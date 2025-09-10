@@ -1,10 +1,9 @@
 name: Unzip and Commit
 
 on:
-  workflow_dispatch:   # تشغيل يدوي من Actions
-  push:
-    paths:
-      - "*.zip"        # يشتغل لو في ملف zip اتضاف
+  push:                 # يشتغل عند أي push
+    branches: [ "main" ]
+  workflow_dispatch:    # يسمح بالتشغيل اليدوي من Actions
 
 jobs:
   unzip:
@@ -17,15 +16,20 @@ jobs:
 
       - name: Extract ZIP
         run: |
-          mkdir extracted
-          unzip "*.zip" -d extracted
+          ZIP_FILE=$(ls *.zip | head -n 1 || true)
+          if [ -n "$ZIP_FILE" ]; then
+            mkdir extracted
+            unzip "$ZIP_FILE" -d extracted
+            cp -r extracted/* .
+            rm -rf extracted
+          else
+            echo "⚠️ No ZIP file found, skipping extraction."
+          fi
 
       - name: Commit extracted files
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          cp -r extracted/* .
-          rm -rf extracted
           git add .
-          git commit -m "Unzipped project files"
+          git diff --cached --quiet || git commit -m "Unzipped project files"
           git push
