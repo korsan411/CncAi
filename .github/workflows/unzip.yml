@@ -1,9 +1,9 @@
 name: Unzip and Commit
 
 on:
-  push:                 # يشتغل عند أي push
+  push:
     branches: [ "main" ]
-  workflow_dispatch:    # يسمح بالتشغيل اليدوي من Actions
+  workflow_dispatch:
 
 jobs:
   unzip:
@@ -14,16 +14,17 @@ jobs:
       - name: Install unzip
         run: sudo apt-get install -y unzip
 
-      - name: Extract ZIP
+      - name: Extract ZIP if exists
         run: |
-          ZIP_FILE=$(ls *.zip | head -n 1 || true)
+          ZIP_FILE=$(ls *.zip 2>/dev/null | head -n 1 || true)
           if [ -n "$ZIP_FILE" ]; then
+            echo "Found zip file: $ZIP_FILE"
             mkdir extracted
-            unzip "$ZIP_FILE" -d extracted
+            unzip -o "$ZIP_FILE" -d extracted
             cp -r extracted/* .
             rm -rf extracted
           else
-            echo "⚠️ No ZIP file found, skipping extraction."
+            echo "⚠️ No ZIP file found. Skipping extraction."
           fi
 
       - name: Commit extracted files
@@ -31,5 +32,9 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add .
-          git diff --cached --quiet || git commit -m "Unzipped project files"
-          git push
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Unzipped project files"
+            git push
+          fi
