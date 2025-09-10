@@ -1,16 +1,17 @@
-from fastapi import FastAPI, WebSocket
-import time
+import os
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+import uvicorn
 
-app = FastAPI(title="CNCai")
+app = FastAPI()
 
-@app.get("/")
-def root():
+# ✅ تقديم واجهة React كملفات ثابتة
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
+
+@app.get("/health")
+def health():
     return {"service": "CNCai", "ok": True}
 
-@app.websocket("/ws/progress")
-async def ws_progress(ws: WebSocket):
-    await ws.accept()
-    for i, step in enumerate(["preprocess","vectorize","toolpath","postprocess","pack"], start=1):
-        await ws.send_json({"event": step, "progress": int(i*100/5)})
-        time.sleep(0.5)
-    await ws.close()
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
