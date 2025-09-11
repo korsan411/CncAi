@@ -1,0 +1,1 @@
+import React,{useState} from 'react';export default function BeginnerMode(){const [p,setP]=useState(null);return (<div><label>ارفع صورة</label><input type='file' accept='image/*' onChange={e=>{const f=e.target.files?.[0];if(f){setP(URL.createObjectURL(f))}}}/>{p&&<img src={p} style={{maxWidth:300,display:'block',marginTop:10}}/>}</div>);}
