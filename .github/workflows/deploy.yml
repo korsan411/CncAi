@@ -10,6 +10,10 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: frontend   # 🔥 خلي كل الأوامر تشتغل من هنا
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -21,25 +25,19 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: |
-          cd frontend
-          npm install
+        run: npm install
 
       - name: Run build
-        run: |
-          cd frontend
-          npm run build
+        run: npm run build
 
-      # لو عندك اختبارات فعل الكود ده
+      # لو عندك اختبارات
       # - name: Run tests
-      #   run: |
-      #     cd frontend
-      #     npm test
+      #   run: npm test
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: frontend/dist
+          path: frontend/dist   # هنا مكان build output
 
   deploy:
     needs: build-and-deploy
