@@ -2,87 +2,99 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>CNC 3D Preview</title>
+  <title>CNC AI Preview</title>
   <style>
-    body { margin: 0; overflow: hidden; background: #111; color: white; }
-    #scaleControl {
-      position: absolute; top: 10px; left: 10px; z-index: 10;
-      background: rgba(0,0,0,0.6); padding: 10px; border-radius: 8px;
+    body { 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      gap: 20px; 
+      font-family: Arial, sans-serif;
+    }
+    canvas { border: 1px solid #ccc; }
+    #preview2d { width: 300px; height: 300px; }
+    #preview3d { width: 400px; height: 400px; }
+    #fileInput {
+      padding: 10px;
+      font-size: 16px;
+      border: 2px solid #333;
+      border-radius: 8px;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <div id="scaleControl">
-    <label>ارتفاع Z: </label>
-    <input type="range" id="scaleZ" min="1" max="50" value="20">
-  </div>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.0/examples/js/controls/OrbitControls.js"></script>
+  <h2>CNC AI Preview</h2>
+  <input type="file" id="fileInput" accept="image/*">
+  <canvas id="preview2d"></canvas>
+  <div id="preview3d"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
 
   <script>
-    let scene = new THREE.Scene();
-    let camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-    let renderer = new THREE.WebGLRenderer({antialias: true});
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
+    const fileInput = document.getElementById('fileInput');
+    const canvas2d = document.getElementById('preview2d');
+    const ctx = canvas2d.getContext('2d');
+    const preview3d = document.getElementById('preview3d');
 
-    // Controls
-    let controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
+    // 3D setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, 400/400, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(400, 400);
+    preview3d.appendChild(renderer.domElement);
 
-    // إضاءة
-    let light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(0, 0, 100).normalize();
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(0, 1, 1).normalize();
     scene.add(light);
-
-    // Geometry
-    const width = 200, height = 200, segments = 100;
-    let geometry = new THREE.PlaneGeometry(width, height, segments, segments);
-    let material = new THREE.MeshPhongMaterial({color: 0xcccccc, wireframe: false, side: THREE.DoubleSide});
-    let mesh = new THREE.Mesh(geometry, material);
-    scene.add(mesh);
-
     camera.position.z = 200;
 
-    // دالة توليد الارتفاع من صورة
-    function createHeightMap(img, scaleZ=20) {
-      let canvas = document.createElement("canvas");
-      let ctx = canvas.getContext("2d");
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx.drawImage(img, 0, 0);
-      let imgData = ctx.getImageData(0, 0, img.width, img.height).data;
+    let mesh;
 
+    function createHeightMap(image) {
+      const w = 100, h = 100;
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = w; tempCanvas.height = h;
+      const tctx = tempCanvas.getContext('2d');
+      tctx.drawImage(image, 0, 0, w, h);
+      const imgData = tctx.getImageData(0, 0, w, h).data;
+
+      const geometry = new THREE.PlaneGeometry(100, 100, w-1, h-1);
       for (let i = 0; i < geometry.attributes.position.count; i++) {
-        let ix = i % (segments + 1);
-        let iy = Math.floor(i / (segments + 1));
-        let px = Math.floor(ix / (segments + 1) * img.width);
-        let py = Math.floor(iy / (segments + 1) * img.height);
-        let idx = (py * img.width + px) * 4;
-
-        let brightness = (imgData[idx] + imgData[idx+1] + imgData[idx+2]) / 3;
-        geometry.attributes.position.setZ(i, (brightness / 255) * scaleZ);
+        const stride = i * 3;
+        const x = i % w;
+        const y = Math.floor(i / w);
+        const idx = (y * w + x) * 4;
+        const brightness = imgData[idx]; // grayscale
+        geometry.attributes.position.array[stride + 2] = brightness / 5; // Z height
       }
       geometry.computeVertexNormals();
-      geometry.attributes.position.needsUpdate = true;
+
+      const material = new THREE.MeshLambertMaterial({ color: 0xaaaaaa, side: THREE.DoubleSide });
+      if (mesh) scene.remove(mesh);
+      mesh = new THREE.Mesh(geometry, material);
+      scene.add(mesh);
     }
-
-    // تحميل صورة
-    let img = new Image();
-    img.src = "https://threejs.org/examples/textures/uv_grid_opengl.jpg"; // هنا حط صورتك
-    img.onload = () => createHeightMap(img, document.getElementById("scaleZ").value);
-
-    // تحكم في الارتفاع بالـ Slider
-    document.getElementById("scaleZ").addEventListener("input", (e) => {
-      createHeightMap(img, e.target.value);
-    });
 
     function animate() {
       requestAnimationFrame(animate);
-      controls.update();
+      if (mesh) mesh.rotation.y += 0.01;
       renderer.render(scene, camera);
     }
     animate();
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const img = new Image();
+      img.onload = () => {
+        canvas2d.width = img.width;
+        canvas2d.height = img.height;
+        ctx.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
+        createHeightMap(img);
+      };
+      img.src = URL.createObjectURL(file);
+    });
   </script>
 </body>
 </html>
