@@ -42,9 +42,14 @@
       height: 80vh;
       text-align: center;
     }
+    #canvas2d {
+      border: 1px solid #333;
+      max-width: 90%;
+      max-height: 90%;
+    }
     canvas {
-      max-width: 100%;
-      max-height: 100%;
+      display: block;
+      margin: auto;
     }
   </style>
 </head>
@@ -89,7 +94,7 @@
     btn3d.onclick = show3d;
     show2d();
 
-    // THREE.js إعداد
+    // إعداد THREE.js
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf5f5f5);
 
@@ -97,10 +102,9 @@
     camera.position.set(0, 100, 200);
 
     const renderer = new THREE.WebGLRenderer({antialias: true});
-    renderer.setSize(window.innerWidth * 0.95, window.innerHeight * 0.7);
+    renderer.setSize(window.innerWidth * 0.9, window.innerHeight * 0.7);
     view3d.appendChild(renderer.domElement);
 
-    // إضاءة
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
@@ -118,19 +122,22 @@
     }
     animate();
 
-    // رفع الصورة ومعالجتها
+    // رفع الصورة
     imageInput.addEventListener("change", (e) => {
       const file = e.target.files[0];
       if (!file) return;
+      console.log("📂 File selected:", file.name);
 
       const img = new Image();
       img.onload = () => {
-        // 2D معاينة
+        console.log("✅ Image loaded");
+
+        // معاينة 2D
         canvas2d.width = img.width;
         canvas2d.height = img.height;
         ctx2d.drawImage(img, 0, 0);
 
-        // 3D Relief
+        // Relief 3D
         const w = 128, h = 128;
         const tempCanvas = document.createElement("canvas");
         const tctx = tempCanvas.getContext("2d");
@@ -143,7 +150,7 @@
         const verts = geometry.attributes.position;
         for (let i = 0, j = 0; i < data.length; i += 4, j++) {
           const brightness = (data[i] + data[i+1] + data[i+2]) / 3;
-          verts.setZ(j, brightness / 20); // عمق relief
+          verts.setZ(j, brightness / 20);
         }
         verts.needsUpdate = true;
 
@@ -153,7 +160,7 @@
         mesh.rotation.x = -Math.PI / 2;
         scene.add(mesh);
 
-        show3d();
+        show2d(); // تبدأ بـ 2D
       };
       img.src = URL.createObjectURL(file);
     });
