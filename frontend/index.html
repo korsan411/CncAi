@@ -83,7 +83,7 @@
   </div>
 
   <div class="preview">
-    <canvas id="threeCanvas"></canvas>
+    <div id="threeContainer"></div>
     <div class="label">المعاينة ثلاثية الأبعاد</div>
   </div>
 
@@ -94,8 +94,10 @@
     const originalImage = document.getElementById('originalImage');
     const heatmapCanvas = document.getElementById('heatmapCanvas');
     const ctx = heatmapCanvas.getContext('2d');
+    const threeContainer = document.getElementById('threeContainer');
 
     let colormap = 'grayscale';
+    let mesh, scene, camera, renderer, controls;
 
     fileInput.addEventListener('change', e => {
       const file = e.target.files[0];
@@ -125,7 +127,7 @@
       const imgData = ctx.getImageData(0, 0, heatmapCanvas.width, heatmapCanvas.height);
       const data = imgData.data;
       for (let i = 0; i < data.length; i += 4) {
-        let v = data[i]; // R فقط كبداية
+        let v = data[i]; // R
         let r, g, b;
         if (colormap === 'grayscale') {
           r = g = b = v;
@@ -149,36 +151,52 @@
 
     // 3D Preview
     function render3D(img) {
-      const threeCanvas = document.getElementById('threeCanvas');
-      threeCanvas.width = img.width;
-      threeCanvas.height = img.height;
+      const w = 100, h = 100; // تصغير الصورة عشان الأداء
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = w; tempCanvas.height = h;
+      const tctx = tempCanvas.getContext('2d');
+      tctx.drawImage(img, 0, 0, w, h);
+      const imgData = tctx.getImageData(0, 0, w, h).data;
 
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(45, threeCanvas.width/threeCanvas.height, 0.1, 1000);
-      camera.position.set(0, -img.height, img.height/1.5);
+      // Setup scene
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+      renderer = new THREE.WebGLRenderer();
+      renderer.setSize(400, 400);
+      threeContainer.innerHTML = "";
+      threeContainer.appendChild(renderer.domElement);
 
-      const renderer = new THREE.WebGLRenderer({canvas: threeCanvas});
-      renderer.setSize(threeCanvas.width, threeCanvas.height);
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      camera.position.set(0, -150, 150);
 
-      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      // Geometry
+      const geometry = new THREE.PlaneGeometry(100, 100, w-1, h-1);
+      for (let i = 0; i < geometry.attributes.position.count; i++) {
+        const stride = i * 3;
+        const x = i % w;
+        const y = Math.floor(i / w);
+        const idx = (y * w + x) * 4;
+        const brightness = imgData[idx]; // R channel
+        geometry.attributes.position.array[stride + 2] = brightness / 5; // الارتفاع
+      }
+      geometry.computeVertexNormals();
 
-      const geometry = new THREE.PlaneGeometry(img.width, img.height, img.width/4, img.height/4);
-      const texture = new THREE.Texture(img);
-      texture.needsUpdate = true;
-      const material = new THREE.MeshBasicMaterial({map: texture, side: THREE.DoubleSide});
-      const plane = new THREE.Mesh(geometry, material);
-      scene.add(plane);
+      const material = new THREE.MeshLambertMaterial({ color: 0xaaaaaa, side: THREE.DoubleSide });
+      mesh = new THREE.Mesh(geometry, material);
+      scene.add(mesh);
 
       const light = new THREE.DirectionalLight(0xffffff, 1);
       light.position.set(0, 0, 100).normalize();
       scene.add(light);
 
-      function animate() {
-        requestAnimationFrame(animate);
-        controls.update();
-        renderer.render(scene, camera);
-      }
       animate();
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      if (mesh) mesh.rotation.y += 0.002;
+      renderer.render(scene, camera);
     }
   </script>
 </body>
