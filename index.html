@@ -1,46 +1,51 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>معاينة 2D وتحويل 3D</title>
+  <title>معاينة 2D و 3D</title>
   <style>
     body { font-family: Arial, sans-serif; text-align: center; background: #f8f8f8; }
     canvas, #viewer3d { border: 1px solid black; margin: 10px; }
-    #viewer3d { width: 500px; height: 400px; display: inline-block; }
-    #progressContainer { width: 500px; margin: 10px auto; border: 1px solid #aaa; background: #eee; }
-    #progressBar { width: 0%; height: 20px; background: #4caf50; }
+    #viewer2d { width: 400px; height: 300px; }
+    #viewer3d { width: 400px; height: 300px; display: inline-block; }
+    #progress { width: 400px; height: 20px; border: 1px solid #333; margin: 10px auto; }
+    #bar { width: 0%; height: 100%; background: green; }
   </style>
 </head>
 <body>
-  <h1>معاينة 2D وتحويل 3D</h1>
+  <h1>معاينة 2D و 3D مع شريط تقدم</h1>
 
-  <h2>تحميل صورة</h2>
-  <input type="file" id="uploadImage" accept="image/*"><br><br>
+  <h2>معاينة 2D</h2>
+  <input type="file" id="upload" accept="image/*"><br><br>
   <canvas id="viewer2d" width="400" height="300"></canvas>
 
-  <h2>معاينة 3D (Heightmap)</h2>
-  <div id="progressContainer"><div id="progressBar"></div></div>
+  <h2>معاينة 3D</h2>
   <div id="viewer3d"></div>
+
+  <div id="progress"><div id="bar"></div></div>
 
   <!-- مكتبة Three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
 
   <script>
-    const uploadImage = document.getElementById('uploadImage');
+    const upload = document.getElementById('upload');
     const canvas2d = document.getElementById('viewer2d');
     const ctx = canvas2d.getContext('2d');
-    const progressBar = document.getElementById('progressBar');
+    const bar = document.getElementById('bar');
 
-    // إعداد مشهد 3D
+    // --- إعداد 3D ---
     const container3d = document.getElementById('viewer3d');
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f0f0);
 
     const camera = new THREE.PerspectiveCamera(
-      45, container3d.clientWidth / container3d.clientHeight, 0.1, 1000
+      45,
+      container3d.clientWidth / container3d.clientHeight,
+      0.1,
+      1000
     );
-    camera.position.set(0, 5, 5);
+    camera.position.z = 5;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container3d.clientWidth, container3d.clientHeight);
@@ -48,64 +53,56 @@
 
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
 
-    // إضاءة
     const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(1, 2, 3).normalize();
+    light.position.set(1, 1, 2).normalize();
     scene.add(light);
     scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
     let mesh = null;
 
-    uploadImage.addEventListener('change', e => {
+    upload.addEventListener('change', e => {
       const file = e.target.files[0];
       if (!file) return;
       const url = URL.createObjectURL(file);
+
       const img = new Image();
       img.onload = () => {
-        // عرض الصورة 2D
+        // معاينة 2D
         ctx.clearRect(0, 0, canvas2d.width, canvas2d.height);
         ctx.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
 
-        // تجهيز canvas صغير لقراءة البكسلات
-        const size = 100; // خليه صغير للتجربة
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = size;
-        tempCanvas.height = size;
-        const tempCtx = tempCanvas.getContext('2d');
-        tempCtx.drawImage(img, 0, 0, size, size);
-        const imageData = tempCtx.getImageData(0, 0, size, size).data;
+        // بدء التقدم
+        bar.style.width = "0%";
 
-        // تحديث شريط التقدم
-        let progress = 0;
-        function updateProgress(val) {
-          progressBar.style.width = val + "%";
-        }
+        setTimeout(() => {
+          // معالجة الـ heightmap
+          const imgCanvas = document.createElement('canvas');
+          imgCanvas.width = img.width;
+          imgCanvas.height = img.height;
+          const imgCtx = imgCanvas.getContext('2d');
+          imgCtx.drawImage(img, 0, 0);
+          const imgData = imgCtx.getImageData(0, 0, img.width, img.height).data;
 
-        // بناء الـ Geometry
-        const geometry = new THREE.PlaneGeometry(5, 5, size - 1, size - 1);
-        const vertices = geometry.attributes.position;
-        
-        for (let y = 0; y < size; y++) {
-          for (let x = 0; x < size; x++) {
-            const i = (y * size + x) * 4;
-            const r = imageData[i];
-            const g = imageData[i + 1];
-            const b = imageData[i + 2];
-            const brightness = (r + g + b) / 3 / 255; // قيمة من 0 إلى 1
-            const vertexIndex = y * size + x;
-            vertices.setZ(vertexIndex, brightness * 2); // رفع الارتفاع
+          const geometry = new THREE.PlaneGeometry(4, 3, img.width - 1, img.height - 1);
+          const vertices = geometry.attributes.position;
+          for (let y = 0; y < img.height; y++) {
+            for (let x = 0; x < img.width; x++) {
+              const i = (y * img.width + x) * 4;
+              const brightness = (imgData[i] + imgData[i+1] + imgData[i+2]) / 3;
+              const z = brightness / 255; 
+              const index = y * img.width + x;
+              vertices.setZ(index, z);
+            }
+            bar.style.width = ((y / img.height) * 100) + "%";
           }
-          progress = Math.round(((y + 1) / size) * 100);
-          updateProgress(progress);
-        }
 
-        vertices.needsUpdate = true;
+          if (mesh) scene.remove(mesh);
+          const material = new THREE.MeshStandardMaterial({ color: 0x0077ff, wireframe: false, side: THREE.DoubleSide });
+          mesh = new THREE.Mesh(geometry, material);
+          scene.add(mesh);
 
-        if (mesh) scene.remove(mesh);
-        const material = new THREE.MeshStandardMaterial({ color: 0x88ccff, wireframe: false, side: THREE.DoubleSide });
-        mesh = new THREE.Mesh(geometry, material);
-        mesh.rotation.x = -Math.PI / 2;
-        scene.add(mesh);
+          bar.style.width = "100%";
+        }, 500);
       };
       img.src = url;
     });
