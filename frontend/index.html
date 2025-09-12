@@ -84,6 +84,7 @@
 
       let mesh;
       let currentGeometry;
+      let currentImage;
 
       // دالة توليد الارتفاعات
       function generateHeightmap(img, zScale = 10) {
@@ -99,7 +100,8 @@
         const geometry = new THREE.PlaneGeometry(100, 100, width - 1, height - 1);
 
         for (let i = 0, j = 0; i < data.length; i += 4, j++) {
-          const brightness = data[i] * 0.3 + data[i + 1] * 0.59 + data[i + 2] * 0.11;
+          const brightness =
+            data[i] * 0.3 + data[i + 1] * 0.59 + data[i + 2] * 0.11;
           geometry.attributes.position.setZ(j, (brightness / 255) * zScale);
         }
 
@@ -114,14 +116,19 @@
         const img = new Image();
         img.onload = () => {
           if (mesh) scene.remove(mesh);
+          currentImage = img;
 
-          currentGeometry = generateHeightmap(img, document.getElementById("zScale").value);
+          currentGeometry = generateHeightmap(
+            img,
+            document.getElementById("zScale").value
+          );
 
           const material = new THREE.MeshStandardMaterial({
             color: 0x888888,
             side: THREE.DoubleSide,
             flatShading: true,
           });
+
           mesh = new THREE.Mesh(currentGeometry, material);
           mesh.rotation.x = -Math.PI / 2;
           scene.add(mesh);
@@ -131,38 +138,12 @@
 
       // التحكم في العمق
       document.getElementById("zScale").addEventListener("input", (e) => {
-        if (!mesh) return;
+        if (!mesh || !currentImage) return;
         const scale = e.target.value;
-        currentGeometry = generateHeightmap(
-          mesh.userData.img,
-          scale
-        );
+
+        const newGeometry = generateHeightmap(currentImage, scale);
         mesh.geometry.dispose();
-        mesh.geometry = currentGeometry;
-      });
-
-      // حفظ الصورة داخل mesh.userData
-      document.getElementById("imageInput").addEventListener("change", (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const img = new Image();
-        img.onload = () => {
-          if (mesh) scene.remove(mesh);
-
-          const zScale = document.getElementById("zScale").value;
-          currentGeometry = generateHeightmap(img, zScale);
-
-          const material = new THREE.MeshStandardMaterial({
-            color: 0x888888,
-            side: THREE.DoubleSide,
-            flatShading: true,
-          });
-          mesh = new THREE.Mesh(currentGeometry, material);
-          mesh.rotation.x = -Math.PI / 2;
-          mesh.userData.img = img; // نخزن الصورة
-          scene.add(mesh);
-        };
-        img.src = URL.createObjectURL(file);
+        mesh.geometry = newGeometry;
       });
 
       // أنيميشن
