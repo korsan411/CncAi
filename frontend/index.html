@@ -2,62 +2,74 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>CNC AI Preview — OrbitControls added</title>
+  <title>CNC AI Preview</title>
   <style>
     body { 
       font-family: Arial, sans-serif; 
       display: flex; 
       flex-direction: column; 
       align-items: center; 
-      gap: 20px; 
-      background: #f9f9f9;
+      gap: 30px; 
+      background: #f4f7fa;
       margin: 0;
       padding: 0;
     }
     header {
       width: 100%;
-      background: #4a90e2;
+      background: linear-gradient(90deg, #4a90e2, #6a5acd);
       color: white;
-      padding: 15px;
+      padding: 20px;
       text-align: center;
-      font-size: 22px;
+      font-size: 24px;
       font-weight: bold;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      box-shadow: 0 3px 8px rgba(0,0,0,0.2);
     }
     .controls {
       display: flex;
-      gap: 15px;
+      gap: 20px;
       align-items: center;
       flex-wrap: wrap;
       justify-content: center;
       background: white;
-      padding: 10px;
-      border-radius: 8px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      padding: 15px 20px;
+      border-radius: 12px;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.15);
     }
     .preview-block { 
       display: flex; 
       flex-direction: column; 
       align-items: center; 
+      gap: 8px;
     }
     canvas { 
-      border: 1px solid #ccc; 
+      border: 2px solid #ddd; 
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
       margin-bottom: 8px; 
+      max-width: 90vw;
     }
     #preview3d canvas {
-      border: 1px solid #ccc;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
     }
     button {
-      padding: 6px 12px;
+      padding: 8px 14px;
       border: none;
-      border-radius: 5px;
+      border-radius: 6px;
       cursor: pointer;
-      background: #eee;
       font-weight: bold;
+      color: white;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      transition: 0.2s;
     }
     button:hover {
-      background: #ddd;
+      transform: scale(1.05);
+      box-shadow: 0 3px 8px rgba(0,0,0,0.25);
     }
+    .btn-jet { background: #1e90ff; }
+    .btn-hot { background: #ff4500; }
+    .btn-cool { background: #8a2be2; }
   </style>
 </head>
 <body>
@@ -66,12 +78,12 @@
   <div class="controls">
     <input type="file" id="fileInput" accept="image/*">
     <label>🔄 سرعة الدوران: <input type="range" id="rotationSpeed" min="0" max="0.05" step="0.001" value="0.01"></label>
-    <label>🔍 زوم: <input type="range" id="zoomControl" min="50" max="500" step="10" value="200"></label>
+    <label>🔍 زوم: <input type="range" id="zoomControl" min="50" max="1000" step="10" value="300"></label>
     <div>
       🌈 ألوان:
-      <button onclick="setColormap('jet')">Jet</button>
-      <button onclick="setColormap('hot')">Hot</button>
-      <button onclick="setColormap('cool')">Cool</button>
+      <button class="btn-jet" onclick="setColormap('jet')">Jet</button>
+      <button class="btn-hot" onclick="setColormap('hot')">Hot</button>
+      <button class="btn-cool" onclick="setColormap('cool')">Cool</button>
     </div>
   </div>
 
@@ -82,7 +94,7 @@
 
   <div class="preview-block">
     <div id="preview3d"></div>
-    <div>🌀 المعاينة ثلاثية الأبعاد (Drag to rotate, Right-drag to pan, Scroll to zoom)</div>
+    <div>🌀 المعاينة ثلاثية الأبعاد</div>
   </div>
 
   <div class="preview-block">
@@ -91,8 +103,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-  <!-- OrbitControls (must match three.js version) -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
 
   <script>
     const fileInput = document.getElementById('fileInput');
@@ -105,52 +115,47 @@
     const rotationSpeedInput = document.getElementById('rotationSpeed');
     const zoomControl = document.getElementById('zoomControl');
 
-    // 3D setup (same as your working code)
+    // 3D setup
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, 400/400, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(400, 400);
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 5000);
+    const renderer = new THREE.WebGLRenderer();
     preview3d.appendChild(renderer.domElement);
 
-    // Add better lights
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-    dirLight.position.set(0, 1, 1).normalize();
-    scene.add(dirLight);
-    scene.add(new THREE.AmbientLight(0x888888));
-
-    // OrbitControls — added
-    const controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.screenSpacePanning = true;
-    // set zoom limits to match zoomControl
-    controls.minDistance = parseFloat(zoomControl.min);
-    controls.maxDistance = parseFloat(zoomControl.max);
-    controls.maxPolarAngle = Math.PI * 0.95; // prevent going under the plane
-
-    camera.position.z = parseFloat(zoomControl.value);
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(0, 1, 1).normalize();
+    scene.add(light);
+    camera.position.z = 300;
 
     let mesh;
-    let rotationSpeed = parseFloat(rotationSpeedInput.value) || 0.01;
+    let rotationSpeed = 0.01;
     let currentColormap = 'jet';
+    let imgWidth = 0, imgHeight = 0;
 
-    // createHeightMap, drawHeatmap, getHeatColor, setColormap - unchanged logic
     function createHeightMap(image) {
-      const w = 100, h = 100;
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = w; tempCanvas.height = h;
-      const tctx = tempCanvas.getContext('2d');
-      tctx.drawImage(image, 0, 0, w, h);
-      const imgData = tctx.getImageData(0, 0, w, h).data;
+      imgWidth = image.width;
+      imgHeight = image.height;
+
+      // تحديث مقاس المعاينات حسب حجم الصورة
+      renderer.setSize(imgWidth, imgHeight);
+      canvas2d.width = imgWidth;
+      canvas2d.height = imgHeight;
+      heatmap.width = imgWidth;
+      heatmap.height = imgHeight;
+
+      const tctx = document.createElement('canvas').getContext('2d');
+      tctx.canvas.width = imgWidth;
+      tctx.canvas.height = imgHeight;
+      tctx.drawImage(image, 0, 0, imgWidth, imgHeight);
+      const imgData = tctx.getImageData(0, 0, imgWidth, imgHeight).data;
 
       // 3D mesh
-      const geometry = new THREE.PlaneGeometry(100, 100, w-1, h-1);
+      const geometry = new THREE.PlaneGeometry(100, 100, imgWidth - 1, imgHeight - 1);
       let min = 255, max = 0;
       for (let i = 0; i < geometry.attributes.position.count; i++) {
         const stride = i * 3;
-        const x = i % w;
-        const y = Math.floor(i / w);
-        const idx = (y * w + x) * 4;
+        const x = i % imgWidth;
+        const y = Math.floor(i / imgWidth);
+        const idx = (y * imgWidth + x) * 4;
         const brightness = imgData[idx];
         min = Math.min(min, brightness);
         max = Math.max(max, brightness);
@@ -161,23 +166,18 @@
       const material = new THREE.MeshLambertMaterial({ color: 0xaaaaaa, side: THREE.DoubleSide });
       if (mesh) scene.remove(mesh);
       mesh = new THREE.Mesh(geometry, material);
-      // rotate plane so z is up (optional, keep consistent with earlier UI)
-      mesh.rotation.x = -Math.PI / 2;
       scene.add(mesh);
 
-      drawHeatmap(imgData, w, h, min, max);
+      drawHeatmap(imgData, imgWidth, imgHeight, min, max);
     }
 
     function drawHeatmap(imgData, w, h, min, max) {
-      heatmap.width = w;
-      heatmap.height = h;
       const heatData = ctxHeat.createImageData(w, h);
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           const idx = (y * w + x) * 4;
           const brightness = imgData[idx];
-          // guard against division by zero if image is flat
-          const norm = (max === min) ? 0.5 : (brightness - min) / (max - min);
+          const norm = (brightness - min) / (max - min);
           const color = getHeatColor(norm, currentColormap);
           heatData.data[idx] = color.r;
           heatData.data[idx+1] = color.g;
@@ -217,24 +217,18 @@
       }
     }
 
-    // animation loop: keep auto-rotation but allow user interaction via controls
     function animate() {
       requestAnimationFrame(animate);
-      // auto-rotate the mesh around its Y axis (if set)
-      if (mesh && rotationSpeed !== 0) mesh.rotation.y += rotationSpeed;
-      controls.update(); // important for damping
+      if (mesh) mesh.rotation.y += rotationSpeed;
       renderer.render(scene, camera);
     }
     animate();
 
-    // file loader same as before
     fileInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
       const img = new Image();
       img.onload = () => {
-        canvas2d.width = img.width;
-        canvas2d.height = img.height;
         ctx2d.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
         createHeightMap(img);
       };
@@ -245,25 +239,8 @@
       rotationSpeed = parseFloat(rotationSpeedInput.value);
     });
 
-    // link zoomControl to the camera distance and to controls' limits
     zoomControl.addEventListener('input', () => {
-      const z = parseFloat(zoomControl.value);
-      camera.position.set(0, z*0.1, z); // keep camera above and behind a bit for nicer view
-      controls.update();
-    });
-
-    // ensure initial camera placement matches slider
-    (function initCameraFromSlider(){
-      const z = parseFloat(zoomControl.value);
-      camera.position.set(0, z*0.1, z);
-      controls.update();
-    })();
-
-    // handle window resize to avoid stretched view
-    window.addEventListener('resize', () => {
-      renderer.setSize(400, 400);
-      camera.aspect = 400/400;
-      camera.updateProjectionMatrix();
+      camera.position.z = parseFloat(zoomControl.value);
     });
   </script>
 </body>
