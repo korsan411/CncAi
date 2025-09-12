@@ -1,83 +1,43 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>معاينة CNC بسيطة</title>
+  <title>CncAi - معاينة</title>
   <style>
-    body { background:#111; color:white; text-align:center; font-family:Arial; }
-    #viewer2d, #viewer3d { border:1px solid #444; margin:10px; }
-    #viewer2d { width:300px; height:300px; }
-    #viewer3d { width:400px; height:400px; display:inline-block; }
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 20px;
+    }
+    canvas {
+      border: 1px solid #000;
+      margin-top: 20px;
+    }
   </style>
 </head>
 <body>
-  <h1>معاينة 2D & 3D</h1>
-  <input type="file" id="upload" accept="image/*"><br><br>
-  <canvas id="viewer2d"></canvas>
-  <div id="viewer3d"></div>
+  <h1>معاينة الصورة</h1>
 
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
+  <input type="file" id="upload" accept="image/*">
+  <br><br>
+  <canvas id="preview" width="400" height="400"></canvas>
 
   <script>
     const upload = document.getElementById("upload");
-    const canvas2d = document.getElementById("viewer2d");
-    const ctx = canvas2d.getContext("2d");
+    const canvas = document.getElementById("preview");
+    const ctx = canvas.getContext("2d");
 
-    const container3d = document.getElementById("viewer3d");
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, container3d.clientWidth/container3d.clientHeight, 0.1, 1000);
-    camera.position.set(0,4,4);
+    upload.addEventListener("change", function(event) {
+      const file = event.target.files[0];
+      if (!file) return;
 
-    const renderer = new THREE.WebGLRenderer({antialias:true});
-    renderer.setSize(container3d.clientWidth, container3d.clientHeight);
-    container3d.appendChild(renderer.domElement);
-
-    const controls = new THREE.OrbitControls(camera, renderer.domElement);
-    scene.add(new THREE.AmbientLight(0xffffff,0.8));
-    const light = new THREE.DirectionalLight(0xffffff,1);
-    light.position.set(5,5,5);
-    scene.add(light);
-
-    let mesh=null;
-
-    upload.addEventListener("change", e=>{
-      const file=e.target.files[0];
-      if(!file) return;
-      const url=URL.createObjectURL(file);
-      const img=new Image();
-      img.onload=()=>{
-        canvas2d.width=100; canvas2d.height=100;
-        ctx.drawImage(img,0,0,canvas2d.width,canvas2d.height);
-
-        const data=ctx.getImageData(0,0,canvas2d.width,canvas2d.height).data;
-        const w=canvas2d.width, h=canvas2d.height;
-
-        const geo=new THREE.PlaneGeometry(4,4,w-1,h-1);
-        const pos=geo.attributes.position;
-        for(let i=0;i<w*h;i++){
-          const idx=i*4;
-          const bright=(data[idx]+data[idx+1]+data[idx+2])/3/255;
-          pos.setZ(i,bright*1.5);
-        }
-        pos.needsUpdate=true;
-        geo.computeVertexNormals();
-
-        if(mesh) scene.remove(mesh);
-        const mat=new THREE.MeshStandardMaterial({color:0x00ffcc,side:THREE.DoubleSide});
-        mesh=new THREE.Mesh(geo,mat);
-        mesh.rotation.x=-Math.PI/2;
-        scene.add(mesh);
+      const img = new Image();
+      img.onload = function() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       };
-      img.src=url;
+      img.src = URL.createObjectURL(file);
     });
-
-    function animate(){
-      requestAnimationFrame(animate);
-      controls.update();
-      renderer.render(scene,camera);
-    }
-    animate();
   </script>
 </body>
 </html>
