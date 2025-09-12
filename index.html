@@ -2,85 +2,60 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>معاينة 2D و 3D</title>
+  <title>Test 3D Preview</title>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; background: #f8f8f8; }
-    canvas, #viewer3d { border: 1px solid black; margin: 10px; }
-    #viewer3d { width: 400px; height: 300px; display: inline-block; }
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
   </style>
 </head>
 <body>
-  <h1>معاينة 2D و 3D</h1>
-
-  <h2>معاينة 2D</h2>
-  <input type="file" id="upload2d" accept="image/*"><br><br>
-  <canvas id="viewer2d" width="400" height="300"></canvas>
-
-  <h2>معاينة 3D</h2>
-  <div id="viewer3d"></div>
-
-  <!-- مكتبة Three.js -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
+  <!-- مكتبة three.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
 
   <script>
-    // --- معاينة 2D ---
-    const upload2d = document.getElementById('upload2d');
-    const canvas2d = document.getElementById('viewer2d');
-    const ctx = canvas2d.getContext('2d');
-
-    upload2d.addEventListener('change', e => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const url = URL.createObjectURL(file);
-      const img = new Image();
-      img.onload = () => {
-        ctx.clearRect(0, 0, canvas2d.width, canvas2d.height);
-        ctx.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
-      };
-      img.src = url;
-    });
-
-    // --- معاينة 3D (مكعب تجريبي) ---
-    const container3d = document.getElementById('viewer3d');
+    // إنشاء المشهد
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf0f0f0);
 
+    // الكاميرا
     const camera = new THREE.PerspectiveCamera(
-      45,
-      container3d.clientWidth / container3d.clientHeight,
-      0.1,
-      1000
+      75, window.innerWidth / window.innerHeight, 0.1, 1000
     );
-    camera.position.z = 3;
+    camera.position.z = 5;
 
+    // الريندر
     const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(container3d.clientWidth, container3d.clientHeight);
-    container3d.appendChild(renderer.domElement);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
 
-    const controls = new THREE.OrbitControls(camera, renderer.domElement);
-
-    const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(1, 1, 2).normalize();
+    // إضافة إضاءة
+    const light = new THREE.PointLight(0xffffff, 1);
+    light.position.set(5, 5, 5);
     scene.add(light);
 
-    const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambient);
-
-    // مكعب تجريبي
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+    // إنشاء مكعب بسيط
+    const geometry = new THREE.BoxGeometry();
+    const material = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
     const cube = new THREE.Mesh(geometry, material);
     scene.add(cube);
 
+    // حلقة الرسم
     function animate() {
       requestAnimationFrame(animate);
+
+      // دوران المكعب
       cube.rotation.x += 0.01;
       cube.rotation.y += 0.01;
-      controls.update();
+
       renderer.render(scene, camera);
     }
     animate();
+
+    // تعديل الحجم عند تغيير النافذة
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
   </script>
 </body>
 </html>
