@@ -70,7 +70,7 @@
 
       // الرندر
       const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
 
       // التحكم بالماوس
       const controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -80,10 +80,9 @@
       const light = new THREE.DirectionalLight(0xffffff, 1);
       light.position.set(0, 50, 50);
       scene.add(light);
-      scene.add(new THREE.AmbientLight(0x404040));
+      scene.add(new THREE.AmbientLight(0x666666));
 
       let mesh;
-      let currentGeometry;
       let currentImage;
 
       // دالة توليد الارتفاعات
@@ -114,22 +113,23 @@
         const file = e.target.files[0];
         if (!file) return;
         const img = new Image();
+        img.crossOrigin = "anonymous"; // ضروري عشان GitHub Pages
         img.onload = () => {
           if (mesh) scene.remove(mesh);
           currentImage = img;
 
-          currentGeometry = generateHeightmap(
+          const geometry = generateHeightmap(
             img,
             document.getElementById("zScale").value
           );
 
           const material = new THREE.MeshStandardMaterial({
-            color: 0x888888,
+            color: 0xcccccc,
             side: THREE.DoubleSide,
             flatShading: true,
           });
 
-          mesh = new THREE.Mesh(currentGeometry, material);
+          mesh = new THREE.Mesh(geometry, material);
           mesh.rotation.x = -Math.PI / 2;
           scene.add(mesh);
         };
@@ -144,6 +144,13 @@
         const newGeometry = generateHeightmap(currentImage, scale);
         mesh.geometry.dispose();
         mesh.geometry = newGeometry;
+      });
+
+      // تحديث عند تغيير حجم الصفحة
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
       });
 
       // أنيميشن
