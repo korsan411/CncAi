@@ -1,369 +1,162 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>CNC AI — Deep Relief Preview</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CNC AI Preview</title>
 
   <!-- three.js -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.156.1/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.156.1/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/controls/OrbitControls.js"></script>
 
   <style>
-    :root{
-      --bg: #f3f4f6;
-      --panel: #ffffff;
-      --muted: #333;
+    body {
+      margin: 0;
+      background: #f5f5f5;
+      font-family: Arial, sans-serif;
     }
-    body{
-      margin:0;
-      font-family: Inter, Arial, sans-serif;
-      background: var(--bg);
-      color: var(--muted);
-      display:flex;
-      flex-direction:column;
-      min-height:100vh;
-      align-items:center;
+    #uploader {
+      padding: 10px;
+      background: #222;
+      color: #fff;
+      text-align: center;
     }
-    header{
-      width:100%;
-      padding:14px 20px;
-      background: #0b1220;
-      color:#fff;
-      box-shadow: 0 1px 0 rgba(0,0,0,0.06);
+    #tabs {
+      display: flex;
+      justify-content: center;
+      background: #ddd;
     }
-    .container{
-      width: 940px;
-      max-width: calc(100% - 32px);
-      margin:18px auto;
-      background: var(--panel);
-      padding:14px;
-      border-radius:8px;
-      box-shadow: 0 6px 18px rgba(16,24,40,0.08);
+    #tabs button {
+      padding: 10px 20px;
+      border: none;
+      background: #ccc;
+      cursor: pointer;
     }
-    .controls{
-      display:flex;
-      gap:12px;
-      align-items:center;
-      margin-bottom:12px;
-      flex-wrap:wrap;
+    #tabs button.active {
+      background: #666;
+      color: #fff;
     }
-    .controls > * { margin: 4px 0; }
-    input[type=file] { padding:6px; }
-    .btn { padding:8px 12px; border-radius:6px; border: none; cursor:pointer; background:#0b69ff; color:white; }
-    .btn.secondary { background:#6b7280; }
-    .viewerRow{
-      display:flex;
-      gap:12px;
+    #view2d, #view3d {
+      display: none;
+      width: 100%;
+      height: 80vh;
+      text-align: center;
     }
-    /* 2D preview */
-    #preview2dBox {
-      width: 300px;
-      min-height: 450px;
-      border:1px solid #e5e7eb;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      background: #fafafa;
-      border-radius:6px;
-      overflow:hidden;
+    canvas {
+      max-width: 100%;
+      max-height: 100%;
     }
-    #canvas2d {
-      max-width:100%;
-      max-height:100%;
-      display:block;
-    }
-    /* 3D preview */
-    #preview3dBox{
-      width: 600px;
-      height: 450px;
-      border:1px solid #e5e7eb;
-      border-radius:6px;
-      background: #f0f4f8; /* فاتح عشان تميز الشكل */
-      position:relative;
-      overflow:hidden;
-    }
-    #preview3d {
-      width:100%;
-      height:100%;
-      display:block;
-    }
-    .info {
-      font-size:13px;
-      color:#374151;
-    }
-    label { font-weight:600; }
-    .rangeVal { min-width:40px; display:inline-block; text-align:right; margin-left:8px; }
-    footer { margin:18px 0 30px; color:#6b7280; font-size:13px; text-align:center;}
   </style>
 </head>
 <body>
-  <header><strong style="font-size:18px">CNC AI</strong> — معاينة Relief عميق</header>
-
-  <div class="container">
-    <div class="controls">
-      <input type="file" id="fileInput" accept="image/*" />
-      <button id="btn2d" class="btn secondary">عرض 2D</button>
-      <button id="btn3d" class="btn">عرض 3D Relief</button>
-
-      <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
-        <label for="depthRange">عمق النحت</label>
-        <input id="depthRange" type="range" min="1" max="80" value="30" />
-        <span class="rangeVal" id="depthValue">30</span>
-      </div>
-    </div>
-
-    <div class="viewerRow">
-      <div id="preview2dBox">
-        <canvas id="canvas2d" width="300" height="450"></canvas>
-      </div>
-
-      <div id="preview3dBox">
-        <!-- هنا سيتم إرفاق WebGL renderer -->
-        <div id="preview3d"></div>
-      </div>
-    </div>
-
-    <p class="info" style="margin-top:12px">
-      ملاحظة: يفضل استخدام صور عالية التباين (أسود وأبيض أو صور مع تفاصيل) للحصول على نتيجة relief أوضح.
-      إذا كان المشهد لا يظهر على المتصفح، جرّب متصفح حديث (Chrome / Firefox) وتأكد من تمكين WebGL.
-    </p>
+  <div id="uploader">
+    <input type="file" id="imageInput" accept="image/*" />
   </div>
 
-  <footer>حفِظت التعديلات — متى ما حبيت نصدّر STL أو G-code أكمل معاك</footer>
+  <div id="tabs">
+    <button id="btn2d" class="active">معاينة 2D</button>
+    <button id="btn3d">معاينة 3D</button>
+  </div>
 
-<script>
-(function(){
-  const fileInput = document.getElementById('fileInput');
-  const canvas2d = document.getElementById('canvas2d');
-  const ctx2d = canvas2d.getContext('2d');
-  const preview3dDiv = document.getElementById('preview3d');
-  const btn2d = document.getElementById('btn2d');
-  const btn3d = document.getElementById('btn3d');
-  const depthRange = document.getElementById('depthRange');
-  const depthValue = document.getElementById('depthValue');
+  <div id="view2d">
+    <canvas id="canvas2d"></canvas>
+  </div>
+  <div id="view3d"></div>
 
-  let uploadedImage = null;
-  let lastRelief = null; // للاحتفاظ بالـ mesh إن احتجنا نعدّل العمق ديناميكياً
+  <script>
+    const imageInput = document.getElementById("imageInput");
+    const canvas2d = document.getElementById("canvas2d");
+    const ctx2d = canvas2d.getContext("2d");
+    const view2d = document.getElementById("view2d");
+    const view3d = document.getElementById("view3d");
+    const btn2d = document.getElementById("btn2d");
+    const btn3d = document.getElementById("btn3d");
 
-  depthRange.addEventListener('input', () => {
-    depthValue.textContent = depthRange.value;
-    // لو في relief جاهز، نعيد حسابه مع العمق الجديد (نفّذ إعادة توليد)
-    if (uploadedImage && preview3dDiv.dataset.mode === 'relief') {
-      // نعيد توليد المشهد 3D بالعمق الجديد
-      generateReliefScene(uploadedImage, parseFloat(depthRange.value));
+    // تبديل بين 2D و 3D
+    function show2d() {
+      view2d.style.display = "block";
+      view3d.style.display = "none";
+      btn2d.classList.add("active");
+      btn3d.classList.remove("active");
     }
-  });
+    function show3d() {
+      view2d.style.display = "none";
+      view3d.style.display = "block";
+      btn3d.classList.add("active");
+      btn2d.classList.remove("active");
+    }
+    btn2d.onclick = show2d;
+    btn3d.onclick = show3d;
+    show2d();
 
-  fileInput.addEventListener('change', (ev) => {
-    const file = ev.target.files && ev.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        uploadedImage = img;
-        // نعرض 2D افتراضياً
-        draw2D(img);
-        show2D();
-        console.log('Image loaded — width:', img.width, 'height:', img.height);
-      };
-      img.onerror = (err) => console.error('Image load error', err);
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
-
-  function draw2D(img) {
-    // ضبط مقاس الكانفاس بما يناسب الصندوق (نحافظ على aspect ratio)
-    const boxW = 300, boxH = 450;
-    let w = img.width, h = img.height;
-    const scale = Math.min(boxW / w, boxH / h);
-    const nw = Math.round(w * scale);
-    const nh = Math.round(h * scale);
-    canvas2d.width = nw;
-    canvas2d.height = nh;
-    ctx2d.clearRect(0,0,nw,nh);
-    ctx2d.drawImage(img, 0, 0, nw, nh);
-  }
-
-  btn2d.addEventListener('click', () => {
-    if (!uploadedImage) return alert('لم تقم باختيار صورة بعد');
-    show2D();
-  });
-
-  btn3d.addEventListener('click', () => {
-    if (!uploadedImage) return alert('لم تقم باختيار صورة بعد');
-    show3D();
-  });
-
-  function show2D(){
-    // إظهار كانفاس 2D وإخفاء 3D (نحذف محتوى 3D لتفادي أخطاء)
-    preview3dDiv.style.display = 'none';
-    preview3dDiv.innerHTML = '';
-    document.getElementById('preview3dBox')?.remove?.();
-    // نترك 2D كما هو
-  }
-
-  function show3D(){
-    preview3dDiv.style.display = 'block';
-    preview3dDiv.innerHTML = '';
-    preview3dDiv.dataset.mode = 'relief';
-    generateReliefScene(uploadedImage, parseFloat(depthRange.value));
-  }
-
-  // ====== دالة إنشاء مشهد relief عميق ======
-  function generateReliefScene(img, depthScale = 30) {
-    console.log('Generating relief — depthScale=', depthScale);
-    // تنظيف أي renderer سابق
-    preview3dDiv.innerHTML = '';
-
-    // إعداد المشهد والكاميرا والrenderer داخل div
-    const w = preview3dDiv.clientWidth || 600;
-    const h = preview3dDiv.clientHeight || 450;
-
+    // THREE.js إعداد
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf0f4f8);
+    scene.background = new THREE.Color(0xf5f5f5);
 
-    const camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 2000);
-    camera.position.set(0, Math.max(w,h) * 0.03, Math.max(w,h) * 0.12); // مكان كاميرا مناسب
-    camera.lookAt(0,0,0);
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 100, 200);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(w, h);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    preview3dDiv.appendChild(renderer.domElement);
+    const renderer = new THREE.WebGLRenderer({antialias: true});
+    renderer.setSize(window.innerWidth * 0.95, window.innerHeight * 0.7);
+    view3d.appendChild(renderer.domElement);
 
-    // Controls
+    // إضاءة
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(100, 200, 100);
+    scene.add(dirLight);
+
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.08;
-    controls.rotateSpeed = 0.6;
 
-    // إضاءة قوية واضحة
-    const ambient = new THREE.AmbientLight(0xffffff, 0.45);
-    scene.add(ambient);
-    const dir = new THREE.DirectionalLight(0xffffff, 0.9);
-    dir.position.set(50, 100, 80);
-    scene.add(dir);
-    // إضافية علوية لتمييز التضاريس
-    const topLight = new THREE.DirectionalLight(0xffffff, 0.4);
-    topLight.position.set(-50, 120, -40);
-    scene.add(topLight);
+    let mesh;
 
-    // نقرأ بكسلات الصورة عبر canvas مؤقت
-    const tmp = document.createElement('canvas');
-    const ctx = tmp.getContext('2d');
-    // نستخدم resolution متوسطة لسرعة جيدة وتفاصيل مقبولة
-    const RES = 256; // لو عايز تفاصيل أعلى زوده (512) لكن البطء يزيد
-    tmp.width = RES;
-    tmp.height = RES;
-    // رسم الصورة مع الحفاظ على aspect
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0,0,RES,RES);
-    // نحسب cropping / scaling بحيث نملأ المربع
-    const iw = img.width, ih = img.height;
-    const ir = iw / ih;
-    const tr = RES / RES;
-    let dw=RES, dh=RES, dx=0, dy=0;
-    if (ir > tr) {
-      // الصورة أوسع → نملأ العرض ونقص في الارتفاع
-      dw = RES;
-      dh = Math.round(RES / ir);
-      dx = 0;
-      dy = Math.round((RES - dh)/2);
-    } else {
-      // الصورة أطول → نملأ الارتفاع ونقص في العرض
-      dh = RES;
-      dw = Math.round(RES * ir);
-      dx = Math.round((RES - dw)/2);
-      dy = 0;
-    }
-    ctx.drawImage(img, 0, 0, iw, ih, dx, dy, dw, dh);
-
-    const imgData = ctx.getImageData(0,0,RES,RES).data;
-
-    // Plane geometry بعُقد حسب RES
-    const geometry = new THREE.PlaneGeometry(100, 100, RES - 1, RES - 1);
-    const pos = geometry.attributes.position;
-    const colors = [];
-
-    // نطبق ارتفاع قوي (deep): heightScale = depthScale (من السلايدر)
-    const heightScale = depthScale; // user-controlled
-
-    for (let i=0, j=0; i < imgData.length; i += 4, j++) {
-      const r = imgData[i], g = imgData[i+1], b = imgData[i+2];
-      // نحسب درج الرمادي (0..255)
-      const gray = Math.round(0.299*r + 0.587*g + 0.114*b);
-      // نعيد قيمة ارتفاع: أبيض=مرتفع، أسود=منخفض
-      const hVal = (gray / 255) * heightScale;
-      pos.setZ(j, hVal);
-
-      // لون بناء على الارتفاع (اختياري لتوضيح التضاريس)
-      // تدرج: أغمق للمنخفض → فاتح للأعلى
-      const t = gray / 255;
-      // نستخدم تدرج بسيط من #5577aa -> #cce0ff -> #ffffff
-      const rcol = (0.34 + 0.66 * t); // تقريبياً
-      const gcol = (0.47 + 0.53 * t);
-      const bcol = (0.67 + 0.33 * t);
-      colors.push(rcol, gcol, bcol);
-    }
-
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    geometry.computeVertexNormals();
-
-    // مادة فاتحة مع vertex colors
-    const material = new THREE.MeshStandardMaterial({
-      vertexColors: true,
-      side: THREE.DoubleSide,
-      metalness: 0.05,
-      roughness: 0.8,
-      flatShading: false
-    });
-
-    // إنشاء الميش وإضافته للمشهد
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.rotation.x = -Math.PI / 2; // نحوله ليصبح أرضي
-    // ضبط قليلاً ليناسب الكاميرا
-    mesh.position.y = - (heightScale/2); // نزحه للنزول في المنتصف
-    scene.add(mesh);
-    lastRelief = { mesh, geometry, material };
-
-    console.log('Relief mesh added — vertices:', geometry.attributes.position.count);
-
-    // إطار مرئي صغير (خريطة شبكة) اختياري للمساعدة
-    const grid = new THREE.GridHelper(120, 10, 0xcccccc, 0xeeeeee);
-    grid.rotation.x = Math.PI / 2;
-    grid.position.y = -0.05;
-    scene.add(grid);
-
-    // إعادة تحجيم الكاميرا بناءً على heightScale وRES
-    camera.position.set(0, Math.max(60, heightScale * 3), Math.max(150, heightScale * 6));
-    camera.lookAt(0,0,0);
-
-    // حلقة الأنيميشن (ثابتة)
-    function renderLoop(){
-      requestAnimationFrame(renderLoop);
+    function animate() {
+      requestAnimationFrame(animate);
       controls.update();
       renderer.render(scene, camera);
     }
-    renderLoop();
+    animate();
 
-    // تنظيف عند تغيير الحجم (نقوم بتحديث الابعاد)
-    function onResize() {
-      const ww = preview3dDiv.clientWidth || 600;
-      const hh = preview3dDiv.clientHeight || 450;
-      renderer.setSize(ww, hh);
-      camera.aspect = ww / hh;
-      camera.updateProjectionMatrix();
-    }
-    window.addEventListener('resize', onResize);
-  } // end generateReliefScene
+    // رفع الصورة ومعالجتها
+    imageInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
 
-  // لو المستخدم اختار عمق عالي افتراضياً (طلبك: "عميقة")
-  // قيمة الافتراضية هي بالفعل 30 (range init). لو عايز نرفع افتراضياً ارفع قيمة ال input في الـ HTML.
+      const img = new Image();
+      img.onload = () => {
+        // 2D معاينة
+        canvas2d.width = img.width;
+        canvas2d.height = img.height;
+        ctx2d.drawImage(img, 0, 0);
 
-})();
-</script>
+        // 3D Relief
+        const w = 128, h = 128;
+        const tempCanvas = document.createElement("canvas");
+        const tctx = tempCanvas.getContext("2d");
+        tempCanvas.width = w;
+        tempCanvas.height = h;
+        tctx.drawImage(img, 0, 0, w, h);
+        const data = tctx.getImageData(0, 0, w, h).data;
+
+        const geometry = new THREE.PlaneGeometry(100, 100, w - 1, h - 1);
+        const verts = geometry.attributes.position;
+        for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+          const brightness = (data[i] + data[i+1] + data[i+2]) / 3;
+          verts.setZ(j, brightness / 20); // عمق relief
+        }
+        verts.needsUpdate = true;
+
+        if (mesh) scene.remove(mesh);
+        const material = new THREE.MeshPhongMaterial({ color: 0xcccccc, side: THREE.DoubleSide, flatShading: true });
+        mesh = new THREE.Mesh(geometry, material);
+        mesh.rotation.x = -Math.PI / 2;
+        scene.add(mesh);
+
+        show3d();
+      };
+      img.src = URL.createObjectURL(file);
+    });
+  </script>
 </body>
 </html>
