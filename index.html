@@ -1,87 +1,125 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>CNC Ai - Image to Gcode</title>
+  <meta charset="UTF-8" />
+  <title>CNC Ai - Relief G-code</title>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
-    canvas { border: 1px solid #000; margin-top: 10px; }
-    #progressContainer { width: 80%; margin: 15px auto; border: 1px solid #aaa; height: 20px; border-radius: 5px; }
-    #progressBar { height: 100%; width: 0; background: green; border-radius: 5px; }
+    body { margin:0; background:#111; color:white; font-family:Arial; text-align:center; }
+    #upload { margin:20px; }
+    #preview3d { width:100vw; height:80vh; }
+    button { margin:10px; padding:10px 20px; }
   </style>
 </head>
 <body>
-  <h1>🖼️ CNC Ai - Image to G-code</h1>
-  
-  <input type="file" id="imageInput" accept="image/*"><br><br>
-  <canvas id="preview" width="400" height="400"></canvas><br><br>
-  
-  <button id="generateBtn">⚙️ توليد G-code</button>
-  
-  <div id="progressContainer">
-    <div id="progressBar"></div>
-  </div>
-  
-  <a id="downloadLink" style="display:none;" download="output.gcode">⬇️ تحميل G-code</a>
+  <h2>CNC Ai - صورة → G-code</h2>
+  <input type="file" id="upload" accept="image/*">
+  <button id="download">تحميل G-code</button>
+  <div id="preview3d"></div>
+
+  <!-- three.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
 
   <script>
-    const imageInput = document.getElementById("imageInput");
-    const canvas = document.getElementById("preview");
-    const ctx = canvas.getContext("2d");
-    const generateBtn = document.getElementById("generateBtn");
-    const progressBar = document.getElementById("progressBar");
-    const downloadLink = document.getElementById("downloadLink");
-    
-    let img = new Image();
+    const upload = document.getElementById("upload");
+    const download = document.getElementById("download");
+    const preview3d = document.getElementById("preview3d");
 
-    // عرض الصورة على الكانفس
-    imageInput.addEventListener("change", e => {
+    let scene, camera, renderer, controls;
+    let gcode = "";
+
+    // إعداد المشهد
+    function initScene() {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000);
+      camera.position.set(0, 50, 80);
+
+      renderer = new THREE.WebGLRenderer({antialias:true});
+      renderer.setSize(window.innerWidth, window.innerHeight*0.8);
+      preview3d.innerHTML = "";
+      preview3d.appendChild(renderer.domElement);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+      const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+      dir.position.set(50,100,50);
+      scene.add(dir);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    initScene();
+    animate();
+
+    // رفع الصورة
+    upload.addEventListener("change", e => {
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = event => {
+      reader.onload = ev => {
+        const img = new Image();
         img.onload = () => {
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          processImage(img);
         };
-        img.src = event.target.result;
+        img.src = ev.target.result;
       };
       reader.readAsDataURL(file);
     });
 
-    // توليد G-code بسيط
-    generateBtn.addEventListener("click", () => {
-      let gcode = "G21 ; Set units to mm\nG90 ; Absolute positioning\n";
-      const lines = 20; // عدد الخطوط الأفقية للتجربة
-      let step = canvas.height / lines;
+    function processImage(img) {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      const size = 100; // تقليل الحجم
+      canvas.width = size;
+      canvas.height = size;
+      ctx.drawImage(img, 0, 0, size, size);
+      const data = ctx.getImageData(0,0,size,size).data;
 
-      let progress = 0;
-      let interval = setInterval(() => {
-        if (progress >= lines) {
-          clearInterval(interval);
-          progressBar.style.width = "100%";
+      const geometry = new THREE.PlaneGeometry(100,100,size-1,size-1);
+      const positions = geometry.attributes.position;
 
-          // حفظ ملف
-          const blob = new Blob([gcode], { type: "text/plain" });
-          const url = URL.createObjectURL(blob);
-          downloadLink.href = url;
-          downloadLink.style.display = "block";
-          downloadLink.textContent = "⬇️ تحميل G-code";
+      gcode = "G21 ; mm\nG90 ; absolute\nG1 F300\n";
 
-          return;
+      let i=0;
+      for (let y=0;y<size;y++) {
+        for (let x=0;x<size;x++) {
+          const idx = (y*size+x)*4;
+          const r=data[idx], g=data[idx+1], b=data[idx+2];
+          const brightness=(r+g+b)/3;
+          const z=(brightness/255)*10; // 0-10mm ارتفاع
+
+          positions.setZ(i, z/2); // تحديث 3D preview
+          gcode += `G1 X${x} Y${y} Z${z.toFixed(2)}\n`;
+          i++;
         }
+      }
+      positions.needsUpdate=true;
 
-        let y = Math.floor(progress * step);
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(canvas.width, y);
-        ctx.strokeStyle = "red";
-        ctx.stroke();
+      const material = new THREE.MeshStandardMaterial({color:0x00ffcc, side:THREE.DoubleSide, wireframe:false});
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.rotation.x=-Math.PI/2;
+      scene.add(mesh);
+    }
 
-        gcode += `G0 X0 Y${y}\nG1 X100 Y${y} F500\n`; // مسار CNC بسيط
-        progress++;
-        progressBar.style.width = ((progress / lines) * 100) + "%";
-      }, 200);
+    download.addEventListener("click", ()=>{
+      const blob = new Blob([gcode], {type:"text/plain"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href=url;
+      a.download="relief.gcode";
+      a.click();
+    });
+
+    window.addEventListener("resize",()=>{
+      camera.aspect=window.innerWidth/(window.innerHeight*0.8);
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight*0.8);
     });
   </script>
 </body>
