@@ -20,7 +20,6 @@
   <input type="file" id="upload3d" accept="image/*"><br><br>
   <div id="viewer3d"></div>
 
-  <!-- مكتبة Three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
 
@@ -55,6 +54,7 @@
       1000
     );
     camera.position.z = 3;
+    camera.lookAt(scene.position);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container3d.clientWidth, container3d.clientHeight);
@@ -62,7 +62,6 @@
 
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
 
-    // إضاءة
     const light = new THREE.DirectionalLight(0xffffff, 1);
     light.position.set(1, 1, 2).normalize();
     scene.add(light);
@@ -79,17 +78,9 @@
       textureLoader.load(url, texture => {
         if (mesh) scene.remove(mesh);
 
-        // نعمل plane بتقسيمات كثيرة عشان يقدر يتشكل
-        const geometry = new THREE.PlaneGeometry(2, 2, 200, 200);
-
-        // نستخدم displacement map
-        const material = new THREE.MeshStandardMaterial({
-          map: texture,
-          displacementMap: texture,
-          displacementScale: 0.3,
-          side: THREE.DoubleSide
-        });
-
+        // مبدئياً نعرض الصورة على plane بسيط
+        const geometry = new THREE.PlaneGeometry(2, 2);
+        const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
         mesh = new THREE.Mesh(geometry, material);
         scene.add(mesh);
       });
