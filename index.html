@@ -2,82 +2,104 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>2D & 3D Preview</title>
+  <title>معاينة 2D و 3D</title>
   <style>
-    body { font-family: Arial; text-align: center; margin: 0; padding: 0; }
-    canvas { border: 1px solid #ccc; margin: 10px; }
-    #viewer { width: 600px; height: 400px; margin: auto; }
+    body { font-family: sans-serif; text-align: center; }
+    #viewer2d, #viewer3d { 
+      margin-top: 10px;
+      border: 1px solid black;
+      display: none;
+    }
+    #viewer3d { width: 500px; height: 400px; margin: auto; }
+    .controls { margin: 15px; }
   </style>
 </head>
 <body>
-  <h2>معاينة 2D و 3D</h2>
-  <input type="file" id="fileInput" accept="image/*"><br><br>
-  <button onclick="show2D()">عرض 2D</button>
-  <button onclick="show3D()">عرض 3D</button>
-  
-  <canvas id="canvas2D" width="600" height="400"></canvas>
-  <div id="viewer"></div>
+  <h1>معاينة الصور</h1>
+  <input type="file" id="upload" accept="image/*"><br><br>
 
-  <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/examples/js/controls/OrbitControls.js"></script>
-  
+  <div class="controls">
+    <button id="show2d">إظهار 2D</button>
+    <button id="show3d">إظهار 3D</button>
+  </div>
+
+  <canvas id="viewer2d" width="500" height="400"></canvas>
+  <div id="viewer3d"></div>
+
+  <!-- three.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.0/examples/js/controls/OrbitControls.js"></script>
+
   <script>
-    let img = new Image();
-    let imgLoaded = false;
+    const upload = document.getElementById('upload');
+    const canvas2d = document.getElementById('viewer2d');
+    const ctx = canvas2d.getContext('2d');
 
-    document.getElementById('fileInput').addEventListener('change', e => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = ev => {
-        img.onload = () => { imgLoaded = true; show2D(); };
-        img.src = ev.target.result;
-      };
-      reader.readAsDataURL(file);
-    });
+    const viewer2d = document.getElementById('viewer2d');
+    const viewer3d = document.getElementById('viewer3d');
 
-    function show2D() {
-      if (!imgLoaded) return alert("ارفع صورة أولاً");
-      const ctx = document.getElementById('canvas2D').getContext('2d');
-      ctx.clearRect(0, 0, 600, 400);
-      ctx.drawImage(img, 0, 0, 600, 400);
-    }
+    document.getElementById('show2d').onclick = ()=>{
+      viewer2d.style.display = 'block';
+      viewer3d.style.display = 'none';
+    };
+    document.getElementById('show3d').onclick = ()=>{
+      viewer2d.style.display = 'none';
+      viewer3d.style.display = 'block';
+    };
 
-    function show3D() {
-      if (!imgLoaded) return alert("ارفع صورة أولاً");
+    // Three.js setup
+    let scene, camera, renderer, controls, plane, texture;
 
-      const viewer = document.getElementById("viewer");
-      viewer.innerHTML = ""; // مسح القديم
+    function init3D(imgUrl){
+      if(renderer){ // clear previous
+        renderer.dispose();
+        viewer3d.innerHTML = "";
+      }
 
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(45, viewer.clientWidth / viewer.clientHeight, 0.1, 1000);
-      const renderer = new THREE.WebGLRenderer();
-      renderer.setSize(viewer.clientWidth, viewer.clientHeight);
-      viewer.appendChild(renderer.domElement);
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(45, viewer3d.clientWidth/viewer3d.clientHeight, 0.1, 1000);
+      camera.position.set(0,0,5);
 
-      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      renderer = new THREE.WebGLRenderer({antialias:true});
+      renderer.setSize(viewer3d.clientWidth, viewer3d.clientHeight);
+      viewer3d.appendChild(renderer.domElement);
 
-      // إضاءة
-      const light = new THREE.DirectionalLight(0xffffff, 1);
-      light.position.set(0, 1, 1).normalize();
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+      const light = new THREE.DirectionalLight(0xffffff,1);
+      light.position.set(0,1,1).normalize();
       scene.add(light);
 
-      // خامة من الصورة
-      const texture = new THREE.TextureLoader().load(img.src);
-      const geometry = new THREE.PlaneGeometry(6, 4);
-      const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
-      const plane = new THREE.Mesh(geometry, material);
-      scene.add(plane);
-
-      camera.position.z = 8;
-
-      function animate() {
-        requestAnimationFrame(animate);
-        controls.update();
-        renderer.render(scene, camera);
-      }
-      animate();
+      const texLoader = new THREE.TextureLoader();
+      texture = texLoader.load(imgUrl, ()=>{
+        const geometry = new THREE.PlaneGeometry(4,3);
+        const material = new THREE.MeshPhongMaterial({map: texture, side: THREE.DoubleSide});
+        plane = new THREE.Mesh(geometry, material);
+        scene.add(plane);
+        animate();
+      });
     }
+
+    function animate(){
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    // handle upload
+    upload.addEventListener('change', e=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = ()=>{
+        ctx.clearRect(0,0,canvas2d.width,canvas2d.height);
+        ctx.drawImage(img,0,0,canvas2d.width,canvas2d.height);
+      };
+      img.src = url;
+
+      init3D(url);
+    });
   </script>
 </body>
 </html>
