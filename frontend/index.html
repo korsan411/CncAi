@@ -5,71 +5,132 @@
   <title>CNC AI Preview</title>
   <style>
     body { 
-      font-family: Arial, sans-serif; 
-      background: #f8f9fa; 
-      margin: 0; 
-      padding: 20px; 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      background: #f7f9fc;
+      margin: 0;
+      padding: 0;
       display: flex; 
       flex-direction: column; 
       align-items: center; 
-      gap: 30px; 
     }
-    #fileInput {
-      padding: 10px;
-      border: 1px solid #ccc;
-      background: white;
+    header {
+      background: linear-gradient(135deg, #4facfe, #00f2fe);
+      color: white;
+      padding: 20px;
+      text-align: center;
+      width: 100%;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    header h1 {
+      margin: 0;
+      font-size: 28px;
+    }
+    header p {
+      margin: 5px 0 0;
+      font-size: 16px;
+    }
+    .controls {
+      margin: 20px;
+      display: flex;
+      gap: 10px;
+    }
+    input[type="file"], button {
+      padding: 10px 15px;
       border-radius: 6px;
+      border: none;
       cursor: pointer;
+      font-size: 14px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      transition: all 0.2s;
     }
-    .preview-block {
-      display: flex; 
-      flex-direction: column; 
-      align-items: center; 
+    input[type="file"] {
+      background: #4facfe;
+      color: white;
+    }
+    input[type="file"]:hover {
+      background: #3a8dde;
+    }
+    button {
+      background: #ff5f6d;
+      color: white;
+    }
+    button:hover {
+      background: #e04a58;
+    }
+    .preview-block { 
       background: white;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
       padding: 15px;
-      border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      margin: 15px;
+      text-align: center;
+      width: fit-content;
     }
-    canvas { border: 1px solid #ccc; }
-    #preview3d { width: 400px; height: 400px; }
-    .desc {
+    canvas, #preview3d canvas { 
+      border-radius: 8px;
+      display: block;
+      margin: 0 auto 10px;
+      max-width: 400px;
+    }
+    .legend {
       margin-top: 10px;
-      font-weight: bold;
-      color: #333;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .legend-bar {
+      width: 200px;
+      height: 20px;
+      background: linear-gradient(to right, blue, cyan, lime, yellow, red);
+      border-radius: 4px;
     }
   </style>
 </head>
 <body>
-  <input type="file" id="fileInput" accept="image/*">
+  <header>
+    <h1>🛠️ CNC AI Preview</h1>
+    <p>معاينة الصور وتحويلها إلى ارتفاعات (2D, 3D, Heatmap)</p>
+  </header>
+
+  <div class="controls">
+    <input type="file" id="fileInput" accept="image/*">
+    <button id="resetBtn">إعادة تعيين</button>
+  </div>
 
   <div class="preview-block">
     <canvas id="preview2d"></canvas>
-    <div class="desc">📷 الصورة الأصلية</div>
+    <div>📷 الصورة الأصلية</div>
   </div>
 
   <div class="preview-block">
     <div id="preview3d"></div>
-    <div class="desc">🌀 المعاينة ثلاثية الأبعاد</div>
+    <div>🌀 المعاينة ثلاثية الأبعاد</div>
   </div>
 
   <div class="preview-block">
     <canvas id="heatmap"></canvas>
-    <div class="desc">🌈 خريطة الارتفاعات (Heatmap)</div>
+    <div>🌈 خريطة الارتفاعات (Heatmap)</div>
+    <div class="legend">
+      <div>منخفض</div>
+      <div class="legend-bar"></div>
+      <div>مرتفع</div>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-
   <script>
     const fileInput = document.getElementById('fileInput');
+    const resetBtn = document.getElementById('resetBtn');
     const canvas2d = document.getElementById('preview2d');
     const ctx2d = canvas2d.getContext('2d');
     const heatmap = document.getElementById('heatmap');
     const ctxHeat = heatmap.getContext('2d');
     const preview3d = document.getElementById('preview3d');
 
-    // إعداد 3D
+    // 3D setup
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(45, 400/400, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer();
     renderer.setSize(400, 400);
     preview3d.appendChild(renderer.domElement);
@@ -104,7 +165,7 @@
       }
       geometry.computeVertexNormals();
 
-      const material = new THREE.MeshLambertMaterial({ color: 0xcccccc, side: THREE.DoubleSide });
+      const material = new THREE.MeshLambertMaterial({ color: 0xaaaaaa, side: THREE.DoubleSide });
       if (mesh) scene.remove(mesh);
       mesh = new THREE.Mesh(geometry, material);
       scene.add(mesh);
@@ -118,7 +179,6 @@
           const idx = (y * w + x) * 4;
           const brightness = imgData[idx];
           const norm = (brightness - min) / (max - min);
-
           const color = getHeatColor(norm);
           heatData.data[idx] = color.r;
           heatData.data[idx+1] = color.g;
@@ -129,12 +189,10 @@
       ctxHeat.putImageData(heatData, 0, 0);
     }
 
-    // ألوان متدرجة: أزرق → أخضر → أصفر → أحمر
     function getHeatColor(value) {
-      const fourValue = 4 * value;
-      const r = Math.min(255, Math.max(0, 255 * (fourValue - 1.5)));
-      const g = Math.min(255, Math.max(0, 255 * (1 - Math.abs(fourValue - 2))));
-      const b = Math.min(255, Math.max(0, 255 * (1.5 - fourValue)));
+      const r = Math.floor(255 * value);
+      const g = Math.floor(255 * (1 - Math.abs(value - 0.5) * 2));
+      const b = Math.floor(255 * (1 - value));
       return { r, g, b };
     }
 
@@ -156,6 +214,12 @@
         createHeightMap(img);
       };
       img.src = URL.createObjectURL(file);
+    });
+
+    resetBtn.addEventListener('click', () => {
+      ctx2d.clearRect(0, 0, canvas2d.width, canvas2d.height);
+      ctxHeat.clearRect(0, 0, heatmap.width, heatmap.height);
+      if (mesh) scene.remove(mesh);
     });
   </script>
 </body>
