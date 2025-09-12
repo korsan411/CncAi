@@ -1,55 +1,46 @@
-name: Build & Deploy
+name: Deploy Frontend
 
 on:
   push:
     branches:
       - main
-  pull_request:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: frontend   # 🔥 خلي كل الأوامر تشتغل من هنا
-
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
         with:
           node-version: 18
-          cache: 'npm'
 
       - name: Install dependencies
         run: npm install
+        working-directory: frontend
 
-      - name: Run build
+      - name: Build project
         run: npm run build
-
-      # لو عندك اختبارات
-      # - name: Run tests
-      #   run: npm test
+        working-directory: frontend
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: frontend/dist   # هنا مكان build output
+          path: frontend/dist
 
   deploy:
-    needs: build-and-deploy
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-
+    runs-on: ubuntu-latest
+    needs: build
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
