@@ -74,7 +74,7 @@
 
       // إضاءة
       const light = new THREE.DirectionalLight(0xffffff, 1);
-      light.position.set(0, 1, 1).normalize();
+      light.position.set(0, 1, 2).normalize();
       scene.add(light);
 
       const ambient = new THREE.AmbientLight(0xffffff, 0.6);
@@ -112,7 +112,12 @@
         (texture) => {
           if (mesh) scene.remove(mesh);
 
-          const geometry = new THREE.PlaneGeometry(4, 3);
+          // اضبط حجم الـ Plane على نفس نسبة الصورة
+          const aspect = texture.image.width / texture.image.height;
+          const height = 3;
+          const width = height * aspect;
+
+          const geometry = new THREE.PlaneGeometry(width, height);
           const material = new THREE.MeshPhongMaterial({
             map: texture,
             side: THREE.DoubleSide
@@ -120,6 +125,10 @@
 
           mesh = new THREE.Mesh(geometry, material);
           scene.add(mesh);
+
+          // عدل الكاميرا بحيث الصورة تبان كويس
+          camera.position.z = Math.max(width, height) * 1.2;
+          controls.update();
         },
         undefined,
         (err) => {
