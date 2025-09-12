@@ -6,7 +6,7 @@
   <style>
     body { font-family: Arial, sans-serif; text-align: center; background: #f8f8f8; }
     canvas, #viewer3d { border: 1px solid black; margin: 10px; }
-    #viewer3d { width: 400px; height: 300px; display: inline-block; background: #ddd; }
+    #viewer3d { width: 400px; height: 300px; display: inline-block; }
   </style>
 </head>
 <body>
@@ -16,7 +16,7 @@
   <input type="file" id="upload2d" accept="image/*"><br><br>
   <canvas id="viewer2d" width="400" height="300"></canvas>
 
-  <h2>معاينة 3D</h2>
+  <h2>معاينة 3D (تجريب)</h2>
   <div id="viewer3d"></div>
 
   <!-- مكتبة Three.js -->
@@ -24,7 +24,7 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
 
   <script>
-    // معاينة 2D
+    // --- معاينة 2D ---
     const upload2d = document.getElementById('upload2d');
     const canvas2d = document.getElementById('viewer2d');
     const ctx = canvas2d.getContext('2d');
@@ -41,7 +41,7 @@
       img.src = url;
     });
 
-    // معاينة 3D - مكعب تجريبي
+    // --- معاينة 3D (مكعب تجريبي) ---
     const container3d = document.getElementById('viewer3d');
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f0f0);
@@ -67,7 +67,7 @@
     const ambient = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambient);
 
-    // مكعب تجريبي
+    // مكعب للتجربة
     const geometry = new THREE.BoxGeometry(1, 1, 1);
     const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
     const cube = new THREE.Mesh(geometry, material);
