@@ -4,26 +4,21 @@
   <meta charset="UTF-8">
   <title>CNC AI Preview</title>
   <style>
-    body { display: flex; gap: 20px; }
+    body { display: flex; flex-direction: column; gap: 20px; font-family: Arial, sans-serif; }
+    .row { display: flex; gap: 20px; }
     canvas { border: 1px solid #ccc; }
     #preview2d { width: 300px; height: 300px; }
-    #preview3d { width: 400px; height: 400px; position: relative; }
-    #topView {
-      position: absolute;
-      bottom: 10px;
-      right: 10px;
-      width: 200px;
-      height: 200px;
-      border: 2px solid #0f0;
-      background: #000;
-    }
+    #preview3d { width: 400px; height: 400px; }
+    #heatmap { width: 300px; height: 300px; }
   </style>
 </head>
 <body>
   <input type="file" id="fileInput" accept="image/*">
-  <canvas id="preview2d"></canvas>
-  <div id="preview3d">
-    <canvas id="topView"></canvas>
+
+  <div class="row">
+    <canvas id="preview2d"></canvas>
+    <div id="preview3d"></div>
+    <canvas id="heatmap"></canvas>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
@@ -31,15 +26,17 @@
   <script>
     const fileInput = document.getElementById('fileInput');
     const canvas2d = document.getElementById('preview2d');
-    const ctx = canvas2d.getContext('2d');
+    const ctx2d = canvas2d.getContext('2d');
     const preview3d = document.getElementById('preview3d');
+    const canvasHeat = document.getElementById('heatmap');
+    const ctxHeat = canvasHeat.getContext('2d');
 
-    // Main 3D setup
+    // 3D setup
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, 400/400, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer();
     renderer.setSize(400, 400);
-    preview3d.insertBefore(renderer.domElement, document.getElementById("topView"));
+    preview3d.appendChild(renderer.domElement);
 
     const light = new THREE.DirectionalLight(0xffffff, 1);
     light.position.set(0, 1, 1).normalize();
@@ -48,13 +45,35 @@
 
     let mesh;
 
-    // Top view camera setup
-    const topCanvas = document.getElementById("topView");
-    const topRenderer = new THREE.WebGLRenderer({ canvas: topCanvas });
-    topRenderer.setSize(200, 200);
-    const topCamera = new THREE.OrthographicCamera(-50, 50, 50, -50, 0.1, 1000);
-    topCamera.position.set(0, 200, 0); // فوق الجسم
-    topCamera.lookAt(0, 0, 0);
+    function getColor(value) {
+      // value بين 0 و 1
+      const r = Math.floor(255 * value);
+      const g = Math.floor(255 * (1 - Math.abs(value - 0.5) * 2));
+      const b = Math.floor(255 * (1 - value));
+      return `rgb(${r},${g},${b})`;
+    }
+
+    function createHeatmap(image, w = 100, h = 100) {
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = w; tempCanvas.height = h;
+      const tctx = tempCanvas.getContext('2d');
+      tctx.drawImage(image, 0, 0, w, h);
+      const imgData = tctx.getImageData(0, 0, w, h).data;
+
+      // تصغير canvas heatmap
+      canvasHeat.width = w;
+      canvasHeat.height = h;
+
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const idx = (y * w + x) * 4;
+          const brightness = imgData[idx]; // R فقط يكفي كقيمة رمادية
+          const norm = brightness / 255; 
+          ctxHeat.fillStyle = getColor(norm);
+          ctxHeat.fillRect(x, y, 1, 1);
+        }
+      }
+    }
 
     function createHeightMap(image) {
       const w = 100, h = 100;
@@ -79,16 +98,15 @@
       if (mesh) scene.remove(mesh);
       mesh = new THREE.Mesh(geometry, material);
       scene.add(mesh);
+
+      // كمان نرسم heatmap
+      createHeatmap(image, w, h);
     }
 
     function animate() {
       requestAnimationFrame(animate);
       if (mesh) mesh.rotation.y += 0.01;
-
-      // render main view
       renderer.render(scene, camera);
-      // render top view
-      topRenderer.render(scene, topCamera);
     }
     animate();
 
@@ -99,7 +117,7 @@
       img.onload = () => {
         canvas2d.width = img.width;
         canvas2d.height = img.height;
-        ctx.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
+        ctx2d.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
         createHeightMap(img);
       };
       img.src = URL.createObjectURL(file);
