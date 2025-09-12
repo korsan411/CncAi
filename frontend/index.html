@@ -1,203 +1,462 @@
 <!DOCTYPE html>
 <html lang="ar">
 <head>
-  <meta charset="UTF-8">
-  <title>CncAi - معاينة الصور</title>
+  <meta charset="utf-8" />
+  <title>CncAi — معاينة الصور & Heightmap & 3D</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      background: #f8f9fa;
-      color: #333;
-      text-align: center;
+    :root{
+      --card-bg: #fff;
+      --accent1: #4a90e2;
+      --accent2: #6a5acd;
+      --muted: #666;
     }
-    header {
-      background: #343a40;
-      color: white;
-      padding: 15px;
+    body{
+      margin:0;
+      font-family: Inter, Arial, sans-serif;
+      background:#f4f7fb;
+      color:#222;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:18px;
+      padding:18px;
     }
-    h1 {
-      margin: 0;
-      font-size: 24px;
+
+    header{
+      width:100%;
+      max-width:1200px;
+      background: linear-gradient(90deg,var(--accent1),var(--accent2));
+      color:white;
+      border-radius:10px;
+      padding:18px 22px;
+      box-shadow:0 6px 18px rgba(0,0,0,0.12);
     }
-    .uploader {
-      margin-top: 10px;
+    header h1{ margin:0; font-size:20px; }
+    header p{ margin:6px 0 0; opacity:0.95; font-size:13px; }
+
+    .controls{
+      width:100%;
+      max-width:1200px;
+      background:var(--card-bg);
+      border-radius:10px;
+      padding:12px;
+      display:flex;
+      gap:12px;
+      align-items:center;
+      flex-wrap:wrap;
+      box-shadow:0 6px 18px rgba(0,0,0,0.06);
     }
-    .preview {
-      margin: 30px auto;
-      max-width: 90%;
+
+    .controls input[type="file"]{
+      padding:8px 12px;
+      border-radius:8px;
+      border:1px solid #e6e9ef;
+      background:#fff;
+      cursor:pointer;
     }
-    .preview canvas, .preview img {
-      max-width: 100%;
-      height: auto;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      background: white;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    .controls .control-group{ display:flex; gap:8px; align-items:center; }
+    label{ font-size:13px; color:var(--muted); }
+
+    .colormap-buttons button{
+      margin:0 6px;
+      padding:8px 12px;
+      border-radius:8px;
+      border:none;
+      cursor:pointer;
+      color:white;
+      font-weight:600;
     }
-    .label {
-      margin-top: 10px;
-      font-weight: bold;
-      color: #555;
+    .btn-jet{ background:#1e90ff; }
+    .btn-hot{ background:#ff4500; }
+    .btn-cool{ background:#8a2be2; }
+    .btn-gray{ background:#6c757d; }
+
+    .main-column{
+      width:100%;
+      max-width:1200px;
+      display:flex;
+      flex-direction:column;
+      gap:18px;
+      align-items:center;
     }
-    .colormap-buttons {
-      margin: 15px 0;
+
+    .card{
+      width:100%;
+      background:var(--card-bg);
+      border-radius:10px;
+      padding:14px;
+      box-shadow:0 6px 18px rgba(0,0,0,0.06);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:10px;
     }
-    .colormap-buttons button {
-      margin: 5px;
-      padding: 8px 14px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      background: #007bff;
-      color: white;
-      transition: 0.3s;
+
+    .label{ font-weight:700; color:#333; }
+
+    /* canvases/images should not overflow screen */
+    img, canvas { max-width:100%; height:auto; display:block; border-radius:8px; border:1px solid #e6e9ef; }
+
+    .row{
+      width:100%;
+      display:flex;
+      gap:12px;
+      align-items:flex-start;
+      justify-content:center;
+      flex-wrap:wrap;
     }
-    .colormap-buttons button:hover {
-      background: #0056b3;
+
+    .small-note{ font-size:12px; color:var(--muted); }
+
+    .actions{ display:flex; gap:8px; align-items:center; }
+    button.reset{
+      background:#ff5f6d; color:white; padding:8px 12px; border-radius:8px; border:none; cursor:pointer;
+    }
+
+    .controls .range{ display:inline-block; vertical-align:middle; }
+    input[type=range]{ width:160px; }
+
+    /* responsive */
+    @media (max-width:720px){
+      .controls input[type="file"]{ width:100%; }
+      input[type=range]{ width:120px; }
     }
   </style>
 </head>
 <body>
+
   <header>
-    <h1>🖼️ CncAi - معاينة الصور</h1>
-    <div class="uploader">
-      <input type="file" id="fileInput" accept="image/*">
-    </div>
+    <h1>🛠️ CncAi — معاينة الصور و توليد heightmap</h1>
+    <p>ارفع صورة، وشاهد: الصورة الأصلية — Heatmap 2D — معاينة ثلاثية الأبعاد بارتفاعات من الصورة.</p>
   </header>
 
-  <div class="preview">
-    <img id="originalImage" alt="الصورة الأصلية">
-    <div class="label">الصورة الأصلية</div>
-  </div>
-
-  <div class="preview">
-    <canvas id="heatmapCanvas"></canvas>
-    <div class="label">خريطة الارتفاعات 2D (Heatmap)</div>
-    <div class="colormap-buttons">
-      <button onclick="setColormap('grayscale')">Grayscale</button>
-      <button onclick="setColormap('jet')">Jet</button>
-      <button onclick="setColormap('hot')">Hot</button>
-      <button onclick="setColormap('cool')">Cool</button>
+  <div class="controls">
+    <input id="fileInput" type="file" accept="image/*">
+    <div class="control-group">
+      <label>🔄 سرعة الدوران</label>
+      <input id="rotationSpeed" type="range" min="0" max="0.05" step="0.001" value="0.01">
+    </div>
+    <div class="control-group">
+      <label>🔍 زوم (مسافة الكاميرا)</label>
+      <input id="zoomControl" type="range" min="50" max="2000" step="10" value="500">
+    </div>
+    <div class="control-group actions">
+      <div class="colormap-buttons">
+        <button class="btn-jet" data-map="jet">Jet</button>
+        <button class="btn-hot" data-map="hot">Hot</button>
+        <button class="btn-cool" data-map="cool">Cool</button>
+        <button class="btn-gray" data-map="grayscale">Gray</button>
+      </div>
+      <button class="reset" id="resetBtn">إعادة تعيين</button>
     </div>
   </div>
 
-  <div class="preview">
-    <div id="threeContainer"></div>
-    <div class="label">المعاينة ثلاثية الأبعاد</div>
+  <div class="main-column">
+    <!-- Original image (full size) -->
+    <div class="card" id="card-original">
+      <div class="label">📷 الصورة الأصلية</div>
+      <img id="originalImage" alt="الصورة الأصلية" />
+      <div class="small-note">الصورة تظهر بأبعادها الأصلية أو مناسبة لشاشة العرض.</div>
+    </div>
+
+    <!-- Heatmap (2D) -->
+    <div class="card" id="card-heatmap">
+      <div class="label">🌈 خريطة الارتفاعات (Heatmap)</div>
+      <canvas id="heatmapCanvas"></canvas>
+      <div class="small-note">خريطة الألوان توضح القيمة النسبية للسطوع (مقياس لارتفاعات الـheightmap).</div>
+    </div>
+
+    <!-- 3D preview -->
+    <div class="card" id="card-3d">
+      <div class="label">🌀 معاينة ثلاثية الأبعاد (Heightmap)</div>
+      <div id="threeContainer" style="width:100%; display:flex; justify-content:center;"></div>
+      <div class="small-note">استخدم الماوس للسحب/التكبير - وقيّم النتيجة. (OrbitControls)</div>
+    </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/examples/js/controls/OrbitControls.js"></script>
+  <!-- three.js and OrbitControls -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
+
   <script>
+    // عناصر DOM
     const fileInput = document.getElementById('fileInput');
     const originalImage = document.getElementById('originalImage');
     const heatmapCanvas = document.getElementById('heatmapCanvas');
-    const ctx = heatmapCanvas.getContext('2d');
+    const heatCtx = heatmapCanvas.getContext('2d');
     const threeContainer = document.getElementById('threeContainer');
+    const rotationSpeedEl = document.getElementById('rotationSpeed');
+    const zoomControlEl = document.getElementById('zoomControl');
+    const resetBtn = document.getElementById('resetBtn');
+    const colormapButtons = document.querySelectorAll('.colormap-buttons button');
 
-    let colormap = 'grayscale';
-    let mesh, scene, camera, renderer, controls;
+    // حالات
+    let currentColormap = 'jet';
+    let rotationSpeed = parseFloat(rotationSpeedEl.value) || 0.01;
+    let cameraDistance = parseFloat(zoomControlEl.value) || 500;
+    let threeState = { scene: null, camera: null, renderer: null, controls: null, mesh: null };
+    let lastImage = null;
 
-    fileInput.addEventListener('change', e => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = ev => {
-        originalImage.src = ev.target.result;
-        const img = new Image();
-        img.onload = () => {
-          heatmapCanvas.width = img.width;
-          heatmapCanvas.height = img.height;
-          ctx.drawImage(img, 0, 0);
-          applyColormap();
-          render3D(img);
-        };
-        img.src = ev.target.result;
-      };
-      reader.readAsDataURL(file);
+    // parameter: maximum subdivisions to avoid heavy geometry
+    const MAX_SUBDIV = 200; // adjust if you want higher/lower performance
+
+    // helper: set colormap from button
+    colormapButtons.forEach(btn=>{
+      btn.addEventListener('click', ()=> {
+        const map = btn.dataset.map;
+        currentColormap = map;
+        if(lastImage) processImageAndRender(lastImage);
+      });
     });
 
-    function setColormap(map) {
-      colormap = map;
-      applyColormap();
-    }
+    // reset
+    resetBtn.addEventListener('click', ()=> {
+      fileInput.value = '';
+      originalImage.src = '';
+      heatCtx.clearRect(0,0,heatmapCanvas.width, heatmapCanvas.height);
+      clearThree();
+      lastImage = null;
+    });
 
-    function applyColormap() {
-      const imgData = ctx.getImageData(0, 0, heatmapCanvas.width, heatmapCanvas.height);
-      const data = imgData.data;
-      for (let i = 0; i < data.length; i += 4) {
-        let v = data[i]; // R
-        let r, g, b;
-        if (colormap === 'grayscale') {
-          r = g = b = v;
-        } else if (colormap === 'jet') {
-          r = Math.max(0, 255 * (1.5 - Math.abs((4 * (v/255)) - 3)));
-          g = Math.max(0, 255 * (1.5 - Math.abs((4 * (v/255)) - 2)));
-          b = Math.max(0, 255 * (1.5 - Math.abs((4 * (v/255)) - 1)));
-        } else if (colormap === 'hot') {
-          r = Math.min(255, v * 3);
-          g = Math.min(255, v * 2);
-          b = v / 2;
-        } else if (colormap === 'cool') {
-          r = v;
-          g = 255 - v;
-          b = 255;
-        }
-        data[i] = r; data[i+1] = g; data[i+2] = b;
+    // update rotation & zoom
+    rotationSpeedEl.addEventListener('input', ()=> {
+      rotationSpeed = parseFloat(rotationSpeedEl.value);
+    });
+    zoomControlEl.addEventListener('input', ()=> {
+      cameraDistance = parseFloat(zoomControlEl.value);
+      if(threeState.camera){
+        // reposition camera while keeping angle
+        threeState.camera.position.set(0, -cameraDistance, cameraDistance*0.6);
+        threeState.controls.update();
       }
-      ctx.putImageData(imgData, 0, 0);
+    });
+
+    // file load
+    fileInput.addEventListener('change', (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = ()=>{
+        lastImage = img;
+        // show original image (fit to container)
+        originalImage.src = url;
+
+        // process & render heatmap + 3d
+        processImageAndRender(img);
+      };
+      img.src = url;
+    });
+
+    // main processing function
+    function processImageAndRender(img){
+      // compute subdivisions for geometry: cap to MAX_SUBDIV and image dims
+      const subX = Math.min(img.width, MAX_SUBDIV);
+      const subY = Math.min(img.height, MAX_SUBDIV);
+
+      // create scaled temp canvas to sample brightness (for performance)
+      const temp = document.createElement('canvas');
+      temp.width = subX;
+      temp.height = subY;
+      const tctx = temp.getContext('2d');
+      // draw scaled down image
+      tctx.drawImage(img, 0, 0, subX, subY);
+      const sample = tctx.getImageData(0,0,subX,subY).data;
+
+      // Generate heatmap on a temp canvas (subX x subY) using chosen colormap
+      const heatTemp = document.createElement('canvas');
+      heatTemp.width = subX;
+      heatTemp.height = subY;
+      const hctx = heatTemp.getContext('2d');
+      const heatImgData = hctx.createImageData(subX, subY);
+
+      // find min/max brightness to normalize
+      let minB = 255, maxB = 0;
+      for(let i=0;i<sample.length;i+=4){
+        const b = sample[i]; // red channel (grayscale assumption)
+        if(b < minB) minB = b;
+        if(b > maxB) maxB = b;
+      }
+      if(maxB === minB) { maxB = minB + 1; } // avoid div0
+
+      for(let y=0;y<subY;y++){
+        for(let x=0;x<subX;x++){
+          const idx = (y*subX + x)*4;
+          const brightness = sample[idx];
+          const norm = (brightness - minB) / (maxB - minB);
+          const col = heatColor(norm, currentColormap);
+          heatImgData.data[idx] = col.r;
+          heatImgData.data[idx+1] = col.g;
+          heatImgData.data[idx+2] = col.b;
+          heatImgData.data[idx+3] = 255;
+        }
+      }
+      hctx.putImageData(heatImgData, 0, 0);
+
+      // draw heatTemp scaled up to heatmapCanvas (original image size)
+      heatmapCanvas.width = img.width;
+      heatmapCanvas.height = img.height;
+      // upscale using drawImage (keeps it fast)
+      heatCtx.clearRect(0,0,heatmapCanvas.width, heatmapCanvas.height);
+      heatCtx.imageSmoothingEnabled = true;
+      heatCtx.drawImage(heatTemp, 0, 0, heatmapCanvas.width, heatmapCanvas.height);
+
+      // draw original image to preview2d canvas (we used <img> for original, but keep a canvas for potential manip)
+      // (not necessary, but keep canvas sized)
+      // now render 3D using sample brightness (subX x subY)
+      render3DFromSample(sample, subX, subY, img.width, img.height);
     }
 
-    // 3D Preview
-    function render3D(img) {
-      const w = 100, h = 100; // تصغير الصورة عشان الأداء
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = w; tempCanvas.height = h;
-      const tctx = tempCanvas.getContext('2d');
-      tctx.drawImage(img, 0, 0, w, h);
-      const imgData = tctx.getImageData(0, 0, w, h).data;
+    // map normalized value [0..1] to color
+    function heatColor(v, map){
+      v = Math.max(0, Math.min(1, v));
+      let r=0,g=0,b=0;
+      if(map === 'jet'){
+        // jet-like
+        r = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*v-3),1),0));
+        g = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*v-2),1),0));
+        b = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*v-1),1),0));
+      } else if(map === 'hot'){
+        r = Math.floor(255 * Math.min(1, 3*v));
+        g = Math.floor(255 * Math.min(1, Math.max(0, 3*v-1)));
+        b = Math.floor(255 * Math.min(1, Math.max(0, 3*v-2)));
+      } else if(map === 'cool'){
+        r = Math.floor(255 * v);
+        g = Math.floor(255 * (1-v));
+        b = 255;
+      } else { // grayscale
+        r = g = b = Math.floor(255 * v);
+      }
+      return {r,g,b};
+    }
 
-      // Setup scene
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
-      renderer = new THREE.WebGLRenderer();
-      renderer.setSize(400, 400);
-      threeContainer.innerHTML = "";
+    // clear three resources
+    function clearThree(){
+      if(!threeState || !threeState.renderer) return;
+      try{
+        threeState.renderer.forceContextLoss();
+      }catch(e){}
+      threeContainer.innerHTML = '';
+      threeState = { scene: null, camera: null, renderer: null, controls: null, mesh: null };
+    }
+
+    // render 3D from sampled brightness array
+    // sampleData: Uint8ClampedArray length = subX*subY*4
+    // subX, subY = sample dims
+    // outW, outH = original image dims (for renderer sizing)
+    function render3DFromSample(sampleData, subX, subY, outW, outH){
+      clearThree();
+
+      // create scene, camera, renderer
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xf8f9fb);
+
+      // renderer set size equal original image dims (or capped to viewport max to avoid huge canvases)
+      // cap to max display width to avoid extremely large rendering on tiny screens
+      const maxDisplay = Math.min(window.innerWidth*0.95, outW);
+      const aspect = outW / outH;
+      const rendererW = Math.round(Math.min(outW, maxDisplay));
+      const rendererH = Math.round(rendererW / aspect);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(rendererW, rendererH);
+      threeContainer.innerHTML = '';
       threeContainer.appendChild(renderer.domElement);
 
-      controls = new THREE.OrbitControls(camera, renderer.domElement);
-      camera.position.set(0, -150, 150);
+      // camera: position based on image size for good framing
+      const camera = new THREE.PerspectiveCamera(45, rendererW/rendererH, 0.1, Math.max(outW,outH)*10);
+      const camDist = cameraDistance;
+      camera.position.set(0, -camDist, camDist*0.6);
+      camera.up.set(0,0,1); // z up
+      camera.lookAt(0,0,0);
 
-      // Geometry
-      const geometry = new THREE.PlaneGeometry(100, 100, w-1, h-1);
-      for (let i = 0; i < geometry.attributes.position.count; i++) {
-        const stride = i * 3;
-        const x = i % w;
-        const y = Math.floor(i / w);
-        const idx = (y * w + x) * 4;
-        const brightness = imgData[idx]; // R channel
-        geometry.attributes.position.array[stride + 2] = brightness / 5; // الارتفاع
+      // controls
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.07;
+      controls.screenSpacePanning = true;
+      controls.minDistance = 10;
+      controls.maxDistance = 10000;
+      controls.maxPolarAngle = Math.PI * 0.95;
+
+      // create geometry: plane with subdivisions of subX/subY
+      const planeWidth = outW;
+      const planeHeight = outH;
+      const segX = Math.max(1, subX - 1);
+      const segY = Math.max(1, subY - 1);
+
+      const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight, segX, segY);
+
+      // fill Z values from sampleData (note: sampleData is in RGBA, use R)
+      // geometry.attributes.position is Float32Array [x,y,z,x,y,z,...]
+      const pos = geometry.attributes.position.array;
+      // sample grid is subX x subY; geometry vertex order matches that grid (left->right, top->bottom)
+      for(let y=0;y<subY;y++){
+        for(let x=0;x<subX;x++){
+          const sIdx = (y*subX + x) * 4;
+          const brightness = sampleData[sIdx]; // 0..255
+          // find corresponding vertex index
+          const vx = x;
+          const vy = (subY - 1) - y; // flip Y so top of image becomes +Y front (adjust for orientation)
+          const vertIndex = (vy * (segX+1) + vx);
+          const stride = vertIndex * 3;
+          // scale Z: choose a reasonable scale factor relative to image size
+          const zScale = Math.max(1, Math.min( Math.max(planeWidth, planeHeight) / 50, 200 )); // heuristic
+          pos[stride + 2] = (brightness / 255) * zScale;
+        }
       }
       geometry.computeVertexNormals();
+      geometry.attributes.position.needsUpdate = true;
 
-      const material = new THREE.MeshLambertMaterial({ color: 0xaaaaaa, side: THREE.DoubleSide });
-      mesh = new THREE.Mesh(geometry, material);
+      // material
+      const material = new THREE.MeshStandardMaterial({ color: 0xcccccc, side: THREE.DoubleSide, flatShading:false });
+      const mesh = new THREE.Mesh(geometry, material);
+      // rotate plane to lie XY plane (z up) if needed - here PlaneGeometry XY is in X (width) and Y (height) with normal +Z, so rotate to show as top-down? keep default orientation but rotate to suit
+      mesh.rotation.x = -Math.PI / 2; // make Z up so we view like real world
       scene.add(mesh);
 
-      const light = new THREE.DirectionalLight(0xffffff, 1);
-      light.position.set(0, 0, 100).normalize();
-      scene.add(light);
+      // lights
+      const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+      dir.position.set(100, 100, 200);
+      scene.add(dir);
+      scene.add(new THREE.AmbientLight(0x888888));
 
-      animate();
+      // store threeState
+      threeState = { scene, camera, renderer, controls, mesh };
+
+      // animation loop
+      function loop(){
+        requestAnimationFrame(loop);
+        // auto-rotate if enabled
+        if(threeState.mesh && rotationSpeed !== 0){
+          threeState.mesh.rotation.z += rotationSpeed; // rotate around Z after we rotated mesh.x
+        }
+        threeState.controls.update();
+        threeState.renderer.render(threeState.scene, threeState.camera);
+      }
+      loop();
     }
 
-    function animate() {
-      requestAnimationFrame(animate);
-      controls.update();
-      if (mesh) mesh.rotation.y += 0.002;
-      renderer.render(scene, camera);
-    }
+    // utility for safe console debug (optional)
+    function safeLog(...a){ try{ console.log(...a);}catch(e){} }
+
+    // ensure window resize updates renderer size modestly
+    window.addEventListener('resize', ()=>{
+      if(!threeState.renderer || !lastImage) return;
+      // recompute new renderer size to fit container width
+      const outW = lastImage.width;
+      const outH = lastImage.height;
+      const maxDisplay = Math.min(window.innerWidth*0.95, outW);
+      const aspect = outW / outH;
+      const rendererW = Math.round(Math.min(outW, maxDisplay));
+      const rendererH = Math.round(rendererW / aspect);
+      threeState.renderer.setSize(rendererW, rendererH);
+      threeState.camera.aspect = rendererW/rendererH;
+      threeState.camera.updateProjectionMatrix();
+    });
+
+    // end of script
   </script>
 </body>
 </html>
