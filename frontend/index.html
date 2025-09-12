@@ -2,41 +2,86 @@
 <html lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>CncAi - معاينة</title>
+  <title>CNC Ai - Image to Gcode</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      margin: 20px;
-    }
-    canvas {
-      border: 1px solid #000;
-      margin-top: 20px;
-    }
+    body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
+    canvas { border: 1px solid #000; margin-top: 10px; }
+    #progressContainer { width: 80%; margin: 15px auto; border: 1px solid #aaa; height: 20px; border-radius: 5px; }
+    #progressBar { height: 100%; width: 0; background: green; border-radius: 5px; }
   </style>
 </head>
 <body>
-  <h1>معاينة الصورة</h1>
-
-  <input type="file" id="upload" accept="image/*">
-  <br><br>
-  <canvas id="preview" width="400" height="400"></canvas>
+  <h1>🖼️ CNC Ai - Image to G-code</h1>
+  
+  <input type="file" id="imageInput" accept="image/*"><br><br>
+  <canvas id="preview" width="400" height="400"></canvas><br><br>
+  
+  <button id="generateBtn">⚙️ توليد G-code</button>
+  
+  <div id="progressContainer">
+    <div id="progressBar"></div>
+  </div>
+  
+  <a id="downloadLink" style="display:none;" download="output.gcode">⬇️ تحميل G-code</a>
 
   <script>
-    const upload = document.getElementById("upload");
+    const imageInput = document.getElementById("imageInput");
     const canvas = document.getElementById("preview");
     const ctx = canvas.getContext("2d");
+    const generateBtn = document.getElementById("generateBtn");
+    const progressBar = document.getElementById("progressBar");
+    const downloadLink = document.getElementById("downloadLink");
+    
+    let img = new Image();
 
-    upload.addEventListener("change", function(event) {
-      const file = event.target.files[0];
+    // عرض الصورة على الكانفس
+    imageInput.addEventListener("change", e => {
+      const file = e.target.files[0];
       if (!file) return;
-
-      const img = new Image();
-      img.onload = function() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const reader = new FileReader();
+      reader.onload = event => {
+        img.onload = () => {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        };
+        img.src = event.target.result;
       };
-      img.src = URL.createObjectURL(file);
+      reader.readAsDataURL(file);
+    });
+
+    // توليد G-code بسيط
+    generateBtn.addEventListener("click", () => {
+      let gcode = "G21 ; Set units to mm\nG90 ; Absolute positioning\n";
+      const lines = 20; // عدد الخطوط الأفقية للتجربة
+      let step = canvas.height / lines;
+
+      let progress = 0;
+      let interval = setInterval(() => {
+        if (progress >= lines) {
+          clearInterval(interval);
+          progressBar.style.width = "100%";
+
+          // حفظ ملف
+          const blob = new Blob([gcode], { type: "text/plain" });
+          const url = URL.createObjectURL(blob);
+          downloadLink.href = url;
+          downloadLink.style.display = "block";
+          downloadLink.textContent = "⬇️ تحميل G-code";
+
+          return;
+        }
+
+        let y = Math.floor(progress * step);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.strokeStyle = "red";
+        ctx.stroke();
+
+        gcode += `G0 X0 Y${y}\nG1 X100 Y${y} F500\n`; // مسار CNC بسيط
+        progress++;
+        progressBar.style.width = ((progress / lines) * 100) + "%";
+      }, 200);
     });
   </script>
 </body>
