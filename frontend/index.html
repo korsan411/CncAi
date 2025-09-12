@@ -5,24 +5,21 @@
   <title>معاينة 2D و 3D</title>
   <style>
     body { font-family: Arial, sans-serif; text-align: center; background: #f8f8f8; }
-    canvas { border: 1px solid black; margin: 10px; }
+    canvas, #viewer3d { border: 1px solid black; margin: 10px; }
     #viewer3d { width: 400px; height: 300px; display: inline-block; }
   </style>
 </head>
 <body>
   <h1>معاينة 2D و 3D</h1>
 
-  <!-- رفع صورة للـ 2D -->
   <h2>معاينة 2D</h2>
   <input type="file" id="upload2d" accept="image/*"><br><br>
   <canvas id="viewer2d" width="400" height="300"></canvas>
 
-  <!-- رفع صورة للـ 3D -->
   <h2>معاينة 3D</h2>
   <input type="file" id="upload3d" accept="image/*"><br><br>
   <div id="viewer3d"></div>
 
-  <!-- مكتبة Three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
 
@@ -50,11 +47,16 @@
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f0f0);
 
-    const camera = new THREE.PerspectiveCamera(45, 400 / 300, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(
+      45,
+      container3d.clientWidth / container3d.clientHeight,
+      0.1,
+      1000
+    );
     camera.position.z = 3;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(400, 300);
+    renderer.setSize(container3d.clientWidth, container3d.clientHeight);
     container3d.appendChild(renderer.domElement);
 
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -62,6 +64,9 @@
     const light = new THREE.DirectionalLight(0xffffff, 1);
     light.position.set(1, 1, 2).normalize();
     scene.add(light);
+
+    const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambient);
 
     let mesh = null;
 
@@ -73,7 +78,11 @@
       textureLoader.load(url, texture => {
         if (mesh) scene.remove(mesh);
 
-        const geometry = new THREE.PlaneGeometry(2, 2);
+        const imgAspect = texture.image.width / texture.image.height;
+        const geoWidth = 2;
+        const geoHeight = 2 / imgAspect;
+
+        const geometry = new THREE.PlaneGeometry(geoWidth, geoHeight);
         const material = new THREE.MeshLambertMaterial({ map: texture, side: THREE.DoubleSide });
         mesh = new THREE.Mesh(geometry, material);
         scene.add(mesh);
