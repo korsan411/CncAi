@@ -91,4 +91,46 @@
 
         for (let i = 0, j = 0; i < data.length; i += 4, j++) {
           const brightness =
-            data[i] * 0.3 + data[i + 1] * 0.59 + data[i +
+            data[i] * 0.3 + data[i + 1] * 0.59 + data[i + 2] * 0.11;
+          geometry.attributes.position.setZ(j, brightness / 20);
+        }
+
+        geometry.computeVertexNormals();
+        const material = new THREE.MeshStandardMaterial({
+          color: 0x88ccff,
+          wireframe: false,
+          side: THREE.DoubleSide,
+        });
+
+        if (mesh) scene.remove(mesh);
+        mesh = new THREE.Mesh(geometry, material);
+        mesh.rotation.x = -Math.PI / 2;
+        scene.add(mesh);
+      }
+
+      // تحميل صورة
+      document.getElementById("imageInput").addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const img = new Image();
+        img.onload = () => generateHeightmap(img);
+        img.src = URL.createObjectURL(file);
+      });
+
+      // الرسوم المتحركة
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      // عند تغيير الحجم
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    </script>
+  </body>
+</html>
