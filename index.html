@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CNC AI Relief Carving</title>
+    <title>CNC AI Heightmap</title>
 
     <!-- three.js -->
     <script src="https://unpkg.com/three@0.164.1/build/three.min.js"></script>
@@ -24,69 +24,96 @@
         padding: 10px;
         background: #222;
         border-bottom: 1px solid #444;
-      }
-      #preview {
-        flex: 1;
-        display: block;
-        width: 100%;
-        height: 100%;
-      }
-      #controls {
-        background: #222;
-        padding: 10px;
         display: flex;
         align-items: center;
         gap: 10px;
       }
+      #views {
+        flex: 1;
+        display: flex;
+      }
+      #preview2d,
+      #preview3d {
+        flex: 1;
+        display: none;
+        align-items: center;
+        justify-content: center;
+      }
+      #preview2d img {
+        max-width: 100%;
+        max-height: 100%;
+      }
+      canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      button {
+        padding: 6px 12px;
+        border: none;
+        border-radius: 4px;
+        background: #444;
+        color: #fff;
+        cursor: pointer;
+      }
+      button.active {
+        background: #0088ff;
+      }
     </style>
   </head>
   <body>
-    <!-- رفع صورة -->
     <div id="uploader">
       <input type="file" id="imageInput" accept="image/*" />
+      <button id="btn2d" class="active">عرض 2D</button>
+      <button id="btn3d">عرض 3D</button>
     </div>
 
-    <!-- أدوات التحكم -->
-    <div id="controls">
-      <label for="zScale">عمق النحت:</label>
-      <input type="range" id="zScale" min="1" max="50" value="10" />
-    </div>
+    <div id="views">
+      <!-- معاينة 2D -->
+      <div id="preview2d" style="display: flex">
+        <p>ارفع صورة لعرضها هنا</p>
+      </div>
 
-    <!-- مكان عرض 3D -->
-    <canvas id="preview"></canvas>
+      <!-- معاينة 3D -->
+      <div id="preview3d">
+        <canvas id="canvas3d"></canvas>
+      </div>
+    </div>
 
     <script>
-      const canvas = document.getElementById("preview");
+      const imgPreview = document.createElement("img");
+      const preview2d = document.getElementById("preview2d");
+      const preview3d = document.getElementById("preview3d");
+      const fileInput = document.getElementById("imageInput");
+      const btn2d = document.getElementById("btn2d");
+      const btn3d = document.getElementById("btn3d");
+
+      // 3D إعداد
+      const canvas3d = document.getElementById("canvas3d");
       const scene = new THREE.Scene();
 
-      // الكاميرا
       const camera = new THREE.PerspectiveCamera(
         75,
-        window.innerWidth / window.innerHeight,
+        canvas3d.clientWidth / canvas3d.clientHeight,
         0.1,
         1000
       );
-      camera.position.set(0, 80, 150);
+      camera.position.set(0, 60, 120);
 
-      // الرندر
-      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-      renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+      const renderer = new THREE.WebGLRenderer({ canvas: canvas3d, antialias: true });
+      renderer.setSize(canvas3d.clientWidth, canvas3d.clientHeight);
 
-      // التحكم بالماوس
       const controls = new THREE.OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
 
-      // إضاءة
+      scene.add(new THREE.AmbientLight(0x404040));
       const light = new THREE.DirectionalLight(0xffffff, 1);
       light.position.set(0, 50, 50);
       scene.add(light);
-      scene.add(new THREE.AmbientLight(0x666666));
 
       let mesh;
-      let currentImage;
 
-      // دالة توليد الارتفاعات
-      function generateHeightmap(img, zScale = 10) {
+      function generateHeightmap(img) {
         const canvasTemp = document.createElement("canvas");
         const ctx = canvasTemp.getContext("2d");
         const width = 128;
@@ -101,59 +128,61 @@
         for (let i = 0, j = 0; i < data.length; i += 4, j++) {
           const brightness =
             data[i] * 0.3 + data[i + 1] * 0.59 + data[i + 2] * 0.11;
-          geometry.attributes.position.setZ(j, (brightness / 255) * zScale);
+          geometry.attributes.position.setZ(j, brightness / 25);
         }
-
         geometry.computeVertexNormals();
-        return geometry;
+
+        if (mesh) scene.remove(mesh);
+
+        const material = new THREE.MeshStandardMaterial({
+          color: 0x888888,
+          wireframe: false,
+          side: THREE.DoubleSide,
+          flatShading: true,
+        });
+
+        mesh = new THREE.Mesh(geometry, material);
+        mesh.rotation.x = -Math.PI / 2;
+        scene.add(mesh);
       }
 
-      // تحميل الصورة
-      document.getElementById("imageInput").addEventListener("change", (e) => {
+      // رفع الصورة
+      fileInput.addEventListener("change", (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        const img = new Image();
-        img.crossOrigin = "anonymous"; // ضروري عشان GitHub Pages
-        img.onload = () => {
-          if (mesh) scene.remove(mesh);
-          currentImage = img;
-
-          const geometry = generateHeightmap(
-            img,
-            document.getElementById("zScale").value
-          );
-
-          const material = new THREE.MeshStandardMaterial({
-            color: 0xcccccc,
-            side: THREE.DoubleSide,
-            flatShading: true,
-          });
-
-          mesh = new THREE.Mesh(geometry, material);
-          mesh.rotation.x = -Math.PI / 2;
-          scene.add(mesh);
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          imgPreview.src = ev.target.result;
+          preview2d.innerHTML = "";
+          preview2d.appendChild(imgPreview);
         };
-        img.src = URL.createObjectURL(file);
+        reader.readAsDataURL(file);
+
+        imgPreview.onload = () => {
+          generateHeightmap(imgPreview);
+        };
       });
 
-      // التحكم في العمق
-      document.getElementById("zScale").addEventListener("input", (e) => {
-        if (!mesh || !currentImage) return;
-        const scale = e.target.value;
+      // تبديل العرض
+      function show2D() {
+        preview2d.style.display = "flex";
+        preview3d.style.display = "none";
+        btn2d.classList.add("active");
+        btn3d.classList.remove("active");
+      }
+      function show3D() {
+        preview2d.style.display = "none";
+        preview3d.style.display = "flex";
+        btn3d.classList.add("active");
+        btn2d.classList.remove("active");
+      }
 
-        const newGeometry = generateHeightmap(currentImage, scale);
-        mesh.geometry.dispose();
-        mesh.geometry = newGeometry;
-      });
+      btn2d.addEventListener("click", show2D);
+      btn3d.addEventListener("click", show3D);
 
-      // تحديث عند تغيير حجم الصفحة
-      window.addEventListener("resize", () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      });
+      // افتراضي 2D
+      show2D();
 
-      // أنيميشن
       function animate() {
         requestAnimationFrame(animate);
         controls.update();
