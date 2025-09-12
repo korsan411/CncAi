@@ -1,1 +1,52 @@
-<!doctype html><html lang='ar' dir='rtl'><head><meta charset='utf-8'/><meta name='viewport' content='width=device-width,initial-scale=1'/><title>AICNC</title></head><body><div id='root'></div><script type='module' src='/src/main.tsx'></script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CNC AI Heightmap</title>
+
+  <!-- three.js من CDN -->
+  <script src="https://unpkg.com/three@0.164.1/build/three.min.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #111;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    #uploader {
+      padding: 10px;
+      background: #222;
+      border-bottom: 1px solid #444;
+    }
+    #preview {
+      flex: 1;
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <!-- رفع صورة -->
+  <div id="uploader">
+    <input type="file" id="imageInput" accept="image/*" />
+  </div>
+
+  <!-- مكان عرض 3D -->
+  <canvas id="preview"></canvas>
+
+  <script>
+    const canvas = document.getElementById("preview");
+    const scene = new THREE.Scene();
+
+    // الكاميرا
+    const camera = new THREE.PerspectiveCamera(
+      75,
+      window.innerWidth / window.innerHeight,
+      0.1
