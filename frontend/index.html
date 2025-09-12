@@ -2,167 +2,143 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>CNC Preview</title>
+  <title>CNC AI Preview</title>
   <style>
-    body {
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      background: #f0f0f0;
-      font-family: Arial, sans-serif;
+    body { 
+      font-family: Arial, sans-serif; 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      gap: 20px; 
     }
-    .preview-box {
-      margin: 10px 0;
-      border: 2px solid #333;
-      background: white;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 5px;
+    .preview-block { 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
     }
-    #originalImage {
-      max-width: 400px;
-      max-height: 400px;
+    canvas { 
+      border: 1px solid #ccc; 
+      margin-bottom: 8px; 
     }
-    #preview2d {
-      width: 400px;
-      height: 400px;
-      display: block;
-    }
-    #colorLegend {
-      margin-top: 10px;
-      width: 400px;
-      height: 30px;
-      display: block;
-      border: 1px solid #333;
-    }
-    #preview3d {
-      width: 100%;
-      height: 400px;
-    }
-    #controls {
-      margin: 20px 0;
-    }
+    #fileInput { margin: 10px; }
   </style>
 </head>
 <body>
-  <div id="controls">
-    <input type="file" id="fileInput" accept="image/*">
+  <input type="file" id="fileInput" accept="image/*">
+
+  <div class="preview-block">
+    <canvas id="preview2d"></canvas>
+    <div>📷 الصورة الأصلية</div>
   </div>
 
-  <h2>المعاينة الأصلية</h2>
-  <div class="preview-box">
-    <img id="originalImage" alt="Original Preview">
-  </div>
-
-  <h2>معاينة 2D (ألوان حسب الارتفاع)</h2>
-  <div class="preview-box">
-    <canvas id="preview2d" width="400" height="400"></canvas>
-    <canvas id="colorLegend"></canvas>
-  </div>
-
-  <h2>معاينة 3D</h2>
-  <div class="preview-box">
+  <div class="preview-block">
     <div id="preview3d"></div>
+    <div>🌀 المعاينة ثلاثية الأبعاد</div>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <div class="preview-block">
+    <canvas id="heatmap"></canvas>
+    <div>🌈 خريطة الارتفاعات (Heatmap)</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+
   <script>
-    const fileInput = document.getElementById("fileInput");
-    const originalImage = document.getElementById("originalImage");
-    const canvas2d = document.getElementById("preview2d");
-    const ctx = canvas2d.getContext("2d");
-    const legendCanvas = document.getElementById("colorLegend");
-    const legendCtx = legendCanvas.getContext("2d");
+    const fileInput = document.getElementById('fileInput');
+    const canvas2d = document.getElementById('preview2d');
+    const ctx2d = canvas2d.getContext('2d');
+    const heatmap = document.getElementById('heatmap');
+    const ctxHeat = heatmap.getContext('2d');
+    const preview3d = document.getElementById('preview3d');
 
-    // إعداد شريط الألوان (Legend)
-    function drawLegend() {
-      const grad = legendCtx.createLinearGradient(0, 0, legendCanvas.width, 0);
-      grad.addColorStop(0, "hsl(240,100%,50%)"); // أزرق - منخفض
-      grad.addColorStop(1, "hsl(0,100%,50%)");   // أحمر - مرتفع
-      legendCtx.fillStyle = grad;
-      legendCtx.fillRect(0, 0, legendCanvas.width, legendCanvas.height);
-      legendCtx.fillStyle = "#000";
-      legendCtx.font = "14px Arial";
-      legendCtx.fillText("منخفض", 5, 20);
-      legendCtx.fillText("مرتفع", legendCanvas.width - 50, 20);
-    }
-    drawLegend();
-
-    // إعداد 3D
+    // 3D setup
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, window.innerWidth/400, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(45, 400/400, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer();
-    renderer.setSize(window.innerWidth * 0.9, 400);
-    document.getElementById("preview3d").appendChild(renderer.domElement);
+    renderer.setSize(400, 400);
+    preview3d.appendChild(renderer.domElement);
 
     const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(1, 1, 1);
+    light.position.set(0, 1, 1).normalize();
     scene.add(light);
+    camera.position.z = 200;
 
     let mesh;
 
-    fileInput.addEventListener("change", (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
+    function createHeightMap(image) {
+      const w = 100, h = 100;
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = w; tempCanvas.height = h;
+      const tctx = tempCanvas.getContext('2d');
+      tctx.drawImage(image, 0, 0, w, h);
+      const imgData = tctx.getImageData(0, 0, w, h).data;
 
-      // معاينة الصورة الأصلية
-      originalImage.src = URL.createObjectURL(file);
+      // 3D mesh
+      const geometry = new THREE.PlaneGeometry(100, 100, w-1, h-1);
+      let min = 255, max = 0;
+      for (let i = 0; i < geometry.attributes.position.count; i++) {
+        const stride = i * 3;
+        const x = i % w;
+        const y = Math.floor(i / w);
+        const idx = (y * w + x) * 4;
+        const brightness = imgData[idx];
+        min = Math.min(min, brightness);
+        max = Math.max(max, brightness);
+        geometry.attributes.position.array[stride + 2] = brightness / 5;
+      }
+      geometry.computeVertexNormals();
 
-      const img = new Image();
-      img.onload = () => {
-        const offCanvas = document.createElement("canvas");
-        offCanvas.width = img.width;
-        offCanvas.height = img.height;
-        const offCtx = offCanvas.getContext("2d");
-        offCtx.drawImage(img, 0, 0);
-        const imgData = offCtx.getImageData(0, 0, img.width, img.height);
+      const material = new THREE.MeshLambertMaterial({ color: 0xaaaaaa, side: THREE.DoubleSide });
+      if (mesh) scene.remove(mesh);
+      mesh = new THREE.Mesh(geometry, material);
+      scene.add(mesh);
 
-        // معاينة 2D ملونة
-        for (let y = 0; y < img.height; y++) {
-          for (let x = 0; x < img.width; x++) {
-            const idx = (y * img.width + x) * 4;
-            const gray = imgData.data[idx]; 
-            ctx.fillStyle = `hsl(${240 - (gray/255)*240}, 100%, 50%)`; 
-            ctx.fillRect(x * (canvas2d.width / img.width), y * (canvas2d.height / img.height),
-                         canvas2d.width / img.width, canvas2d.height / img.height);
-          }
+      // Heatmap
+      heatmap.width = w;
+      heatmap.height = h;
+      const heatData = ctxHeat.createImageData(w, h);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const idx = (y * w + x) * 4;
+          const brightness = imgData[idx];
+          const norm = (brightness - min) / (max - min);
+
+          const color = getHeatColor(norm);
+          heatData.data[idx] = color.r;
+          heatData.data[idx+1] = color.g;
+          heatData.data[idx+2] = color.b;
+          heatData.data[idx+3] = 255;
         }
+      }
+      ctxHeat.putImageData(heatData, 0, 0);
+    }
 
-        // معاينة 3D
-        if (mesh) scene.remove(mesh);
-
-        const geometry = new THREE.PlaneGeometry(10, 10, img.width - 1, img.height - 1);
-        const vertices = geometry.attributes.position.array;
-
-        for (let y = 0; y < img.height; y++) {
-          for (let x = 0; x < img.width; x++) {
-            const idx = (y * img.width + x) * 4;
-            const gray = imgData.data[idx] / 255;
-            const vidx = (y * img.width + x) * 3 + 2;
-            vertices[vidx] = gray * 3;
-          }
-        }
-
-        geometry.computeVertexNormals();
-        const material = new THREE.MeshLambertMaterial({ color: 0xdddddd, side: THREE.DoubleSide });
-        mesh = new THREE.Mesh(geometry, material);
-        scene.add(mesh);
-
-        camera.position.set(0, -15, 10);
-        camera.lookAt(0, 0, 0);
-      };
-      img.src = URL.createObjectURL(file);
-    });
+    function getHeatColor(value) {
+      const r = Math.floor(255 * value);
+      const g = Math.floor(255 * (1 - Math.abs(value - 0.5) * 2));
+      const b = Math.floor(255 * (1 - value));
+      return { r, g, b };
+    }
 
     function animate() {
       requestAnimationFrame(animate);
-      if (mesh) mesh.rotation.z += 0.002;
+      if (mesh) mesh.rotation.y += 0.01;
       renderer.render(scene, camera);
     }
     animate();
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const img = new Image();
+      img.onload = () => {
+        canvas2d.width = img.width;
+        canvas2d.height = img.height;
+        ctx2d.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
+        createHeightMap(img);
+      };
+      img.src = URL.createObjectURL(file);
+    });
   </script>
 </body>
 </html>
