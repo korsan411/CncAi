@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CNC AI Heightmap</title>
 
-    <!-- three.js -->
+    <!-- مكتبة three.js -->
     <script src="https://unpkg.com/three@0.164.1/build/three.min.js"></script>
-    <!-- OrbitControls -->
+    <!-- OrbitControls للتحكم بالكاميرا -->
     <script src="https://unpkg.com/three@0.164.1/examples/js/controls/OrbitControls.js"></script>
 
     <style>
@@ -25,9 +25,6 @@
         padding: 10px;
         background: #222;
         border-bottom: 1px solid #444;
-        display: flex;
-        align-items: center;
-        gap: 10px;
       }
       #preview {
         flex: 1;
@@ -35,34 +32,22 @@
         width: 100%;
         height: 100%;
       }
-      button {
-        background: #444;
-        color: #fff;
-        border: none;
-        padding: 6px 12px;
-        cursor: pointer;
-        border-radius: 4px;
-      }
-      button:hover {
-        background: #666;
-      }
     </style>
   </head>
   <body>
-    <!-- رفع صورة -->
+    <!-- أداة رفع صورة -->
     <div id="uploader">
       <input type="file" id="imageInput" accept="image/*" />
-      <button id="resetBtn">Reset</button>
     </div>
 
-    <!-- مكان عرض 3D -->
+    <!-- كانفاس العرض -->
     <canvas id="preview"></canvas>
 
     <script>
       const canvas = document.getElementById("preview");
       const scene = new THREE.Scene();
 
-      // الكاميرا
+      // إعداد الكاميرا
       const camera = new THREE.PerspectiveCamera(
         75,
         window.innerWidth / window.innerHeight,
@@ -71,11 +56,11 @@
       );
       camera.position.set(0, 60, 120);
 
-      // الرندر
+      // إعداد الرندر
       const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
 
-      // controls للتحكم بالماوس
+      // تحكم بالماوس
       const controls = new THREE.OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
       controls.dampingFactor = 0.05;
@@ -91,60 +76,56 @@
 
       let mesh;
 
-      // دالة تحويل الصورة لارتفاعات
+      // دالة توليد heightmap من الصورة
       function generateHeightmap(img) {
         const canvasTemp = document.createElement("canvas");
         const ctx = canvasTemp.getContext("2d");
-        const width = 128;
-        const height = 128;
+        const width = 256,
+          height = 256;
         canvasTemp.width = width;
         canvasTemp.height = height;
         ctx.drawImage(img, 0, 0, width, height);
-        const data = ctx.getImageData(0, 0, width, height).data;
 
+        const data = ctx.getImageData(0, 0, width, height).data;
         const geometry = new THREE.PlaneGeometry(100, 100, width - 1, height - 1);
 
         for (let i = 0, j = 0; i < data.length; i += 4, j++) {
           const brightness =
             data[i] * 0.3 + data[i + 1] * 0.59 + data[i + 2] * 0.11;
-          geometry.attributes.position.setZ(j, brightness / 25); // تحجيم الارتفاع
+          geometry.attributes.position.setZ(j, brightness / 25);
         }
 
         geometry.computeVertexNormals();
 
+        if (mesh) scene.remove(mesh);
+
         const material = new THREE.MeshStandardMaterial({
-          color: 0xdddddd,
+          color: 0x88ccff,
           wireframe: false,
           side: THREE.DoubleSide,
         });
-
-        if (mesh) scene.remove(mesh);
         mesh = new THREE.Mesh(geometry, material);
         mesh.rotation.x = -Math.PI / 2;
         scene.add(mesh);
       }
 
-      // رفع صورة
-      document.getElementById("imageInput").addEventListener("change", (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const img = new Image();
-        img.onload = () => generateHeightmap(img);
-        img.src = URL.createObjectURL(file);
-      });
+      // ربط رفع الصورة
+      document
+        .getElementById("imageInput")
+        .addEventListener("change", (event) => {
+          const file = event.target.files[0];
+          if (!file) return;
 
-      // زرار Reset
-      document.getElementById("resetBtn").addEventListener("click", () => {
-        if (mesh) {
-          scene.remove(mesh);
-          mesh.geometry.dispose();
-          mesh.material.dispose();
-          mesh = null;
-        }
-        document.getElementById("imageInput").value = "";
-      });
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            const img = new Image();
+            img.onload = () => generateHeightmap(img);
+            img.src = e.target.result;
+          };
+          reader.readAsDataURL(file);
+        });
 
-      // أنيميشن
+      // تحديث العرض
       function animate() {
         requestAnimationFrame(animate);
         controls.update();
@@ -152,6 +133,7 @@
       }
       animate();
 
+      // إعادة ضبط عند تغيير حجم الشاشة
       window.addEventListener("resize", () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
