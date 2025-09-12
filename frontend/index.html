@@ -1,76 +1,177 @@
 <!DOCTYPE html>
-<html lang="ar">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CNC AI</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f4f4f4;
-      margin: 0;
-      padding: 0;
-      text-align: center;
-    }
-    header {
-      background: #222;
-      color: #fff;
-      padding: 20px;
-    }
-    main {
-      padding: 20px;
-    }
-    .upload-box {
-      background: #fff;
-      padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-      display: inline-block;
-    }
-    input[type="file"] {
-      margin: 10px 0;
-    }
-    canvas {
-      margin-top: 20px;
-      border: 1px solid #ccc;
-      max-width: 100%;
-    }
-  </style>
-</head>
-<body>
-  <header>
-    <h1>🚀 CNC AI Project</h1>
-  </header>
-  <main>
-    <div class="upload-box">
-      <h2>حمّل صورة للتحويل</h2>
-      <input type="file" id="upload" accept="image/*">
-      <canvas id="preview"></canvas>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CNC AI Relief Carving</title>
+
+    <!-- three.js -->
+    <script src="https://unpkg.com/three@0.164.1/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.164.1/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background: #111;
+        color: #fff;
+        font-family: Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+      #uploader {
+        padding: 10px;
+        background: #222;
+        border-bottom: 1px solid #444;
+      }
+      #preview {
+        flex: 1;
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      #controls {
+        background: #222;
+        padding: 10px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- رفع صورة -->
+    <div id="uploader">
+      <input type="file" id="imageInput" accept="image/*" />
     </div>
-  </main>
 
-  <script>
-    const uploadInput = document.getElementById("upload");
-    const canvas = document.getElementById("preview");
-    const ctx = canvas.getContext("2d");
+    <!-- أدوات التحكم -->
+    <div id="controls">
+      <label for="zScale">عمق النحت:</label>
+      <input type="range" id="zScale" min="1" max="50" value="10" />
+    </div>
 
-    uploadInput.addEventListener("change", function(e) {
-      const file = e.target.files[0];
-      if (!file) return;
+    <!-- مكان عرض 3D -->
+    <canvas id="preview"></canvas>
 
-      const reader = new FileReader();
-      reader.onload = function(event) {
+    <script>
+      const canvas = document.getElementById("preview");
+      const scene = new THREE.Scene();
+
+      // الكاميرا
+      const camera = new THREE.PerspectiveCamera(
+        75,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1000
+      );
+      camera.position.set(0, 80, 150);
+
+      // الرندر
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+
+      // التحكم بالماوس
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+
+      // إضاءة
+      const light = new THREE.DirectionalLight(0xffffff, 1);
+      light.position.set(0, 50, 50);
+      scene.add(light);
+      scene.add(new THREE.AmbientLight(0x404040));
+
+      let mesh;
+      let currentGeometry;
+
+      // دالة توليد الارتفاعات
+      function generateHeightmap(img, zScale = 10) {
+        const canvasTemp = document.createElement("canvas");
+        const ctx = canvasTemp.getContext("2d");
+        const width = 128;
+        const height = 128;
+        canvasTemp.width = width;
+        canvasTemp.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+        const data = ctx.getImageData(0, 0, width, height).data;
+
+        const geometry = new THREE.PlaneGeometry(100, 100, width - 1, height - 1);
+
+        for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+          const brightness = data[i] * 0.3 + data[i + 1] * 0.59 + data[i + 2] * 0.11;
+          geometry.attributes.position.setZ(j, (brightness / 255) * zScale);
+        }
+
+        geometry.computeVertexNormals();
+        return geometry;
+      }
+
+      // تحميل الصورة
+      document.getElementById("imageInput").addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
         const img = new Image();
-        img.onload = function() {
-          // ضبط حجم الكانفاس على حجم الصورة
-          canvas.width = img.width;
-          canvas.height = img.height;
-          ctx.drawImage(img, 0, 0);
+        img.onload = () => {
+          if (mesh) scene.remove(mesh);
+
+          currentGeometry = generateHeightmap(img, document.getElementById("zScale").value);
+
+          const material = new THREE.MeshStandardMaterial({
+            color: 0x888888,
+            side: THREE.DoubleSide,
+            flatShading: true,
+          });
+          mesh = new THREE.Mesh(currentGeometry, material);
+          mesh.rotation.x = -Math.PI / 2;
+          scene.add(mesh);
         };
-        img.src = event.target.result;
-      };
-      reader.readAsDataURL(file);
-    });
-  </script>
-</body>
+        img.src = URL.createObjectURL(file);
+      });
+
+      // التحكم في العمق
+      document.getElementById("zScale").addEventListener("input", (e) => {
+        if (!mesh) return;
+        const scale = e.target.value;
+        currentGeometry = generateHeightmap(
+          mesh.userData.img,
+          scale
+        );
+        mesh.geometry.dispose();
+        mesh.geometry = currentGeometry;
+      });
+
+      // حفظ الصورة داخل mesh.userData
+      document.getElementById("imageInput").addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const img = new Image();
+        img.onload = () => {
+          if (mesh) scene.remove(mesh);
+
+          const zScale = document.getElementById("zScale").value;
+          currentGeometry = generateHeightmap(img, zScale);
+
+          const material = new THREE.MeshStandardMaterial({
+            color: 0x888888,
+            side: THREE.DoubleSide,
+            flatShading: true,
+          });
+          mesh = new THREE.Mesh(currentGeometry, material);
+          mesh.rotation.x = -Math.PI / 2;
+          mesh.userData.img = img; // نخزن الصورة
+          scene.add(mesh);
+        };
+        img.src = URL.createObjectURL(file);
+      });
+
+      // أنيميشن
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+    </script>
+  </body>
 </html>
