@@ -2,83 +2,120 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>CncAi Height Map</title>
+  <title>معاينة 2D و 3D من الصورة</title>
   <style>
-    body { margin: 0; background: #111; color: white; text-align: center; }
-    canvas { display: block; }
-    #uploader { margin: 10px; }
+    body { font-family: Arial, sans-serif; text-align: center; background: #f8f8f8; }
+    canvas, #viewer3d { border: 1px solid black; margin: 10px; }
+    #viewer3d { width: 500px; height: 400px; display: inline-block; }
   </style>
 </head>
 <body>
-  <h2>معاينة 3D من الصورة</h2>
-  <input type="file" id="uploader" accept="image/*">
-  <div id="viewer"></div>
+  <h1>معاينة 2D و 3D</h1>
 
-  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/examples/js/controls/OrbitControls.js"></script>
+  <input type="file" id="upload" accept="image/*"><br><br>
+
+  <h2>معاينة 2D</h2>
+  <canvas id="viewer2d" width="400" height="300"></canvas>
+
+  <h2>معاينة 3D (سطح الارتفاعات)</h2>
+  <div id="viewer3d"></div>
+
+  <!-- مكتبة Three.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
+
   <script>
-    let scene, camera, renderer, controls;
+    const upload = document.getElementById('upload');
+    const canvas2d = document.getElementById('viewer2d');
+    const ctx = canvas2d.getContext('2d');
 
-    function init() {
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-      camera.position.set(0, -15, 10);
+    // --- إعداد 3D ---
+    const container3d = document.getElementById('viewer3d');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
 
-      renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      document.getElementById('viewer').appendChild(renderer.domElement);
+    const camera = new THREE.PerspectiveCamera(
+      45,
+      container3d.clientWidth / container3d.clientHeight,
+      0.1,
+      1000
+    );
+    camera.position.set(0, -100, 150);
 
-      controls = new THREE.OrbitControls(camera, renderer.domElement);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container3d.clientWidth, container3d.clientHeight);
+    container3d.appendChild(renderer.domElement);
 
-      const light = new THREE.DirectionalLight(0xffffff, 1);
-      light.position.set(10, 10, 20);
-      scene.add(light);
-      scene.add(new THREE.AmbientLight(0x404040));
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
 
-      animate();
-    }
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(0, 0, 1).normalize();
+    scene.add(light);
 
+    const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambient);
+
+    let mesh = null;
+
+    // --- رفع الصورة ---
+    upload.addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        // رسم 2D
+        ctx.clearRect(0, 0, canvas2d.width, canvas2d.height);
+        ctx.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
+
+        // استخراج بيانات الصورة
+        const imgData = ctx.getImageData(0, 0, canvas2d.width, canvas2d.height);
+        const data = imgData.data;
+
+        // لو فيه Mesh قديم نمسحه
+        if (mesh) {
+          scene.remove(mesh);
+          mesh.geometry.dispose();
+          mesh.material.dispose();
+          mesh = null;
+        }
+
+        // إنشاء سطح ارتفاعات
+        const geometry = new THREE.PlaneGeometry(100, 75, canvas2d.width - 1, canvas2d.height - 1);
+
+        for (let i = 0; i < geometry.attributes.position.count; i++) {
+          const x = i % canvas2d.width;
+          const y = Math.floor(i / canvas2d.width);
+          const pixelIndex = (y * canvas2d.width + x) * 4;
+          const r = data[pixelIndex];
+          const g = data[pixelIndex + 1];
+          const b = data[pixelIndex + 2];
+          const brightness = (r + g + b) / 3;
+          geometry.attributes.position.setZ(i, brightness / 20); // ارتفاع
+        }
+
+        geometry.computeVertexNormals();
+
+        const material = new THREE.MeshStandardMaterial({
+          color: 0xdddddd,
+          wireframe: false,
+          side: THREE.DoubleSide
+        });
+
+        mesh = new THREE.Mesh(geometry, material);
+        scene.add(mesh);
+      };
+      img.src = url;
+    });
+
+    // --- تشغيل الأنيميشن ---
     function animate() {
       requestAnimationFrame(animate);
+      if (mesh) mesh.rotation.z += 0.002;
       controls.update();
       renderer.render(scene, camera);
     }
-
-    document.getElementById('uploader').addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          ctx.drawImage(img, 0, 0);
-          const imageData = ctx.getImageData(0, 0, img.width, img.height).data;
-
-          // بناء Geometry
-          const geometry = new THREE.PlaneGeometry(10, 10, img.width - 1, img.height - 1);
-          for (let i = 0; i < geometry.attributes.position.count; i++) {
-            const x = i % img.width;
-            const y = Math.floor(i / img.width);
-            const idx = (y * img.width + x) * 4;
-            const brightness = imageData[idx]; // نستخدم قناة R
-            geometry.attributes.position.setZ(i, brightness / 40); // تحكم في scale هنا
-          }
-          geometry.computeVertexNormals();
-
-          const material = new THREE.MeshStandardMaterial({ color: 0xcccccc, side: THREE.DoubleSide });
-          const mesh = new THREE.Mesh(geometry, material);
-          scene.add(mesh);
-        };
-        img.src = ev.target.result;
-      };
-      reader.readAsDataURL(file);
-    });
-
-    init();
+    animate();
   </script>
 </body>
 </html>
