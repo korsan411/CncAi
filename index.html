@@ -1,326 +1,124 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>CncAi — 2D → 3D Heightmap (Reviewed)</title>
+  <meta charset="UTF-8" />
+  <title>CNC Ai - 3D Preview</title>
   <style>
-    body{font-family:Inter,Arial, Helvetica, sans-serif; margin:12px; background:#f6f7fb; color:#111}
-    h1{margin:6px 0}
-    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start}
-    .panel{background:#fff;padding:12px;border-radius:8px;box-shadow:0 1px 6px rgba(0,0,0,.06)}
-    label{display:block;margin-bottom:6px;font-weight:600}
-    input[type=file]{margin-bottom:8px}
-    button{padding:8px 12px;margin-right:8px;cursor:pointer}
-    select,input[type=range]{margin-right:8px}
-    canvas{display:block;background:#222;border:1px solid #ccc}
-    #viewer3d{width:720px;height:480px;background:#eaf0fb;border:1px solid #cfd8e6}
-    .muted{font-size:13px;color:#666;margin-top:6px}
-    #progressWrap{width:420px;height:14px;background:#eee;border:1px solid #ddd;border-radius:8px;overflow:hidden;margin-top:8px}
-    #progressBar{height:100%;width:0;background:#4caf50;transition:width .08s linear}
-    pre#log{max-width:1200px;white-space:pre-wrap;font-family:monospace;font-size:12px;color:#333;padding:8px;background:#fff;border-radius:6px;border:1px solid #eee}
-    .controls-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .small{font-size:13px;padding:6px 8px}
+    body { margin: 0; background: #111; color: white; font-family: Arial, sans-serif; }
+    #upload { margin: 20px; }
+    #progress-container {
+      width: 100%; height: 20px; background: #333; margin: 10px 0;
+    }
+    #progress-bar {
+      height: 100%; width: 0%; background: lime; transition: width 0.2s;
+    }
+    canvas { display: block; }
   </style>
 </head>
 <body>
-  <h1>CncAi — تحويل صورة إلى خريطة ارتفاعات (مراجعة)</h1>
+  <input type="file" id="upload" accept="image/*" />
+  <div id="progress-container"><div id="progress-bar"></div></div>
+  <div id="preview3d"></div>
 
-  <div class="panel">
-    <label>1) ارفع صورة (موصى بصور صغيرة ≤512×512)</label>
-    <input id="fileInput" type="file" accept="image/*" />
-    <div class="controls-row" style="margin-top:8px">
-      <label class="small">Resolution:</label>
-      <select id="resSelect" class="small">
-        <option value="64">64 × 64 (أسرع)</option>
-        <option value="128" selected>128 × 128 (توازن)</option>
-        <option value="256">256 × 256 (أفضل جودة)</option>
-      </select>
-
-      <label class="small">Displacement:</label>
-      <input id="dispRange" type="range" min="1" max="200" value="60" />
-
-      <button id="runBtn" class="small">ابدأ التحويل</button>
-      <button id="resetBtn" class="small">إعادة</button>
-    </div>
-    <div class="muted">النظام يُعالج الصورة على أجزاء حتى يبقى المتصفح مستجيباً. دقّة أعلى = نتيجة أنقى لكن أبطأ.</div>
-
-    <div id="progressWrap"><div id="progressBar"></div></div>
-  </div>
-
-  <div class="row" style="margin-top:12px">
-    <div class="panel" style="width:440px">
-      <label>الصورة الأصلية (2D)</label>
-      <canvas id="origCanvas" width="420" height="315"></canvas>
-    </div>
-
-    <div class="panel" style="width:440px">
-      <label>خريطة العمق (grayscale)</label>
-      <canvas id="depthCanvas" width="420" height="315"></canvas>
-    </div>
-
-    <div class="panel" style="flex:1">
-      <label>معاينة 3D (Heightmap)</label>
-      <div id="viewer3d"></div>
-    </div>
-  </div>
-
-  <pre id="log" class="panel">سجل الأحداث: (Console أيضاً سيحتفظ بالـ logs)</pre>
-
-  <!-- Three.js و OrbitControls -->
+  <!-- three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
 
   <script>
-  // ======== عناصر الصفحة ========
-  const fileInput = document.getElementById('fileInput');
-  const runBtn = document.getElementById('runBtn');
-  const resetBtn = document.getElementById('resetBtn');
-  const resSelect = document.getElementById('resSelect');
-  const dispRange = document.getElementById('dispRange');
+    const upload = document.getElementById("upload");
+    const progressBar = document.getElementById("progress-bar");
+    const preview3d = document.getElementById("preview3d");
 
-  const origCanvas = document.getElementById('origCanvas');
-  const origCtx = origCanvas.getContext('2d');
-  const depthCanvas = document.getElementById('depthCanvas');
-  const depthCtx = depthCanvas.getContext('2d');
+    // إعداد الـ scene
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 4, 4);
+    camera.lookAt(0, 0, 0);
 
-  const progressBar = document.getElementById('progressBar');
-  const logEl = document.getElementById('log');
+    const renderer = new THREE.WebGLRenderer({antialias:true});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    preview3d.appendChild(renderer.domElement);
 
-  function log(...args){ console.log(...args); logEl.textContent += args.join(' ') + '\\n'; }
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
 
-  // ======== Three.js init ========
-  const viewer3d = document.getElementById('viewer3d');
-  let scene, camera, renderer, controls, surfaceMesh;
-  function initThree(){
-    viewer3d.innerHTML = '';
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf3f7ff);
+    // إضاءة
+    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(5, 5, 5);
+    scene.add(dirLight);
 
-    const W = viewer3d.clientWidth || 720;
-    const H = viewer3d.clientHeight || 480;
-    camera = new THREE.PerspectiveCamera(45, W/H, 0.1, 5000);
-    camera.position.set(0, -Math.max(W,H)*0.7, Math.max(W,H)*0.45);
+    // تحميل صورة ومعالجتها
+    upload.addEventListener("change", e => {
+      const file = e.target.files[0];
+      if (!file) return;
 
-    renderer = new THREE.WebGLRenderer({ antialias:true });
-    renderer.setPixelRatio(window.devicePixelRatio || 1);
-    renderer.setSize(W,H);
-    viewer3d.appendChild(renderer.domElement);
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = new Image();
+        img.onload = () => {
+          // تقليل الحجم للسرعة
+          const canvas2d = document.createElement("canvas");
+          const ctx = canvas2d.getContext("2d");
+          canvas2d.width = 100;
+          canvas2d.height = 100;
+          ctx.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
 
-    controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.target.set(0,0,0);
+          const imageData = ctx.getImageData(0, 0, canvas2d.width, canvas2d.height).data;
+          const width = canvas2d.width;
+          const height = canvas2d.height;
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const dl = new THREE.DirectionalLight(0xffffff, 0.9);
-    dl.position.set(60,80,100);
-    scene.add(dl);
+          const geometry = new THREE.PlaneGeometry(4, 4, width - 1, height - 1);
+          const positions = geometry.attributes.position;
+          
+          let i = 0;
+          const total = width * height;
 
-    animate();
-  }
-  function animate(){
-    requestAnimationFrame(animate);
-    if (controls) controls.update();
-    if (renderer && scene && camera) renderer.render(scene, camera);
-  }
-  initThree();
+          function processChunk() {
+            let count = 0;
+            while (i < total && count < 500) {
+              const x = i % width;
+              const y = Math.floor(i / width);
+              const idx = (y * width + x) * 4;
+              const brightness = (imageData[idx] + imageData[idx+1] + imageData[idx+2]) / 3 / 255;
+              positions.setZ(i, brightness * 1.5); // الارتفاع
+              i++;
+              count++;
+            }
+            positions.needsUpdate = true;
 
-  // ======== حالة الصورة المرفوعة ========
-  let loadedImage = null; // HTMLImageElement
-  let normalizedDepth = null; // Float32Array of last computed normalized depth (0..1), length res*res
-  let lastRes = 0;
+            const progress = (i / total) * 100;
+            progressBar.style.width = progress + "%";
 
-  fileInput.addEventListener('change', (e) => {
-    logEl.textContent = '';
-    const f = e.target.files[0];
-    if(!f){ log('لم يتم اختيار ملف'); return; }
-    const url = URL.createObjectURL(f);
-    const img = new Image();
-    img.crossOrigin = "anonymous"; // harmless for local blobs
-    img.onload = () => {
-      loadedImage = img;
-      // رسم الصورة في origCanvas (fit)
-      const W = origCanvas.width, H = origCanvas.height;
-      origCtx.clearRect(0,0,W,H);
-      const scale = Math.min(W/img.width, H/img.height);
-      const dw = Math.round(img.width * scale), dh = Math.round(img.height * scale);
-      const dx = Math.round((W-dw)/2), dy = Math.round((H-dh)/2);
-      origCtx.drawImage(img, 0,0, img.width, img.height, dx, dy, dw, dh);
-      log('تم تحميل الصورة: ' + img.width + 'x' + img.height + ' — مرسومة ' + dw + 'x' + dh);
-      // المسح القديم
-      depthCtx.clearRect(0,0,depthCanvas.width,depthCanvas.height);
-      clearSurface();
-      progressBar.style.width = '0%';
-    };
-    img.onerror = ()=> { log('فشل تحميل الصورة'); };
-    img.src = url;
-  });
-
-  function clearSurface(){
-    if(surfaceMesh){
-      scene.remove(surfaceMesh);
-      try{ surfaceMesh.geometry.dispose(); surfaceMesh.material.dispose(); }catch(e){}
-      surfaceMesh = null;
-    }
-  }
-
-  // ======== تحويل إلى depth (chunked) ========
-  async function convertImageToDepth(options = {res:128, displacement:60}){
-    if(!loadedImage){ log('رفع صورة أولاً'); return; }
-    const res = options.res || 128;
-    const displacement = options.displacement || 60;
-
-    lastRes = res;
-    // رسم الصورة على canvas مؤقت بالحجم res x res (center fit)
-    const tmp = document.createElement('canvas');
-    tmp.width = res; tmp.height = res;
-    const tctx = tmp.getContext('2d');
-    tctx.fillStyle = '#000';
-    tctx.fillRect(0,0,res,res);
-    // fit
-    const s = Math.min(res/loadedImage.width, res/loadedImage.height);
-    const dw = Math.round(loadedImage.width * s), dh = Math.round(loadedImage.height * s);
-    const dx = Math.round((res-dw)/2), dy = Math.round((res-dh)/2);
-    tctx.drawImage(loadedImage, 0,0, loadedImage.width, loadedImage.height, dx, dy, dw, dh);
-
-    // read image data
-    const imgData = tctx.getImageData(0,0,res,res).data;
-    const depthArr = new Float32Array(res*res);
-
-    // chunk parameters
-    const rows = res;
-    const chunkRows = Math.max(1, Math.floor(rows / 60)); // ~60 updates => smooth progress
-    let row = 0;
-    log('بدأت معالجة الخريطة بدقة ' + res + ' × ' + res);
-
-    await new Promise((resolve) => {
-      function processChunk(){
-        const start = row;
-        const end = Math.min(rows, start + chunkRows);
-        for(let y=start; y<end; y++){
-          for(let x=0; x<res; x++){
-            const idx = (y*res + x)*4;
-            const r = imgData[idx], g = imgData[idx+1], b = imgData[idx+2];
-            const lum = 0.2126*r + 0.7152*g + 0.0722*b; // luminance
-            depthArr[y*res + x] = lum / 255.0; // 0..1
+            if (i < total) {
+              requestAnimationFrame(processChunk);
+            } else {
+              const material = new THREE.MeshStandardMaterial({ color: 0x00ffcc, wireframe: false, side: THREE.DoubleSide });
+              const mesh = new THREE.Mesh(geometry, material);
+              mesh.rotation.x = -Math.PI/2;
+              scene.add(mesh);
+            }
           }
-        }
-        row = end;
-        // update progress
-        progressBar.style.width = Math.round((row / rows) * 100) + '%';
-
-        if(row < rows){
-          // keep UI responsive
-          setTimeout(processChunk, 0);
-        } else {
-          resolve();
-        }
-      }
-      setTimeout(processChunk, 0);
+          processChunk();
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
     });
 
-    log('اكتملت معالجة العمق — عرض الخريطة والإنشاء ثلاثي الأبعاد');
-
-    // save normalized depth (we will reuse when user changes displacement)
-    normalizedDepth = depthArr.slice(0);
-
-    // draw depth to depthCanvas (scale up)
-    const depthImage = depthCtx.createImageData(res, res);
-    for(let i=0;i<res*res;i++){
-      const v = Math.round(depthArr[i] * 255);
-      depthImage.data[i*4 + 0] = v;
-      depthImage.data[i*4 + 1] = v;
-      depthImage.data[i*4 + 2] = v;
-      depthImage.data[i*4 + 3] = 255;
+    // Render loop
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
     }
-    // render scaled
-    const tmpOut = document.createElement('canvas');
-    tmpOut.width = res; tmpOut.height = res;
-    tmpOut.getContext('2d').putImageData(depthImage, 0, 0);
-    depthCtx.clearRect(0,0,depthCanvas.width,depthCanvas.height);
-    depthCtx.drawImage(tmpOut, 0, 0, depthCanvas.width, depthCanvas.height);
+    animate();
 
-    // build 3D surface
-    buildSurfaceFromDepth(depthArr, res, res, displacement);
-  }
-
-  // ======== بناء السطح 3D من مصفوفة العمق ========
-  function buildSurfaceFromDepth(depthArr, w, h, scale){
-    clearSurface();
-
-    // plane geometry (w x h) with subdivisions matching pixels
-    const geo = new THREE.PlaneGeometry(w, h, w-1, h-1);
-    const pos = geo.attributes.position;
-    // set z values
-    for(let i=0;i<pos.count;i++){
-      pos.setZ(i, depthArr[i] * scale);
-    }
-    pos.needsUpdate = true;
-    geo.computeVertexNormals();
-
-    const mat = new THREE.MeshStandardMaterial({ color: 0xe6eefb, metalness:0, roughness:0.85, side:THREE.DoubleSide });
-    surfaceMesh = new THREE.Mesh(geo, mat);
-    surfaceMesh.rotation.x = -Math.PI/2; // put Z up
-    scene.add(surfaceMesh);
-
-    // center camera and update
-    const larger = Math.max(w,h);
-    camera.position.set(0, -larger*0.9, larger*0.6);
-    controls.target.set(0,0,0);
-    controls.update();
-    progressBar.style.width = '100%';
-  }
-
-  // ======== update displacement (without recomputing depth) ========
-  function updateDisplacement(newScale){
-    if(!surfaceMesh || !normalizedDepth) return;
-    const pos = surfaceMesh.geometry.attributes.position;
-    for(let i=0;i<pos.count;i++){
-      pos.setZ(i, normalizedDepth[i] * newScale);
-    }
-    pos.needsUpdate = true;
-    surfaceMesh.geometry.computeVertexNormals();
-  }
-
-  // ======== أزرار التشغيل ========
-  runBtn.addEventListener('click', async ()=>{
-    logEl.textContent = '';
-    if(!loadedImage){ log('ارفع صورة أولاً'); return; }
-    const res = parseInt(resSelect.value, 10);
-    const disp = parseFloat(dispRange.value);
-    progressBar.style.width = '0%';
-    await convertImageToDepth({res:res, displacement:disp});
-  });
-
-  resetBtn.addEventListener('click', ()=>{
-    origCtx.clearRect(0,0,origCanvas.width,origCanvas.height);
-    depthCtx.clearRect(0,0,depthCanvas.width,depthCanvas.height);
-    fileInput.value = '';
-    clearSurface();
-    progressBar.style.width = '0%';
-    logEl.textContent = 'تم إعادة الضبط';
-    loadedImage = null;
-    normalizedDepth = null;
-  });
-
-  dispRange.addEventListener('input', ()=>{
-    const v = parseFloat(dispRange.value);
-    updateDisplacement(v);
-  });
-
-  // ======== Resize handler for 3D viewport ========
-  window.addEventListener('resize', ()=>{
-    if(!renderer || !camera) return;
-    const W = viewer3d.clientWidth, H = viewer3d.clientHeight;
-    renderer.setSize(W,H);
-    camera.aspect = W/H;
-    camera.updateProjectionMatrix();
-  });
-
-  // ======== Quick WebGL check ========
-  if(!window.WebGLRenderingContext){
-    log('تحذير: متصفحك لا يدعم WebGL. المعاينة ثلاثية الأبعاد لن تعمل.');
-  }
-
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
   </script>
 </body>
 </html>
