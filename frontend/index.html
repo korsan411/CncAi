@@ -2,30 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>CNC Ai - Image to Gcode</title>
+  <title>معاينة CNC بسيطة</title>
   <style>
-    body { background: #111; color: #fff; font-family: Arial, sans-serif; text-align: center; }
-    canvas, #viewer3d { border: 1px solid #444; margin: 10px; }
-    #viewer2d { width: 300px; height: 300px; }
-    #viewer3d { width: 400px; height: 400px; display: inline-block; }
-    #progress-container { width: 400px; margin: 20px auto; background: #333; height: 20px; border-radius: 5px; overflow: hidden; }
-    #progress-bar { width: 0%; height: 100%; background: lime; text-align: center; font-size: 12px; }
-    button { margin: 10px; padding: 10px 20px; font-size: 16px; cursor: pointer; }
+    body { background:#111; color:white; text-align:center; font-family:Arial; }
+    #viewer2d, #viewer3d { border:1px solid #444; margin:10px; }
+    #viewer2d { width:300px; height:300px; }
+    #viewer3d { width:400px; height:400px; display:inline-block; }
   </style>
 </head>
 <body>
-  <h1>🖼️ → 3D → G-code</h1>
-  <input type="file" id="upload" accept="image/*"><br>
+  <h1>معاينة 2D & 3D</h1>
+  <input type="file" id="upload" accept="image/*"><br><br>
   <canvas id="viewer2d"></canvas>
-
-  <div id="progress-container"><div id="progress-bar">0%</div></div>
-
-  <h2>معاينة 3D</h2>
   <div id="viewer3d"></div>
 
-  <button id="downloadGcode">💾 تحميل G-code</button>
-
-  <!-- three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
 
@@ -33,107 +23,59 @@
     const upload = document.getElementById("upload");
     const canvas2d = document.getElementById("viewer2d");
     const ctx = canvas2d.getContext("2d");
-    const progressBar = document.getElementById("progress-bar");
 
-    // إعداد Three.js
     const container3d = document.getElementById("viewer3d");
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, container3d.clientWidth/container3d.clientHeight, 0.1, 1000);
-    camera.position.set(0, -5, 5);
+    camera.position.set(0,4,4);
 
     const renderer = new THREE.WebGLRenderer({antialias:true});
     renderer.setSize(container3d.clientWidth, container3d.clientHeight);
     container3d.appendChild(renderer.domElement);
 
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const light = new THREE.DirectionalLight(0xffffff, 0.8);
+    scene.add(new THREE.AmbientLight(0xffffff,0.8));
+    const light = new THREE.DirectionalLight(0xffffff,1);
     light.position.set(5,5,5);
     scene.add(light);
 
-    let mesh = null;
-    let heightMap = [];
+    let mesh=null;
 
-    upload.addEventListener("change", e => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const img = new Image();
-      img.onload = () => {
-        canvas2d.width = 100;
-        canvas2d.height = 100;
-        ctx.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
-        processImage();
+    upload.addEventListener("change", e=>{
+      const file=e.target.files[0];
+      if(!file) return;
+      const url=URL.createObjectURL(file);
+      const img=new Image();
+      img.onload=()=>{
+        canvas2d.width=100; canvas2d.height=100;
+        ctx.drawImage(img,0,0,canvas2d.width,canvas2d.height);
+
+        const data=ctx.getImageData(0,0,canvas2d.width,canvas2d.height).data;
+        const w=canvas2d.width, h=canvas2d.height;
+
+        const geo=new THREE.PlaneGeometry(4,4,w-1,h-1);
+        const pos=geo.attributes.position;
+        for(let i=0;i<w*h;i++){
+          const idx=i*4;
+          const bright=(data[idx]+data[idx+1]+data[idx+2])/3/255;
+          pos.setZ(i,bright*1.5);
+        }
+        pos.needsUpdate=true;
+        geo.computeVertexNormals();
+
+        if(mesh) scene.remove(mesh);
+        const mat=new THREE.MeshStandardMaterial({color:0x00ffcc,side:THREE.DoubleSide});
+        mesh=new THREE.Mesh(geo,mat);
+        mesh.rotation.x=-Math.PI/2;
+        scene.add(mesh);
       };
-      img.src = URL.createObjectURL(file);
+      img.src=url;
     });
 
-    function processImage() {
-      const imgData = ctx.getImageData(0, 0, canvas2d.width, canvas2d.height);
-      const data = imgData.data;
-      const width = imgData.width, height = imgData.height;
-      heightMap = [];
-
-      const geometry = new THREE.PlaneGeometry(4, 4, width-1, height-1);
-      const verts = geometry.attributes.position.array;
-
-      let i=0;
-      function step() {
-        const row = i;
-        for (let col=0; col<width; col++) {
-          const idx = (row*width+col)*4;
-          const gray = (data[idx]+data[idx+1]+data[idx+2])/3;
-          const z = (gray/255)*1.5;
-          const vi = (row*width+col)*3+2;
-          verts[vi] = z;
-          if (!heightMap[row]) heightMap[row] = [];
-          heightMap[row][col] = z;
-        }
-        i++;
-        progressBar.style.width = Math.round(i/height*100)+"%";
-        progressBar.innerText = Math.round(i/height*100)+"%";
-        if (i<height) {
-          requestAnimationFrame(step);
-        } else {
-          geometry.computeVertexNormals();
-          const material = new THREE.MeshStandardMaterial({color:0x00ffcc, side:THREE.DoubleSide, flatShading:true});
-          if (mesh) scene.remove(mesh);
-          mesh = new THREE.Mesh(geometry, material);
-          mesh.rotation.x = -Math.PI/2;
-          scene.add(mesh);
-        }
-      }
-      step();
-    }
-
-    function generateGcode() {
-      if (!heightMap.length) { alert("❌ حمّل صورة أولاً!"); return; }
-      let gcode = "G21 ;mm\nG90 ;absolute\nG1 F500\n";
-      const h = heightMap.length;
-      const w = heightMap[0].length;
-      for (let y=0; y<h; y++) {
-        let line = (y%2===0) ? [...Array(w).keys()] : [...Array(w).keys()].reverse();
-        for (let x of line) {
-          const z = heightMap[y][x].toFixed(2);
-          gcode += `G1 X${x} Y${y} Z${z}\n`;
-        }
-      }
-      gcode += "M30 ;End\n";
-      return gcode;
-    }
-
-    document.getElementById("downloadGcode").addEventListener("click", ()=>{
-      const gcode = generateGcode();
-      const blob = new Blob([gcode], {type:"text/plain"});
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = "output.gcode";
-      a.click();
-    });
-
-    function animate() {
+    function animate(){
       requestAnimationFrame(animate);
       controls.update();
-      renderer.render(scene, camera);
+      renderer.render(scene,camera);
     }
     animate();
   </script>
