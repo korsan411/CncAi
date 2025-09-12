@@ -1,135 +1,209 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar">
 <head>
-  <meta charset="UTF-8">
-  <title>معاينة CNC 2D & 3D</title>
+  <meta charset="utf-8" />
+  <title>معاينة 2D & 3D (موثوق)</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      background: #f4f4f4;
-    }
-    #controls {
-      margin: 15px;
-    }
-    button {
-      margin: 0 5px;
-      padding: 8px 16px;
-      cursor: pointer;
-    }
-    #viewer2d, #viewer3d {
-      margin: 20px auto;
-      border: 1px solid #ccc;
-      background: white;
-    }
+    body{font-family:Arial, Helvetica, sans-serif; background:#f4f6f8; color:#0b1630; text-align:center; padding:18px;}
+    h1{margin:6px 0 14px;}
+    #controls{margin:12px 0;}
+    button{padding:8px 14px; margin:0 6px; cursor:pointer; border-radius:6px; border:none; background:#0b69ff; color:#fff;}
+    #viewer2d, #viewer3d{margin:18px auto; border:1px solid #d1d5db; background:#fff; display:none;}
+    #viewer2d{width:640px; height:420px;}
+    #viewer3d{width:640px; height:420px;}
+    canvas{display:block; margin:auto;}
+    .note{font-size:13px;color:#374151;margin-top:8px;}
   </style>
 </head>
 <body>
-  <h1>معاينة الصورة</h1>
-  <input type="file" id="upload" accept="image/*"><br><br>
+  <h1>معاينة CNC — 2D و 3D</h1>
+
+  <input id="fileInput" type="file" accept="image/*" /><br>
 
   <div id="controls">
-    <button onclick="show2D()">عرض 2D</button>
-    <button onclick="show3D()">عرض 3D</button>
+    <button id="btn2d">عرض 2D</button>
+    <button id="btn3d">عرض 3D</button>
   </div>
 
-  <!-- معاينة 2D -->
-  <canvas id="viewer2d" width="600" height="400"></canvas>
+  <!-- 2D canvas -->
+  <canvas id="viewer2d" width="640" height="420"></canvas>
 
-  <!-- معاينة 3D -->
-  <div id="viewer3d" style="width:600px; height:400px; display:none;"></div>
+  <!-- 3D container -->
+  <div id="viewer3d"></div>
 
-  <!-- مكتبة three.js -->
+  <p class="note">ملاحظة: افتح Console (F12) لو الصورة لم تظهر — سأعرض رسائل تصحيح هناك.</p>
+
+  <!-- three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/controls/OrbitControls.js"></script>
 
   <script>
-    const upload = document.getElementById('upload');
+  (function(){
+    const fileInput = document.getElementById('fileInput');
+    const btn2d = document.getElementById('btn2d');
+    const btn3d = document.getElementById('btn3d');
     const canvas2d = document.getElementById('viewer2d');
     const ctx2d = canvas2d.getContext('2d');
     const viewer3d = document.getElementById('viewer3d');
 
+    // three.js globals
     let scene, camera, renderer, controls, mesh;
+    let currentCanvasTexture = null; // texture created from image canvas
+    let lastOffscreen = null; // offscreen canvas used for texture
 
-    // إعداد 3D
-    function init3D() {
+    // init 3D once
+    function init3D(){
+      if (scene) return;
       scene = new THREE.Scene();
-      scene.background = new THREE.Color(0xf0f0f0);
+      scene.background = new THREE.Color(0xf0f4f8);
 
-      camera = new THREE.PerspectiveCamera(45, viewer3d.clientWidth / viewer3d.clientHeight, 0.1, 100);
+      const w = viewer3d.clientWidth || 640;
+      const h = viewer3d.clientHeight || 420;
+      camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 2000);
       camera.position.set(0, 0, 5);
 
-      renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setSize(viewer3d.clientWidth, viewer3d.clientHeight);
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(w, h);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       viewer3d.appendChild(renderer.domElement);
 
       controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
 
-      // إضاءة
-      const light = new THREE.DirectionalLight(0xffffff, 1);
-      light.position.set(0, 1, 1).normalize();
-      scene.add(light);
+      // lights
+      scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+      const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+      dir.position.set(50, 100, 50);
+      scene.add(dir);
 
-      const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-      scene.add(ambient);
+      window.addEventListener('resize', onWindowResize);
+      animate();
+      console.log('3D initialized');
     }
 
-    function animate() {
+    function onWindowResize(){
+      if (!renderer) return;
+      const w = viewer3d.clientWidth || 640;
+      const h = viewer3d.clientHeight || 420;
+      renderer.setSize(w,h);
+      camera.aspect = w/h;
+      camera.updateProjectionMatrix();
+    }
+
+    function animate(){
       requestAnimationFrame(animate);
       if (controls) controls.update();
       if (renderer && scene && camera) renderer.render(scene, camera);
     }
 
-    init3D();
-    animate();
+    // draw image into main 2D canvas (keeps aspect)
+    function draw2DImage(img){
+      const cw = canvas2d.width, ch = canvas2d.height;
+      ctx2d.clearRect(0,0,cw,ch);
+      const sw = img.width, sh = img.height;
+      const scale = Math.min(cw/sw, ch/sh);
+      const dw = Math.round(sw * scale), dh = Math.round(sh * scale);
+      const dx = Math.round((cw - dw)/2), dy = Math.round((ch - dh)/2);
+      ctx2d.drawImage(img, 0,0,sw,sh, dx,dy,dw,dh);
+      console.log('2D drawn:', sw+'x'+sh, '->', dw+'x'+dh);
+    }
 
-    // عند رفع صورة
-    upload.addEventListener('change', e => {
-      const file = e.target.files[0];
-      if (!file) return;
+    // create CanvasTexture from image (reliable for blob URLs)
+    function createCanvasTextureFromImage(img){
+      // cap size to avoid huge textures
+      const MAX = 1024; // increase if you want more detail
+      let iw = img.width, ih = img.height;
+      const scale = Math.min(1, MAX / Math.max(iw, ih));
+      const w = Math.max(1, Math.round(iw * scale));
+      const h = Math.max(1, Math.round(ih * scale));
 
-      const imgURL = URL.createObjectURL(file);
+      const off = document.createElement('canvas');
+      off.width = w; off.height = h;
+      const octx = off.getContext('2d');
+      // fill white to avoid transparent issues
+      octx.fillStyle = '#fff';
+      octx.fillRect(0,0,w,h);
+      octx.drawImage(img, 0,0,iw,ih, 0,0,w,h);
 
-      // --- عرض 2D ---
+      // cleanup previous
+      if (currentCanvasTexture) { currentCanvasTexture.dispose(); currentCanvasTexture = null; }
+      lastOffscreen = off;
+      const tex = new THREE.CanvasTexture(off);
+      tex.needsUpdate = true;
+      tex.flipY = false;
+      currentCanvasTexture = tex;
+      console.log('CanvasTexture created', w, 'x', h);
+      return { texture: tex, w, h };
+    }
+
+    // add image plane to scene (or update existing)
+    function addImagePlaneToScene(texInfo){
+      init3D();
+      if (!texInfo) { console.warn('No texture info'); return; }
+
+      // remove old
+      if (mesh){ scene.remove(mesh); mesh.geometry.dispose?.(); mesh.material.dispose?.(); mesh = null; }
+
+      const { texture, w:tw, h:th } = texInfo;
+      const aspect = tw / th;
+      const height = 3.0;
+      const width = height * aspect;
+
+      const geometry = new THREE.PlaneGeometry(width, height);
+      const material = new THREE.MeshStandardMaterial({ map: texture, side: THREE.DoubleSide });
+      mesh = new THREE.Mesh(geometry, material);
+      scene.add(mesh);
+
+      // fit camera to plane
+      const distance = Math.max(width, height) * 1.5;
+      camera.position.set(0, 0, distance);
+      camera.lookAt(mesh.position);
+      controls.update();
+
+      console.log('Added plane to scene — size:', width.toFixed(2) + 'x' + height.toFixed(2));
+    }
+
+    // handle file load
+    fileInput.addEventListener('change', (e)=>{
+      const f = e.target.files && e.target.files[0];
+      if (!f) { console.log('no file'); return; }
+      const url = URL.createObjectURL(f);
+      console.log('File selected:', f.name);
+
       const img = new Image();
       img.onload = () => {
-        ctx2d.clearRect(0, 0, canvas2d.width, canvas2d.height);
-        ctx2d.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
+        // draw 2D
+        draw2DImage(img);
+
+        // create reliable texture and add to scene
+        const texInfo = createCanvasTextureFromImage(img);
+        addImagePlaneToScene(texInfo);
+
+        // show 2D by default
+        show2D();
+        // release blob URL (we already copied to canvas)
+        URL.revokeObjectURL(url);
       };
-      img.src = imgURL;
-
-      // --- عرض 3D ---
-      const loader = new THREE.TextureLoader();
-      loader.load(
-        imgURL,
-        (texture) => {
-          if (mesh) scene.remove(mesh);
-
-          const geometry = new THREE.PlaneGeometry(4, 3);
-          const material = new THREE.MeshPhongMaterial({
-            map: texture,
-            side: THREE.DoubleSide
-          });
-
-          mesh = new THREE.Mesh(geometry, material);
-          scene.add(mesh);
-        },
-        undefined,
-        (err) => {
-          console.error("خطأ في تحميل الصورة:", err);
-        }
-      );
+      img.onerror = (err)=>{ console.error('Image load error', err); };
+      img.src = url;
     });
 
-    // التبديل بين 2D و 3D
-    function show2D() {
-      canvas2d.style.display = "block";
-      viewer3d.style.display = "none";
-    }
-    function show3D() {
-      canvas2d.style.display = "none";
-      viewer3d.style.display = "block";
-    }
+    // show/hide helpers
+    function show2D(){ canvas2d.style.display = 'block'; viewer3d.style.display = 'none'; btn2d.style.opacity = 1; btn3d.style.opacity = 0.8; }
+    function show3D(){ canvas2d.style.display = 'none'; viewer3d.style.display = 'block'; btn3d.style.opacity = 1; btn2d.style.opacity = 0.8; init3D(); }
+
+    btn2d.addEventListener('click', ()=>{ show2D(); });
+    btn3d.addEventListener('click', ()=>{ 
+      if (!currentCanvasTexture) { alert('أرفع صورة أولاً لتفعيل معاينة 3D'); return; }
+      show3D(); 
+    });
+
+    // start: show nothing until upload — but you can show 2D placeholder
+    canvas2d.style.display = 'none';
+    viewer3d.style.display = 'none';
+    console.log('Ready — ارفع صورة لتجربة المعاينة');
+  })();
   </script>
 </body>
 </html>
