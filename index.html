@@ -1,176 +1,53 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CNC AI Heightmap</title>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>Test 2D & 3D</title>
+  <script src="https://unpkg.com/three@0.164.1/build/three.min.js"></script>
+  <style>
+    body { margin:0; background:#111; color:#fff; font-family:Arial; }
+    #canvas2d, #canvas3d { width:100%; height:400px; border:1px solid #555; margin-top:10px; }
+  </style>
+</head>
+<body>
+  <h3>معاينة 2D</h3>
+  <canvas id="canvas2d"></canvas>
 
-    <!-- three.js -->
-    <script src="https://unpkg.com/three@0.164.1/build/three.min.js"></script>
-    <!-- OrbitControls -->
-    <script src="https://unpkg.com/three@0.164.1/examples/js/controls/OrbitControls.js"></script>
+  <h3>معاينة 3D</h3>
+  <div id="canvas3d"></div>
 
-    <style>
-      body {
-        margin: 0;
-        padding: 0;
-        background: #111;
-        color: #fff;
-        font-family: Arial, sans-serif;
-        display: flex;
-        flex-direction: column;
-        height: 100vh;
-      }
-      #uploader {
-        padding: 10px;
-        background: #222;
-        border-bottom: 1px solid #444;
-      }
-      #viewToggle {
-        margin-left: 10px;
-        padding: 5px 10px;
-        background: #555;
-        border: none;
-        color: #fff;
-        cursor: pointer;
-      }
-      #canvas2d, #canvas3d {
-        flex: 1;
-        display: none;
-        width: 100%;
-        height: 100%;
-      }
-      #canvas2d.active, #canvas3d.active {
-        display: block;
-      }
-    </style>
-  </head>
-  <body>
-    <!-- رفع صورة -->
-    <div id="uploader">
-      <input type="file" id="imageInput" accept="image/*" />
-      <button id="viewToggle">التبديل بين 2D / 3D</button>
-    </div>
+  <script>
+    // معاينة 2D
+    const c = document.getElementById("canvas2d");
+    const ctx = c.getContext("2d");
+    c.width = 300;
+    c.height = 200;
+    ctx.fillStyle = "red";
+    ctx.fillRect(50, 50, 200, 100);
+    ctx.fillStyle = "white";
+    ctx.font = "20px Arial";
+    ctx.fillText("2D Works!", 90, 120);
 
-    <!-- معاينة 2D -->
-    <canvas id="canvas2d" class="active"></canvas>
+    // معاينة 3D
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, 300/200, 0.1, 1000);
+    camera.position.z = 5;
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(300, 200);
+    document.getElementById("canvas3d").appendChild(renderer.domElement);
 
-    <!-- معاينة 3D -->
-    <canvas id="canvas3d"></canvas>
+    const geometry = new THREE.BoxGeometry();
+    const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    const cube = new THREE.Mesh(geometry, material);
+    scene.add(cube);
 
-    <script>
-      const imageInput = document.getElementById("imageInput");
-      const canvas2d = document.getElementById("canvas2d");
-      const ctx2d = canvas2d.getContext("2d");
-      const canvas3d = document.getElementById("canvas3d");
-      let mesh;
-
-      // إعداد three.js
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(
-        75,
-        window.innerWidth / window.innerHeight,
-        0.1,
-        1000
-      );
-      camera.position.set(0, 60, 120);
-      const renderer = new THREE.WebGLRenderer({ canvas: canvas3d, antialias: true });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-
-      // تحكم بالماوس
-      const controls = new THREE.OrbitControls(camera, renderer.domElement);
-      controls.enableDamping = true;
-
-      // إضاءة
-      const light = new THREE.DirectionalLight(0xffffff, 1);
-      light.position.set(0, 100, 100);
-      scene.add(light);
-      scene.add(new THREE.AmbientLight(0x404040));
-
-      // تحديث الحجم عند تغيير النافذة
-      window.addEventListener("resize", () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-      });
-
-      // خريطة ألوان (حسب الارتفاع)
-      function getColor(brightness) {
-        const t = brightness / 255;
-        if (t < 0.25) return new THREE.Color(0x0000ff); // أزرق
-        if (t < 0.5) return new THREE.Color(0x00ff00);  // أخضر
-        if (t < 0.75) return new THREE.Color(0xffff00); // أصفر
-        return new THREE.Color(0xffffff);               // أبيض
-      }
-
-      // رسم 3D
-      function generateHeightmap(img) {
-        const tempCanvas = document.createElement("canvas");
-        const tempCtx = tempCanvas.getContext("2d");
-        const width = 128;
-        const height = 128;
-        tempCanvas.width = width;
-        tempCanvas.height = height;
-        tempCtx.drawImage(img, 0, 0, width, height);
-        const data = tempCtx.getImageData(0, 0, width, height).data;
-
-        const geometry = new THREE.PlaneGeometry(100, 100, width - 1, height - 1);
-        const colors = [];
-
-        for (let i = 0, j = 0; i < data.length; i += 4, j++) {
-          const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
-          geometry.attributes.position.setZ(j, brightness / 20);
-
-          const color = getColor(brightness);
-          colors.push(color.r, color.g, color.b);
-        }
-
-        geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-        geometry.computeVertexNormals();
-
-        if (mesh) scene.remove(mesh);
-
-        const material = new THREE.MeshStandardMaterial({
-          vertexColors: true,
-          side: THREE.DoubleSide,
-          flatShading: true,
-        });
-        mesh = new THREE.Mesh(geometry, material);
-        mesh.rotation.x = -Math.PI / 2;
-        scene.add(mesh);
-      }
-
-      // رفع صورة
-      imageInput.addEventListener("change", (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const img = new Image();
-        img.onload = () => {
-          // 2D
-          canvas2d.width = img.width;
-          canvas2d.height = img.height;
-          ctx2d.drawImage(img, 0, 0);
-
-          // 3D
-          generateHeightmap(img);
-        };
-        img.src = URL.createObjectURL(file);
-      });
-
-      // تبديل العرض
-      const toggleBtn = document.getElementById("viewToggle");
-      toggleBtn.addEventListener("click", () => {
-        canvas2d.classList.toggle("active");
-        canvas3d.classList.toggle("active");
-      });
-
-      // حلقة الرسم 3D
-      function animate() {
-        requestAnimationFrame(animate);
-        controls.update();
-        renderer.render(scene, camera);
-      }
-      animate();
-    </script>
-  </body>
+    function animate() {
+      requestAnimationFrame(animate);
+      cube.rotation.x += 0.01;
+      cube.rotation.y += 0.01;
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
 </html>
