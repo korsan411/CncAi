@@ -4,30 +4,27 @@
   <meta charset="UTF-8">
   <title>CNC AI Preview</title>
   <style>
-    body { 
-      display: flex; 
-      flex-direction: column; 
-      align-items: center; 
-      gap: 20px; 
-      font-family: Arial, sans-serif;
-    }
+    body { display: flex; gap: 20px; }
     canvas { border: 1px solid #ccc; }
     #preview2d { width: 300px; height: 300px; }
-    #preview3d { width: 400px; height: 400px; }
-    #fileInput {
-      padding: 10px;
-      font-size: 16px;
-      border: 2px solid #333;
-      border-radius: 8px;
-      cursor: pointer;
+    #preview3d { width: 400px; height: 400px; position: relative; }
+    #topView {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      width: 200px;
+      height: 200px;
+      border: 2px solid #0f0;
+      background: #000;
     }
   </style>
 </head>
 <body>
-  <h2>CNC AI Preview</h2>
   <input type="file" id="fileInput" accept="image/*">
   <canvas id="preview2d"></canvas>
-  <div id="preview3d"></div>
+  <div id="preview3d">
+    <canvas id="topView"></canvas>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
 
@@ -37,12 +34,12 @@
     const ctx = canvas2d.getContext('2d');
     const preview3d = document.getElementById('preview3d');
 
-    // 3D setup
+    // Main 3D setup
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, 400/400, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer();
     renderer.setSize(400, 400);
-    preview3d.appendChild(renderer.domElement);
+    preview3d.insertBefore(renderer.domElement, document.getElementById("topView"));
 
     const light = new THREE.DirectionalLight(0xffffff, 1);
     light.position.set(0, 1, 1).normalize();
@@ -50,6 +47,14 @@
     camera.position.z = 200;
 
     let mesh;
+
+    // Top view camera setup
+    const topCanvas = document.getElementById("topView");
+    const topRenderer = new THREE.WebGLRenderer({ canvas: topCanvas });
+    topRenderer.setSize(200, 200);
+    const topCamera = new THREE.OrthographicCamera(-50, 50, 50, -50, 0.1, 1000);
+    topCamera.position.set(0, 200, 0); // فوق الجسم
+    topCamera.lookAt(0, 0, 0);
 
     function createHeightMap(image) {
       const w = 100, h = 100;
@@ -65,8 +70,8 @@
         const x = i % w;
         const y = Math.floor(i / w);
         const idx = (y * w + x) * 4;
-        const brightness = imgData[idx]; // grayscale
-        geometry.attributes.position.array[stride + 2] = brightness / 5; // Z height
+        const brightness = imgData[idx];
+        geometry.attributes.position.array[stride + 2] = brightness / 5;
       }
       geometry.computeVertexNormals();
 
@@ -79,7 +84,11 @@
     function animate() {
       requestAnimationFrame(animate);
       if (mesh) mesh.rotation.y += 0.01;
+
+      // render main view
       renderer.render(scene, camera);
+      // render top view
+      topRenderer.render(scene, topCamera);
     }
     animate();
 
