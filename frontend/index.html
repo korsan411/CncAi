@@ -3,9 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CNC AI Preview</title>
+    <title>CNC AI Relief Preview</title>
 
-    <!-- مكتبة three.js -->
+    <!-- three.js -->
     <script src="https://unpkg.com/three@0.164.1/build/three.min.js"></script>
     <!-- OrbitControls -->
     <script src="https://unpkg.com/three@0.164.1/examples/js/controls/OrbitControls.js"></script>
@@ -25,6 +25,11 @@
         padding: 10px;
         border-bottom: 1px solid #444;
       }
+      #buttons {
+        background: #222;
+        padding: 8px;
+        text-align: center;
+      }
       #viewer {
         flex: 1;
         position: relative;
@@ -40,14 +45,6 @@
       #viewer3d {
         display: none;
       }
-      #buttons {
-        background: #222;
-        padding: 5px;
-        text-align: center;
-      }
-      canvas {
-        display: block;
-      }
     </style>
   </head>
   <body>
@@ -57,7 +54,7 @@
 
     <div id="buttons">
       <button id="btn2d">معاينة 2D</button>
-      <button id="btn3d">معاينة 3D</button>
+      <button id="btn3d">معاينة 3D Relief</button>
     </div>
 
     <div id="viewer">
@@ -102,7 +99,7 @@
         if (uploadedImg) show2d();
       });
 
-      // زر 3D
+      // زر 3D Relief
       document.getElementById("btn3d").addEventListener("click", () => {
         if (!uploadedImg) return;
 
@@ -122,34 +119,49 @@
         viewer3d.appendChild(renderer.domElement);
 
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
 
         // إضاءة
-        const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(ambient);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
         const light = new THREE.DirectionalLight(0xffffff, 0.8);
         light.position.set(1, 1, 2);
         scene.add(light);
 
-        // تحميل الصورة كـ texture
-        const loader = new THREE.TextureLoader();
-        loader.load(uploadedImg.src, (texture) => {
-          const geometry = new THREE.PlaneGeometry(5, 5);
-          const material = new THREE.MeshPhongMaterial({
-            map: texture,
-            side: THREE.DoubleSide,
-          });
-          const plane = new THREE.Mesh(geometry, material);
-          scene.add(plane);
+        // تحويل الصورة إلى ارتفاعات
+        const tempCanvas = document.createElement("canvas");
+        const tempCtx = tempCanvas.getContext("2d");
+        const size = 128;
+        tempCanvas.width = size;
+        tempCanvas.height = size;
+        tempCtx.drawImage(uploadedImg, 0, 0, size, size);
+        const imgData = tempCtx.getImageData(0, 0, size, size).data;
 
-          camera.position.z = 8;
+        const geometry = new THREE.PlaneGeometry(5, 5, size - 1, size - 1);
+        for (let i = 0, j = 0; i < imgData.length; i += 4, j++) {
+          const gray = imgData[i] * 0.3 + imgData[i + 1] * 0.59 + imgData[i + 2] * 0.11;
+          const height = (gray / 255) * 1.5; // مقياس الارتفاع
+          geometry.attributes.position.setZ(j, height);
+        }
+        geometry.computeVertexNormals();
 
-          function animate() {
-            requestAnimationFrame(animate);
-            controls.update();
-            renderer.render(scene, camera);
-          }
-          animate();
+        const material = new THREE.MeshStandardMaterial({
+          color: 0xcccccc,
+          side: THREE.DoubleSide,
+          flatShading: true,
         });
+
+        const relief = new THREE.Mesh(geometry, material);
+        scene.add(relief);
+
+        camera.position.set(0, 3, 6);
+        controls.update();
+
+        function animate() {
+          requestAnimationFrame(animate);
+          controls.update();
+          renderer.render(scene, camera);
+        }
+        animate();
       });
     </script>
   </body>
