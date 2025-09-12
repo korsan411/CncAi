@@ -48,6 +48,8 @@
     dirLight.position.set(5, 5, 5);
     scene.add(dirLight);
 
+    let mesh = null;
+
     // تحميل صورة ومعالجتها
     upload.addEventListener("change", e => {
       const file = e.target.files[0];
@@ -69,8 +71,8 @@
           const height = canvas2d.height;
 
           const geometry = new THREE.PlaneGeometry(4, 4, width - 1, height - 1);
-          const positions = geometry.attributes.position;
-          
+          const positions = geometry.attributes.position.array;
+
           let i = 0;
           const total = width * height;
 
@@ -81,11 +83,14 @@
               const y = Math.floor(i / width);
               const idx = (y * width + x) * 4;
               const brightness = (imageData[idx] + imageData[idx+1] + imageData[idx+2]) / 3 / 255;
-              positions.setZ(i, brightness * 1.5); // الارتفاع
+
+              // التعديل هنا: نكتب مباشرة في المصفوفة
+              positions[i * 3 + 2] = brightness * 1.5;
+
               i++;
               count++;
             }
-            positions.needsUpdate = true;
+            geometry.attributes.position.needsUpdate = true;
 
             const progress = (i / total) * 100;
             progressBar.style.width = progress + "%";
@@ -93,9 +98,16 @@
             if (i < total) {
               requestAnimationFrame(processChunk);
             } else {
-              const material = new THREE.MeshStandardMaterial({ color: 0x00ffcc, wireframe: false, side: THREE.DoubleSide });
-              const mesh = new THREE.Mesh(geometry, material);
-              mesh.rotation.x = -Math.PI/2;
+              geometry.computeVertexNormals();
+              const material = new THREE.MeshStandardMaterial({
+                color: 0x00ffcc,
+                side: THREE.DoubleSide,
+                flatShading: true
+              });
+
+              if (mesh) scene.remove(mesh);
+              mesh = new THREE.Mesh(geometry, material);
+              mesh.rotation.x = -Math.PI / 2;
               scene.add(mesh);
             }
           }
