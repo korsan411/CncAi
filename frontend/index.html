@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>CNC AI Preview</title>
+  <title>CNC AI Preview — OrbitControls added</title>
   <style>
     body { 
       font-family: Arial, sans-serif; 
@@ -82,7 +82,7 @@
 
   <div class="preview-block">
     <div id="preview3d"></div>
-    <div>🌀 المعاينة ثلاثية الأبعاد</div>
+    <div>🌀 المعاينة ثلاثية الأبعاد (Drag to rotate, Right-drag to pan, Scroll to zoom)</div>
   </div>
 
   <div class="preview-block">
@@ -91,6 +91,8 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <!-- OrbitControls (must match three.js version) -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
 
   <script>
     const fileInput = document.getElementById('fileInput');
@@ -103,22 +105,36 @@
     const rotationSpeedInput = document.getElementById('rotationSpeed');
     const zoomControl = document.getElementById('zoomControl');
 
-    // 3D setup
+    // 3D setup (same as your working code)
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, 400/400, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer();
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(400, 400);
     preview3d.appendChild(renderer.domElement);
 
-    const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(0, 1, 1).normalize();
-    scene.add(light);
-    camera.position.z = 200;
+    // Add better lights
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+    dirLight.position.set(0, 1, 1).normalize();
+    scene.add(dirLight);
+    scene.add(new THREE.AmbientLight(0x888888));
+
+    // OrbitControls — added
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.screenSpacePanning = true;
+    // set zoom limits to match zoomControl
+    controls.minDistance = parseFloat(zoomControl.min);
+    controls.maxDistance = parseFloat(zoomControl.max);
+    controls.maxPolarAngle = Math.PI * 0.95; // prevent going under the plane
+
+    camera.position.z = parseFloat(zoomControl.value);
 
     let mesh;
-    let rotationSpeed = 0.01;
+    let rotationSpeed = parseFloat(rotationSpeedInput.value) || 0.01;
     let currentColormap = 'jet';
 
+    // createHeightMap, drawHeatmap, getHeatColor, setColormap - unchanged logic
     function createHeightMap(image) {
       const w = 100, h = 100;
       const tempCanvas = document.createElement('canvas');
@@ -145,6 +161,8 @@
       const material = new THREE.MeshLambertMaterial({ color: 0xaaaaaa, side: THREE.DoubleSide });
       if (mesh) scene.remove(mesh);
       mesh = new THREE.Mesh(geometry, material);
+      // rotate plane so z is up (optional, keep consistent with earlier UI)
+      mesh.rotation.x = -Math.PI / 2;
       scene.add(mesh);
 
       drawHeatmap(imgData, w, h, min, max);
@@ -158,7 +176,8 @@
         for (let x = 0; x < w; x++) {
           const idx = (y * w + x) * 4;
           const brightness = imgData[idx];
-          const norm = (brightness - min) / (max - min);
+          // guard against division by zero if image is flat
+          const norm = (max === min) ? 0.5 : (brightness - min) / (max - min);
           const color = getHeatColor(norm, currentColormap);
           heatData.data[idx] = color.r;
           heatData.data[idx+1] = color.g;
@@ -198,13 +217,17 @@
       }
     }
 
+    // animation loop: keep auto-rotation but allow user interaction via controls
     function animate() {
       requestAnimationFrame(animate);
-      if (mesh) mesh.rotation.y += rotationSpeed;
+      // auto-rotate the mesh around its Y axis (if set)
+      if (mesh && rotationSpeed !== 0) mesh.rotation.y += rotationSpeed;
+      controls.update(); // important for damping
       renderer.render(scene, camera);
     }
     animate();
 
+    // file loader same as before
     fileInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -222,8 +245,25 @@
       rotationSpeed = parseFloat(rotationSpeedInput.value);
     });
 
+    // link zoomControl to the camera distance and to controls' limits
     zoomControl.addEventListener('input', () => {
-      camera.position.z = parseFloat(zoomControl.value);
+      const z = parseFloat(zoomControl.value);
+      camera.position.set(0, z*0.1, z); // keep camera above and behind a bit for nicer view
+      controls.update();
+    });
+
+    // ensure initial camera placement matches slider
+    (function initCameraFromSlider(){
+      const z = parseFloat(zoomControl.value);
+      camera.position.set(0, z*0.1, z);
+      controls.update();
+    })();
+
+    // handle window resize to avoid stretched view
+    window.addEventListener('resize', () => {
+      renderer.setSize(400, 400);
+      camera.aspect = 400/400;
+      camera.updateProjectionMatrix();
     });
   </script>
 </body>
