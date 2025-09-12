@@ -7,3 +7,4 @@ Unified backend + frontend project for CNC image to G-code.
 docker compose up --build
 ```
 Open http://localhost:8000
+By Eyad Samir
