@@ -81,9 +81,6 @@
     <label>🔍 زوم: 
       <input type="range" id="zoomControl" min="50" max="500" step="10" value="200">
     </label>
-    <label>⬆️ ارتفاع Z: 
-      <input type="range" id="zScaleControl" min="0.2" max="5" step="0.1" value="1">
-    </label>
   </div>
 
   <div class="preview-block">
@@ -94,6 +91,7 @@
       <button onclick="setColormap('jet')">Jet</button>
       <button onclick="setColormap('hot')">Hot</button>
       <button onclick="setColormap('cool')">Cool</button>
+      <button onclick="setColormap('gray')">Gray</button>
     </div>
   </div>
 
@@ -109,7 +107,6 @@
 
     const rotationSpeedInput = document.getElementById('rotationSpeed');
     const zoomControl = document.getElementById('zoomControl');
-    const zScaleControl = document.getElementById('zScaleControl');
 
     // 3D setup
     const scene = new THREE.Scene();
@@ -126,12 +123,13 @@
     let mesh;
     let rotationSpeed = 0.01;
     let currentColormap = 'jet';
-    let scaleZ = 1; // عامل تحكم في ارتفاع Z
 
     function createHeightMap(image) {
-      const w = 100, h = 100;
+      const w = image.width;
+      const h = image.height;
       const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = w; tempCanvas.height = h;
+      tempCanvas.width = w; 
+      tempCanvas.height = h;
       const tctx = tempCanvas.getContext('2d');
       tctx.drawImage(image, 0, 0, w, h);
       const imgData = tctx.getImageData(0, 0, w, h).data;
@@ -148,11 +146,10 @@
         const brightness = imgData[idx];
         min = Math.min(min, brightness);
         max = Math.max(max, brightness);
+        geometry.attributes.position.array[stride + 2] = brightness / 80;
 
-        // تطبيق ارتفاع Z
-        geometry.attributes.position.array[stride + 2] = (brightness / 80) * scaleZ;
-
-        const norm = (brightness - 0) / 255;
+        // normalize brightness
+        const norm = brightness / 255;
         const color = getHeatColor(norm, currentColormap);
         colors.push(color.r/255, color.g/255, color.b/255);
       }
@@ -202,6 +199,8 @@
         r = Math.floor(255 * value);
         g = Math.floor(255 * (1-value));
         b = 255;
+      } else if(map==='gray'){
+        r = g = b = Math.floor(255 * value);
       }
       return {r,g,b};
     }
@@ -241,15 +240,6 @@
 
     zoomControl.addEventListener('input', () => {
       camera.position.z = parseFloat(zoomControl.value);
-    });
-
-    zScaleControl.addEventListener('input', () => {
-      scaleZ = parseFloat(zScaleControl.value);
-      if(fileInput.files[0]){
-        const img = new Image();
-        img.onload = () => createHeightMap(img);
-        img.src = URL.createObjectURL(fileInput.files[0]);
-      }
     });
   </script>
 </body>
