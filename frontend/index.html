@@ -1,248 +1,244 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>CNC AI Preview</title>
+  <title>CncAi - Image to CNC Preview</title>
   <style>
-    body { 
-      font-family: Arial, sans-serif; 
-      display: flex; 
-      flex-direction: column; 
-      align-items: center; 
-      gap: 20px; 
-      background: #f4f6f9;
+    body {
+      font-family: Arial, sans-serif;
+      background: #f8f9fa;
       margin: 0;
       padding: 0;
+      text-align: center;
     }
     header {
-      width: 100%;
-      background: linear-gradient(90deg, #4a90e2, #0078d7);
-      color: white;
-      padding: 15px;
-      text-align: center;
-      font-size: 24px;
+      background: #343a40;
+      color: #fff;
+      padding: 20px;
+      font-size: 22px;
       font-weight: bold;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     }
-    .controls {
-      display: flex;
-      flex-direction: column;
-      gap: 15px;
-      align-items: center;
-      justify-content: center;
-      background: white;
-      padding: 15px 20px;
-      border-radius: 10px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      max-width: 600px;
+    .container {
+      padding: 20px;
     }
-    .sliders {
-      display: flex;
-      gap: 20px;
-      flex-wrap: wrap;
-      justify-content: center;
+    .preview {
+      margin: 20px auto;
+      border: 1px solid #ddd;
+      padding: 10px;
+      background: #fff;
+      display: inline-block;
+    }
+    canvas {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: auto;
     }
     .buttons {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      justify-content: center;
+      margin-top: 10px;
     }
-    canvas { 
-      border: 1px solid #ccc; 
-      margin-bottom: 8px; 
-    }
-    #preview3d canvas {
-      border: 1px solid #ccc;
-    }
-    button {
-      padding: 8px 14px;
+    .btn {
+      background: #007bff;
       border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: bold;
       color: white;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-      transition: 0.2s;
+      padding: 8px 16px;
+      margin: 4px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.3s;
     }
-    button:hover {
-      opacity: 0.8;
+    .btn:hover {
+      background: #0056b3;
     }
-    .btn-jet { background: #0078d7; }
-    .btn-hot { background: #e63946; }
-    .btn-cool { background: #6a5acd; }
-    .btn-gray { background: #6c757d; }
+    .colormap-buttons {
+      margin-top: 10px;
+    }
+    .colormap-buttons .btn {
+      background: #6c757d;
+    }
+    .colormap-buttons .btn:hover {
+      background: #495057;
+    }
   </style>
 </head>
 <body>
-  <header>🛠️ CNC AI Preview</header>
+  <header>
+    🛠️ CncAi - تحويل الصور إلى معاينة CNC
+  </header>
 
-  <div class="controls">
-    <input type="file" id="fileInput" accept="image/*">
-    <div class="sliders">
-      <label>🔄 سرعة الدوران: <input type="range" id="rotationSpeed" min="0" max="0.05" step="0.001" value="0.01"></label>
-      <label>🔍 زوم: <input type="range" id="zoomControl" min="50" max="500" step="10" value="200"></label>
+  <div class="container">
+    <input type="file" id="upload" accept="image/*" class="btn"><br><br>
+
+    <!-- معاينة الصورة الأصلية -->
+    <div class="preview">
+      <h3>📷 الصورة الأصلية</h3>
+      <canvas id="originalCanvas"></canvas>
+      <div class="buttons">
+        <button class="btn" onclick="resetView('originalCanvas')">🔄 إعادة تعيين</button>
+        <button class="btn" onclick="downloadCanvas('originalCanvas')">💾 تحميل</button>
+      </div>
     </div>
-    <div class="buttons">
-      🌈 ألوان:
-      <button class="btn-jet" onclick="setColormap('jet')">Jet</button>
-      <button class="btn-hot" onclick="setColormap('hot')">Hot</button>
-      <button class="btn-cool" onclick="setColormap('cool')">Cool</button>
-      <button class="btn-gray" onclick="setColormap('gray')">Gray</button>
+
+    <!-- معاينة 2D -->
+    <div class="preview">
+      <h3>🖼️ المعاينة ثنائية الأبعاد</h3>
+      <canvas id="preview2D"></canvas>
+      <div class="buttons">
+        <button class="btn" onclick="resetView('preview2D')">🔄 إعادة تعيين</button>
+        <button class="btn" onclick="downloadCanvas('preview2D')">💾 تحميل</button>
+      </div>
+    </div>
+
+    <!-- معاينة Heatmap -->
+    <div class="preview">
+      <h3>🌈 خريطة الألوان (Heatmap)</h3>
+      <canvas id="heatmapCanvas"></canvas>
+      <div class="colormap-buttons">
+        <button class="btn" onclick="applyColormap('viridis')">Viridis</button>
+        <button class="btn" onclick="applyColormap('plasma')">Plasma</button>
+        <button class="btn" onclick="applyColormap('inferno')">Inferno</button>
+        <button class="btn" onclick="applyColormap('gray')">Grayscale</button>
+      </div>
+      <div class="buttons">
+        <button class="btn" onclick="resetView('heatmapCanvas')">🔄 إعادة تعيين</button>
+        <button class="btn" onclick="downloadCanvas('heatmapCanvas')">💾 تحميل</button>
+      </div>
+    </div>
+
+    <!-- معاينة 3D -->
+    <div class="preview">
+      <h3>🔳 المعاينة ثلاثية الأبعاد</h3>
+      <div id="preview3D" style="width:600px; height:400px; margin:auto; background:#eee;"></div>
+      <div class="buttons">
+        <button class="btn" onclick="reset3D()">🔄 إعادة تعيين</button>
+        <button class="btn" onclick="download3D()">💾 تحميل</button>
+      </div>
     </div>
   </div>
 
-  <div class="preview-block">
-    <canvas id="preview2d"></canvas>
-    <div>📷 الصورة الأصلية</div>
-  </div>
+  <!-- مكتبات Three.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
-  <div class="preview-block">
-    <div id="preview3d"></div>
-    <div>🌀 المعاينة ثلاثية الأبعاد</div>
-  </div>
-
-  <div class="preview-block">
-    <canvas id="heatmap"></canvas>
-    <div>🌈 خريطة الارتفاعات (Heatmap)</div>
-  </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
   <script>
-    const fileInput = document.getElementById('fileInput');
-    const canvas2d = document.getElementById('preview2d');
-    const ctx2d = canvas2d.getContext('2d');
-    const heatmap = document.getElementById('heatmap');
-    const ctxHeat = heatmap.getContext('2d');
-    const preview3d = document.getElementById('preview3d');
+    const upload = document.getElementById('upload');
+    const originalCanvas = document.getElementById('originalCanvas');
+    const ctxOriginal = originalCanvas.getContext('2d');
+    const preview2D = document.getElementById('preview2D');
+    const ctx2D = preview2D.getContext('2d');
+    const heatmapCanvas = document.getElementById('heatmapCanvas');
+    const ctxHeatmap = heatmapCanvas.getContext('2d');
 
-    const rotationSpeedInput = document.getElementById('rotationSpeed');
-    const zoomControl = document.getElementById('zoomControl');
+    let currentImage = null;
 
-    // 3D setup
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, 400/400, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer();
-    renderer.setSize(400, 400);
-    preview3d.appendChild(renderer.domElement);
-
-    const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(0, 1, 1).normalize();
-    scene.add(light);
-    camera.position.z = 200;
-
-    let mesh;
-    let rotationSpeed = 0.01;
-    let currentColormap = 'jet';
-
-    function createHeightMap(image) {
-      const w = 100, h = 100;
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = w; tempCanvas.height = h;
-      const tctx = tempCanvas.getContext('2d');
-      tctx.drawImage(image, 0, 0, w, h);
-      const imgData = tctx.getImageData(0, 0, w, h).data;
-
-      // 3D mesh
-      const geometry = new THREE.PlaneGeometry(100, 100, w-1, h-1);
-      let min = 255, max = 0;
-      for (let i = 0; i < geometry.attributes.position.count; i++) {
-        const stride = i * 3;
-        const x = i % w;
-        const y = Math.floor(i / w);
-        const idx = (y * w + x) * 4;
-        const brightness = imgData[idx];
-        min = Math.min(min, brightness);
-        max = Math.max(max, brightness);
-        geometry.attributes.position.array[stride + 2] = brightness / 5;
-      }
-      geometry.computeVertexNormals();
-
-      const material = new THREE.MeshLambertMaterial({ color: 0xaaaaaa, side: THREE.DoubleSide });
-      if (mesh) scene.remove(mesh);
-      mesh = new THREE.Mesh(geometry, material);
-      scene.add(mesh);
-
-      drawHeatmap(imgData, w, h, min, max);
-    }
-
-    function drawHeatmap(imgData, w, h, min, max) {
-      heatmap.width = w;
-      heatmap.height = h;
-      const heatData = ctxHeat.createImageData(w, h);
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          const idx = (y * w + x) * 4;
-          const brightness = imgData[idx];
-          const norm = (brightness - min) / (max - min);
-          const color = getHeatColor(norm, currentColormap);
-          heatData.data[idx] = color.r;
-          heatData.data[idx+1] = color.g;
-          heatData.data[idx+2] = color.b;
-          heatData.data[idx+3] = 255;
-        }
-      }
-      ctxHeat.putImageData(heatData, 0, 0);
-    }
-
-    function getHeatColor(value, map) {
-      let r=0,g=0,b=0;
-      if(map==='jet'){ 
-        r = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-3),1),0));
-        g = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-2),1),0));
-        b = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-1),1),0));
-      } else if(map==='hot'){ 
-        r = Math.floor(255 * Math.min(1, 3*value));
-        g = Math.floor(255 * Math.min(1, 3*value-1));
-        g = Math.max(g,0);
-        b = Math.floor(255 * Math.min(1, 3*value-2));
-        b = Math.max(b,0);
-      } else if(map==='cool'){
-        r = Math.floor(255 * value);
-        g = Math.floor(255 * (1-value));
-        b = 255;
-      } else if(map==='gray'){
-        r = g = b = Math.floor(255 * value);
-      }
-      return {r,g,b};
-    }
-
-    function setColormap(map) {
-      currentColormap = map;
-      if(fileInput.files[0]){
-        const img = new Image();
-        img.onload = () => createHeightMap(img);
-        img.src = URL.createObjectURL(fileInput.files[0]);
-      }
-    }
-
-    function animate() {
-      requestAnimationFrame(animate);
-      if (mesh) mesh.rotation.y += rotationSpeed;
-      renderer.render(scene, camera);
-    }
-    animate();
-
-    fileInput.addEventListener('change', (e) => {
+    upload.addEventListener('change', e => {
       const file = e.target.files[0];
       if (!file) return;
       const img = new Image();
       img.onload = () => {
-        canvas2d.width = img.width;
-        canvas2d.height = img.height;
-        ctx2d.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
-        createHeightMap(img);
+        currentImage = img;
+
+        // معاينة الصورة الأصلية
+        originalCanvas.width = img.width;
+        originalCanvas.height = img.height;
+        ctxOriginal.drawImage(img, 0, 0);
+
+        // معاينة 2D
+        preview2D.width = img.width;
+        preview2D.height = img.height;
+        ctx2D.drawImage(img, 0, 0);
+
+        // Heatmap
+        heatmapCanvas.width = img.width;
+        heatmapCanvas.height = img.height;
+        ctxHeatmap.drawImage(img, 0, 0);
+
+        // معاينة 3D
+        init3D(img);
       };
       img.src = URL.createObjectURL(file);
     });
 
-    rotationSpeedInput.addEventListener('input', () => {
-      rotationSpeed = parseFloat(rotationSpeedInput.value);
-    });
+    function resetView(id) {
+      if (!currentImage) return;
+      const canvas = document.getElementById(id);
+      const ctx = canvas.getContext('2d');
+      canvas.width = currentImage.width;
+      canvas.height = currentImage.height;
+      ctx.drawImage(currentImage, 0, 0);
+    }
 
-    zoomControl.addEventListener('input', () => {
-      camera.position.z = parseFloat(zoomControl.value);
-    });
+    function downloadCanvas(id) {
+      const canvas = document.getElementById(id);
+      const link = document.createElement('a');
+      link.download = id + '.png';
+      link.href = canvas.toDataURL();
+      link.click();
+    }
+
+    function applyColormap(type) {
+      if (!currentImage) return;
+      const imgData = ctxHeatmap.getImageData(0, 0, heatmapCanvas.width, heatmapCanvas.height);
+      const data = imgData.data;
+      for (let i = 0; i < data.length; i += 4) {
+        const v = data[i]; // use red channel as grayscale
+        let r = v, g = v, b = v;
+        if (type === 'viridis') { r = v; g = 255-v; b = v/2; }
+        if (type === 'plasma') { r = v; g = v/2; b = 255-v; }
+        if (type === 'inferno') { r = 255-v; g = v/3; b = v/5; }
+        if (type === 'gray') { r = g = b = v; }
+        data[i] = r; data[i+1] = g; data[i+2] = b;
+      }
+      ctxHeatmap.putImageData(imgData, 0, 0);
+    }
+
+    // ========== 3D Preview ==========
+    let scene, camera, renderer, controls, mesh;
+
+    function init3D(img) {
+      const container = document.getElementById('preview3D');
+      container.innerHTML = ""; // clear old
+
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(45, container.clientWidth/container.clientHeight, 1, 1000);
+      camera.position.set(0, 200, 200);
+
+      renderer = new THREE.WebGLRenderer();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      container.appendChild(renderer.domElement);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+      const light = new THREE.DirectionalLight(0xffffff, 1);
+      light.position.set(0,1,1).normalize();
+      scene.add(light);
+
+      const geometry = new THREE.PlaneGeometry(img.width, img.height, img.width/2, img.height/2);
+      const material = new THREE.MeshLambertMaterial({color:0xcccccc, side:THREE.DoubleSide, wireframe:false});
+      mesh = new THREE.Mesh(geometry, material);
+      mesh.rotation.x = -Math.PI/2;
+      scene.add(mesh);
+
+      animate();
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+
+    function reset3D() {
+      if (!camera) return;
+      camera.position.set(0, 200, 200);
+      controls.reset();
+    }
+
+    function download3D() {
+      const link = document.createElement('a');
+      link.download = 'preview3D.png';
+      link.href = renderer.domElement.toDataURL();
+      link.click();
+    }
   </script>
 </body>
 </html>
