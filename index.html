@@ -1,62 +1,63 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar">
 <head>
   <meta charset="UTF-8">
   <title>CNC AI Preview</title>
   <style>
-    body { 
-      font-family: Arial, sans-serif; 
-      display: flex; 
-      flex-direction: column; 
-      align-items: center; 
-      gap: 20px; 
+    body {
+      font-family: Arial, sans-serif;
       background: #f9f9f9;
       margin: 0;
       padding: 0;
+      text-align: center;
     }
     header {
-      width: 100%;
       background: #4a90e2;
       color: white;
       padding: 15px;
-      text-align: center;
       font-size: 22px;
       font-weight: bold;
       box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     }
-    .controls {
-      display: flex;
-      gap: 15px;
-      align-items: center;
-      flex-wrap: wrap;
-      justify-content: center;
-      background: white;
+    .controls, .gcode-controls {
+      margin: 15px auto;
       padding: 10px;
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 15px;
+      background: white;
       border-radius: 8px;
       box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      max-width: 800px;
     }
-    .preview-block { 
-      display: flex; 
-      flex-direction: column; 
-      align-items: center; 
+    .preview-block {
+      margin: 20px auto;
     }
-    canvas { 
-      border: 1px solid #ccc; 
-      margin-bottom: 8px; 
+    canvas {
+      border: 1px solid #ccc;
+      max-width: 100%;
     }
     #preview3d canvas {
       border: 1px solid #ccc;
     }
     button {
-      padding: 6px 12px;
+      padding: 8px 14px;
       border: none;
-      border-radius: 5px;
+      border-radius: 6px;
       cursor: pointer;
-      background: #eee;
+      background: #4a90e2;
+      color: white;
       font-weight: bold;
     }
     button:hover {
-      background: #ddd;
+      background: #357ABD;
+    }
+    label {
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
     }
   </style>
 </head>
@@ -75,23 +76,28 @@
   <div class="preview-block">
     <div id="preview3d"></div>
     <div>🌀 المعاينة ثلاثية الأبعاد</div>
-    <label>🔄 سرعة الدوران: 
-      <input type="range" id="rotationSpeed" min="0" max="0.05" step="0.001" value="0.01">
-    </label>
-    <label>🔍 زوم: 
-      <input type="range" id="zoomControl" min="50" max="500" step="10" value="200">
-    </label>
+    <div class="controls">
+      <label>🔄 سرعة الدوران: <input type="range" id="rotationSpeed" min="0" max="0.05" step="0.001" value="0.01"></label>
+      <label>🔍 زوم: <input type="range" id="zoomControl" min="50" max="500" step="10" value="200"></label>
+    </div>
   </div>
 
   <div class="preview-block">
     <canvas id="heatmap"></canvas>
     <div>🌈 خريطة الارتفاعات (Heatmap)</div>
-    <div>
-      🌈 ألوان:
+    <div class="controls">
       <button onclick="setColormap('jet')">Jet</button>
       <button onclick="setColormap('hot')">Hot</button>
       <button onclick="setColormap('cool')">Cool</button>
+      <button onclick="setColormap('gray')">Gray</button>
     </div>
+  </div>
+
+  <div class="gcode-controls">
+    <label>قطر الأداة (mm): <input type="number" id="toolDiameter" value="3" step="0.1"></label>
+    <label>Stepover: <input type="number" id="stepover" value="0.5" step="0.1"></label>
+    <label>أقصى عمق (mm): <input type="number" id="maxDepth" value="2" step="0.1"></label>
+    <button id="generateGcodeBtn">⚙️ توليد G-code</button>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
@@ -122,54 +128,55 @@
     let mesh;
     let rotationSpeed = 0.01;
     let currentColormap = 'jet';
+    let heightDataGlobal;
 
     function createHeightMap(image) {
-      const w = 100, h = 100;
+      const w = image.width, h = image.height;
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = w; tempCanvas.height = h;
       const tctx = tempCanvas.getContext('2d');
       tctx.drawImage(image, 0, 0, w, h);
       const imgData = tctx.getImageData(0, 0, w, h).data;
 
+      // height data
+      heightDataGlobal = [];
+      for (let y = 0; y < h; y++) {
+        let row = [];
+        for (let x = 0; x < w; x++) {
+          const idx = (y * w + x) * 4;
+          const brightness = imgData[idx]; // R channel
+          row.push(brightness/255);
+        }
+        heightDataGlobal.push(row);
+      }
+
       // 3D mesh
       const geometry = new THREE.PlaneGeometry(100, 100, w-1, h-1);
-      let min = 255, max = 0;
-      const colors = [];
       for (let i = 0; i < geometry.attributes.position.count; i++) {
         const stride = i * 3;
         const x = i % w;
         const y = Math.floor(i / w);
-        const idx = (y * w + x) * 4;
-        const brightness = imgData[idx];
-        min = Math.min(min, brightness);
-        max = Math.max(max, brightness);
-        geometry.attributes.position.array[stride + 2] = brightness / 80;
-
-        // normalize brightness
-        const norm = (brightness - 0) / 255;
-        const color = getHeatColor(norm, currentColormap);
-        colors.push(color.r/255, color.g/255, color.b/255);
+        const zVal = heightDataGlobal[y][x] * 80; // scaleZ ثابت
+        geometry.attributes.position.array[stride + 2] = zVal;
       }
-      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
       geometry.computeVertexNormals();
 
-      const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+      const material = new THREE.MeshLambertMaterial({ color: 0xaaaaaa, side: THREE.DoubleSide });
       if (mesh) scene.remove(mesh);
       mesh = new THREE.Mesh(geometry, material);
       scene.add(mesh);
 
-      drawHeatmap(imgData, w, h, min, max);
+      drawHeatmap(heightDataGlobal, w, h);
     }
 
-    function drawHeatmap(imgData, w, h, min, max) {
+    function drawHeatmap(heightData, w, h) {
       heatmap.width = w;
       heatmap.height = h;
       const heatData = ctxHeat.createImageData(w, h);
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           const idx = (y * w + x) * 4;
-          const brightness = imgData[idx];
-          const norm = (brightness - min) / (max - min);
+          const norm = heightData[y][x];
           const color = getHeatColor(norm, currentColormap);
           heatData.data[idx] = color.r;
           heatData.data[idx+1] = color.g;
@@ -196,16 +203,16 @@
         r = Math.floor(255 * value);
         g = Math.floor(255 * (1-value));
         b = 255;
+      } else if(map==='gray'){
+        r=g=b=Math.floor(255*value);
       }
       return {r,g,b};
     }
 
     function setColormap(map) {
       currentColormap = map;
-      if(fileInput.files[0]){
-        const img = new Image();
-        img.onload = () => createHeightMap(img);
-        img.src = URL.createObjectURL(fileInput.files[0]);
+      if(heightDataGlobal){
+        drawHeatmap(heightDataGlobal, heatmap.width, heatmap.height);
       }
     }
 
@@ -235,6 +242,102 @@
 
     zoomControl.addEventListener('input', () => {
       camera.position.z = parseFloat(zoomControl.value);
+    });
+
+    // ==================== GCODE توليد ====================
+    function generateGcodeFromHeight(heightData, options = {}) {
+      const h = heightData.length;
+      const w = heightData[0].length;
+
+      const cfg = Object.assign({
+        pixelSizeMM: 0.5,
+        maxCutDepth: 2.0,
+        safeZ: 5.0,
+        plungeFeed: 200,
+        cutFeed: 800,
+        travelFeed: 1800,
+        invert: false,
+        toolDiameter: 3.0,
+        stepover: 0.5,
+        spindleSpeed: 12000,
+        unit: 'mm'
+      }, options);
+
+      const stepOverDist = cfg.toolDiameter * cfg.stepover;
+      const lines = [];
+      lines.push(`(Generated by CncAi with tool stepover)`);
+      lines.push(`G21 ; units in ${cfg.unit}`);
+      lines.push(`G90 ; absolute positioning`);
+      lines.push(`M3 S${cfg.spindleSpeed}`);
+      lines.push(`G0 Z${cfg.safeZ}`);
+      lines.push(``);
+
+      const widthMM = w * cfg.pixelSizeMM;
+      const heightMM = h * cfg.pixelSizeMM;
+      const numPasses = Math.ceil(heightMM / stepOverDist);
+
+      for (let pass = 0; pass < numPasses; pass++) {
+        const y_mm = pass * stepOverDist;
+        if (y_mm >= heightMM) break;
+
+        const leftToRight = (pass % 2 === 0);
+        lines.push(`(Pass ${pass} at Y=${y_mm.toFixed(3)})`);
+
+        if (leftToRight) {
+          lines.push(`G0 X0 Y${y_mm.toFixed(3)}`);
+          for (let x_mm = 0; x_mm <= widthMM; x_mm += cfg.pixelSizeMM) {
+            const col = Math.min(w - 1, Math.round(x_mm / cfg.pixelSizeMM));
+            const row = Math.min(h - 1, Math.round(y_mm / cfg.pixelSizeMM));
+            const val = heightData[row][col];
+            const norm = Math.max(0, Math.min(1, val));
+            const depth = cfg.invert ? cfg.maxCutDepth * norm : cfg.maxCutDepth * (1 - norm);
+            const targetZ = -depth;
+            lines.push(`G1 Z${targetZ.toFixed(3)} F${cfg.plungeFeed}`);
+            lines.push(`G1 X${x_mm.toFixed(3)} Y${y_mm.toFixed(3)} F${cfg.cutFeed}`);
+          }
+        } else {
+          lines.push(`G0 X${widthMM.toFixed(3)} Y${y_mm.toFixed(3)}`);
+          for (let x_mm = widthMM; x_mm >= 0; x_mm -= cfg.pixelSizeMM) {
+            const col = Math.min(w - 1, Math.round(x_mm / cfg.pixelSizeMM));
+            const row = Math.min(h - 1, Math.round(y_mm / cfg.pixelSizeMM));
+            const val = heightData[row][col];
+            const norm = Math.max(0, Math.min(1, val));
+            const depth = cfg.invert ? cfg.maxCutDepth * norm : cfg.maxCutDepth * (1 - norm);
+            const targetZ = -depth;
+            lines.push(`G1 Z${targetZ.toFixed(3)} F${cfg.plungeFeed}`);
+            lines.push(`G1 X${x_mm.toFixed(3)} Y${y_mm.toFixed(3)} F${cfg.cutFeed}`);
+          }
+        }
+        lines.push(`G0 Z${cfg.safeZ}`);
+      }
+
+      lines.push(`G0 Z${cfg.safeZ}`);
+      lines.push(`G0 X0 Y0`);
+      lines.push(`M5`);
+      lines.push(`M30`);
+      return lines.join('\n');
+    }
+
+    document.getElementById('generateGcodeBtn').addEventListener('click', () => {
+      if (!heightDataGlobal) {
+        alert("❌ من فضلك ارفع صورة أولاً.");
+        return;
+      }
+      const toolDiameter = parseFloat(document.getElementById('toolDiameter').value);
+      const stepover = parseFloat(document.getElementById('stepover').value);
+      const maxDepth = parseFloat(document.getElementById('maxDepth').value);
+
+      const gcode = generateGcodeFromHeight(heightDataGlobal, {
+        toolDiameter: toolDiameter,
+        stepover: stepover,
+        maxCutDepth: maxDepth
+      });
+
+      const blob = new Blob([gcode], { type: "text/plain" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "output.nc";
+      a.click();
     });
   </script>
 </body>
