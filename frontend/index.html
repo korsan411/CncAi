@@ -2,166 +2,226 @@
 <html lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>CncAi - Image to CNC</title>
+  <title>CncAi - معاينة الصور</title>
   <style>
-    body {font-family: Arial, sans-serif;background: #f4f4f4;margin: 0;padding: 0;text-align: center;}
-    header {background: linear-gradient(90deg, #333, #555);color: white;padding: 15px;font-size: 22px;font-weight: bold;}
-    main {padding: 20px;}
-    .preview-container {margin-bottom: 30px;}
-    canvas, img {max-width: 100%;height: auto;border: 2px solid #ccc;border-radius: 8px;background: white;}
-    .controls {margin-top: 10px;}
-    .btn {background: #007bff;color: white;padding: 8px 15px;margin: 5px;border: none;border-radius: 6px;cursor: pointer;transition: background 0.3s;}
-    .btn:hover {background: #0056b3;}
-    .slider-container {margin-top: 10px;}
-    input[type="range"] {width: 200px;}
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f4f4f9;
+      color: #333;
+      text-align: center;
+    }
+    header {
+      background: #2c3e50;
+      color: #fff;
+      padding: 15px;
+      font-size: 22px;
+      font-weight: bold;
+    }
+    .container {
+      max-width: 1200px;
+      margin: auto;
+      padding: 20px;
+    }
+    .buttons {
+      margin: 15px 0;
+    }
+    .buttons button {
+      margin: 5px;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 6px;
+      background: #3498db;
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.3s;
+    }
+    .buttons button:hover {
+      background: #2980b9;
+    }
+    .preview {
+      margin: 20px auto;
+    }
+    canvas, img {
+      max-width: 100%;
+      height: auto;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background: white;
+    }
+    #preview3d {
+      margin: 20px auto;
+      width: 400px;
+      height: 400px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+    .controls {
+      margin-top: 10px;
+      text-align: center;
+    }
+    .controls label {
+      display: block;
+      margin: 6px 0;
+      font-size: 14px;
+    }
+    .controls input[type=range] {
+      width: 80%;
+    }
   </style>
 </head>
 <body>
-  <header>CncAi - Image to CNC</header>
-
-  <main>
-    <!-- رفع الصورة -->
-    <div class="preview-container">
-      <input type="file" id="upload" class="btn">
+  <header>CncAi - معاينة الصور</header>
+  <div class="container">
+    <input type="file" id="upload" accept="image/*">
+    <div class="buttons">
+      <button onclick="showPreview('original')">الصورة الأصلية</button>
+      <button onclick="showPreview('2d')">معاينة 2D</button>
+      <button onclick="showPreview('heatmap')">Heatmap</button>
+      <button onclick="showPreview('3d')">معاينة 3D</button>
     </div>
 
-    <!-- معاينة الصورة الأصلية -->
-    <div class="preview-container">
-      <h3>الصورة الأصلية</h3>
-      <img id="originalPreview" alt="الصورة الأصلية">
-    </div>
-
-    <!-- معاينة 2D -->
-    <div class="preview-container">
-      <h3>معاينة 2D</h3>
-      <canvas id="canvas2D"></canvas>
-    </div>
-
-    <!-- معاينة Heatmap -->
-    <div class="preview-container">
-      <h3>Heatmap</h3>
-      <canvas id="heatmapCanvas"></canvas>
+    <div id="original" class="preview"></div>
+    <div id="2d" class="preview" style="display:none;"></div>
+    <div id="heatmap" class="preview" style="display:none;"></div>
+    <div id="3d" class="preview" style="display:none;">
+      <div id="preview3d"></div>
       <div class="controls">
-        <button class="btn" onclick="setColormap('gray')">رمادي</button>
-        <button class="btn" onclick="setColormap('jet')">Jet</button>
-        <button class="btn" onclick="setColormap('hot')">Hot</button>
+        <label>ارتفاع Z:
+          <input type="range" id="scaleZ" min="10" max="150" value="80">
+        </label>
+        <label>سرعة الدوران:
+          <input type="range" id="rotateSpeed" min="0" max="0.05" step="0.001" value="0.01">
+        </label>
       </div>
     </div>
+  </div>
 
-    <!-- معاينة 3D -->
-    <div class="preview-container">
-      <h3>معاينة 3D</h3>
-      <div id="preview3D" style="width: 100%; height: 400px;"></div>
-      <div class="slider-container">
-        <label>سرعة الدوران:</label>
-        <input type="range" id="rotationSpeed" min="0" max="0.05" step="0.001" value="0.01">
-        <br>
-        <label>تكبير/تصغير:</label>
-        <input type="range" id="zoomLevel" min="200" max="1200" step="10" value="600">
-      </div>
-    </div>
-  </main>
-
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
-
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script>
-    const upload = document.getElementById('upload');
-    const originalPreview = document.getElementById('originalPreview');
-    const canvas2D = document.getElementById('canvas2D');
-    const ctx2D = canvas2D.getContext('2d');
-    const heatmapCanvas = document.getElementById('heatmapCanvas');
-    const ctxHeatmap = heatmapCanvas.getContext('2d');
-
+    let uploadedImg, scene, camera, renderer, controls, mesh;
+    let animateId;
     let rotationSpeed = 0.01;
-    let camera, controls, mesh, scene, renderer;
 
-    upload.addEventListener('change', e => {
+    const upload = document.getElementById("upload");
+    upload.addEventListener("change", handleUpload);
+
+    function handleUpload(e) {
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = evt => {
-        const img = new Image();
-        img.onload = () => {
-          // عرض الصورة الأصلية
-          originalPreview.src = img.src;
-
-          // معاينة 2D
-          canvas2D.width = img.width;
-          canvas2D.height = img.height;
-          ctx2D.drawImage(img, 0, 0);
-
-          // Heatmap
-          heatmapCanvas.width = img.width;
-          heatmapCanvas.height = img.height;
-          ctxHeatmap.drawImage(img, 0, 0);
-
-          // 3D
-          init3D(img);
+      reader.onload = function(event) {
+        uploadedImg = new Image();
+        uploadedImg.src = event.target.result;
+        uploadedImg.onload = () => {
+          renderOriginal();
+          render2D();
+          renderHeatmap();
+          render3D();
         };
-        img.src = evt.target.result;
       };
       reader.readAsDataURL(file);
-    });
-
-    // تغيير colormap
-    function setColormap(type) {
-      const imgData = ctx2D.getImageData(0, 0, canvas2D.width, canvas2D.height);
-      const data = imgData.data;
-      for (let i = 0; i < data.length; i += 4) {
-        let v = data[i]; // intensity
-        if (type === 'gray') {
-          data[i] = data[i+1] = data[i+2] = v;
-        } else if (type === 'jet') {
-          data[i] = v;
-          data[i+1] = 255 - v;
-          data[i+2] = v / 2;
-        } else if (type === 'hot') {
-          data[i] = Math.min(255, v * 2);
-          data[i+1] = v;
-          data[i+2] = v / 2;
-        }
-      }
-      ctxHeatmap.putImageData(imgData, 0, 0);
     }
 
-    // 3D Preview
-    function init3D(img) {
-      const container = document.getElementById('preview3D');
+    function showPreview(id) {
+      document.querySelectorAll(".preview").forEach(p => p.style.display = "none");
+      document.getElementById(id).style.display = "block";
+    }
+
+    function renderOriginal() {
+      const div = document.getElementById("original");
+      div.innerHTML = "";
+      const img = document.createElement("img");
+      img.src = uploadedImg.src;
+      img.style.maxWidth = uploadedImg.width + "px";
+      div.appendChild(img);
+    }
+
+    function render2D() {
+      const div = document.getElementById("2d");
+      div.innerHTML = "";
+      const canvas = document.createElement("canvas");
+      canvas.width = uploadedImg.width;
+      canvas.height = uploadedImg.height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(uploadedImg, 0, 0);
+      div.appendChild(canvas);
+    }
+
+    function renderHeatmap() {
+      const div = document.getElementById("heatmap");
+      div.innerHTML = "";
+      const canvas = document.createElement("canvas");
+      canvas.width = uploadedImg.width;
+      canvas.height = uploadedImg.height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(uploadedImg, 0, 0);
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < imgData.data.length; i += 4) {
+        let avg = (imgData.data[i] + imgData.data[i+1] + imgData.data[i+2]) / 3;
+        imgData.data[i] = avg;
+        imgData.data[i+1] = 0;
+        imgData.data[i+2] = 255 - avg;
+      }
+      ctx.putImageData(imgData, 0, 0);
+      div.appendChild(canvas);
+    }
+
+    function render3D() {
+      const container = document.getElementById("preview3d");
       container.innerHTML = "";
 
       scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(45, container.clientWidth/container.clientHeight, 1, 2000);
-      camera.position.z = 600;
+      camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+      camera.position.set(0, -200, 200);
 
       renderer = new THREE.WebGLRenderer({antialias:true});
       renderer.setSize(container.clientWidth, container.clientHeight);
       container.appendChild(renderer.domElement);
 
       controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableZoom = true;
 
-      const geometry = new THREE.PlaneGeometry(img.width, img.height, 100, 100);
-      const texture = new THREE.TextureLoader().load(img.src);
-      const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
+      const light = new THREE.DirectionalLight(0xffffff, 1);
+      light.position.set(0, 0, 500).normalize();
+      scene.add(light);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = uploadedImg.width;
+      canvas.height = uploadedImg.height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(uploadedImg, 0, 0);
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+      const geometry = new THREE.PlaneGeometry(uploadedImg.width, uploadedImg.height, uploadedImg.width-1, uploadedImg.height-1);
+      const scaleZ = parseFloat(document.getElementById("scaleZ").value);
+
+      for (let i = 0; i < geometry.attributes.position.count; i++) {
+        const x = i % uploadedImg.width;
+        const y = Math.floor(i / uploadedImg.width);
+        const index = (y * uploadedImg.width + x) * 4;
+        const avg = (imgData[index] + imgData[index+1] + imgData[index+2]) / 3;
+        geometry.attributes.position.setZ(i, avg/255 * scaleZ);
+      }
+
+      geometry.computeVertexNormals();
+      const material = new THREE.MeshPhongMaterial({color:0x3498db, side:THREE.DoubleSide, flatShading:true});
       mesh = new THREE.Mesh(geometry, material);
-      mesh.scale.z = 80;
       scene.add(mesh);
 
       animate();
     }
 
     function animate() {
-      requestAnimationFrame(animate);
-      if (mesh) mesh.rotation.y += rotationSpeed;
-      if (camera) camera.position.z = document.getElementById("zoomLevel").value;
-      if (controls) controls.update();
-      if (renderer && scene && camera) {
-        renderer.render(scene, camera);
-      }
+      animateId = requestAnimationFrame(animate);
+      mesh.rotation.z += rotationSpeed;
+      renderer.render(scene, camera);
     }
 
-    // سلايدرز للتحكم
-    document.getElementById("rotationSpeed").addEventListener("input", e => {
+    document.getElementById("scaleZ").addEventListener("input", render3D);
+    document.getElementById("rotateSpeed").addEventListener("input", e => {
       rotationSpeed = parseFloat(e.target.value);
     });
   </script>
