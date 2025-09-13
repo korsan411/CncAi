@@ -4,61 +4,20 @@
   <meta charset="UTF-8">
   <title>CncAi - Image to CNC</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f4f4f4;
-      margin: 0;
-      padding: 0;
-      text-align: center;
-    }
-    header {
-      background: linear-gradient(90deg, #333, #555);
-      color: white;
-      padding: 15px;
-      font-size: 22px;
-      font-weight: bold;
-    }
-    main {
-      padding: 20px;
-    }
-    .preview-container {
-      margin-bottom: 30px;
-    }
-    canvas, img {
-      max-width: 100%;
-      height: auto;
-      border: 2px solid #ccc;
-      border-radius: 8px;
-      background: white;
-    }
-    .controls {
-      margin-top: 10px;
-    }
-    .btn {
-      background: #007bff;
-      color: white;
-      padding: 8px 15px;
-      margin: 5px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: background 0.3s;
-    }
-    .btn:hover {
-      background: #0056b3;
-    }
-    .slider-container {
-      margin-top: 10px;
-    }
-    input[type="range"] {
-      width: 200px;
-    }
+    body {font-family: Arial, sans-serif;background: #f4f4f4;margin: 0;padding: 0;text-align: center;}
+    header {background: linear-gradient(90deg, #333, #555);color: white;padding: 15px;font-size: 22px;font-weight: bold;}
+    main {padding: 20px;}
+    .preview-container {margin-bottom: 30px;}
+    canvas, img {max-width: 100%;height: auto;border: 2px solid #ccc;border-radius: 8px;background: white;}
+    .controls {margin-top: 10px;}
+    .btn {background: #007bff;color: white;padding: 8px 15px;margin: 5px;border: none;border-radius: 6px;cursor: pointer;transition: background 0.3s;}
+    .btn:hover {background: #0056b3;}
+    .slider-container {margin-top: 10px;}
+    input[type="range"] {width: 200px;}
   </style>
 </head>
 <body>
-  <header>
-    CncAi - Image to CNC
-  </header>
+  <header>CncAi - Image to CNC</header>
 
   <main>
     <!-- رفع الصورة -->
@@ -175,14 +134,15 @@
       camera = new THREE.PerspectiveCamera(45, container.clientWidth/container.clientHeight, 1, 2000);
       camera.position.z = 600;
 
-      renderer = new THREE.WebGLRenderer();
+      renderer = new THREE.WebGLRenderer({antialias:true});
       renderer.setSize(container.clientWidth, container.clientHeight);
       container.appendChild(renderer.domElement);
 
       controls = new THREE.OrbitControls(camera, renderer.domElement);
 
       const geometry = new THREE.PlaneGeometry(img.width, img.height, 100, 100);
-      const material = new THREE.MeshBasicMaterial({ map: new THREE.TextureLoader().load(img.src), side: THREE.DoubleSide });
+      const texture = new THREE.TextureLoader().load(img.src);
+      const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
       mesh = new THREE.Mesh(geometry, material);
       mesh.scale.z = 80;
       scene.add(mesh);
@@ -194,7 +154,10 @@
       requestAnimationFrame(animate);
       if (mesh) mesh.rotation.y += rotationSpeed;
       if (camera) camera.position.z = document.getElementById("zoomLevel").value;
-      renderer.render(scene, camera);
+      if (controls) controls.update();
+      if (renderer && scene && camera) {
+        renderer.render(scene, camera);
+      }
     }
 
     // سلايدرز للتحكم
