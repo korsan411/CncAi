@@ -81,6 +81,9 @@
     <label>🔍 زوم: 
       <input type="range" id="zoomControl" min="50" max="500" step="10" value="200">
     </label>
+    <label>⬆️ ارتفاع Z: 
+      <input type="range" id="zScaleControl" min="0.2" max="5" step="0.1" value="1">
+    </label>
   </div>
 
   <div class="preview-block">
@@ -106,6 +109,7 @@
 
     const rotationSpeedInput = document.getElementById('rotationSpeed');
     const zoomControl = document.getElementById('zoomControl');
+    const zScaleControl = document.getElementById('zScaleControl');
 
     // 3D setup
     const scene = new THREE.Scene();
@@ -122,6 +126,7 @@
     let mesh;
     let rotationSpeed = 0.01;
     let currentColormap = 'jet';
+    let scaleZ = 1; // عامل تحكم في ارتفاع Z
 
     function createHeightMap(image) {
       const w = 100, h = 100;
@@ -143,9 +148,10 @@
         const brightness = imgData[idx];
         min = Math.min(min, brightness);
         max = Math.max(max, brightness);
-        geometry.attributes.position.array[stride + 2] = brightness / 80;
 
-        // normalize brightness
+        // تطبيق ارتفاع Z
+        geometry.attributes.position.array[stride + 2] = (brightness / 80) * scaleZ;
+
         const norm = (brightness - 0) / 255;
         const color = getHeatColor(norm, currentColormap);
         colors.push(color.r/255, color.g/255, color.b/255);
@@ -235,6 +241,15 @@
 
     zoomControl.addEventListener('input', () => {
       camera.position.z = parseFloat(zoomControl.value);
+    });
+
+    zScaleControl.addEventListener('input', () => {
+      scaleZ = parseFloat(zScaleControl.value);
+      if(fileInput.files[0]){
+        const img = new Image();
+        img.onload = () => createHeightMap(img);
+        img.src = URL.createObjectURL(fileInput.files[0]);
+      }
     });
   </script>
 </body>
