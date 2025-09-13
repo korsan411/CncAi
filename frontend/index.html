@@ -2,164 +2,195 @@
 <html lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>CncAi Preview</title>
+  <title>CNC AI Preview</title>
   <style>
     body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f4f6f9;
       margin: 0;
-      font-family: Arial, sans-serif;
-      background: #121212;
-      color: #fff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      padding: 0;
+      text-align: center;
+      direction: rtl;
     }
     header {
-      background: #1e1e1e;
-      width: 100%;
-      padding: 15px;
-      text-align: center;
-      font-size: 22px;
+      background: linear-gradient(90deg, #4a90e2, #357ABD);
+      color: white;
+      padding: 20px;
+      font-size: 24px;
       font-weight: bold;
-      color: #00e0ff;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+      box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+      letter-spacing: 1px;
     }
-    .controls {
-      margin: 15px;
+    .controls, .gcode-controls {
+      margin: 15px auto;
+      padding: 12px;
       display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
       justify-content: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+      max-width: 850px;
     }
-    button, input[type=file] {
-      padding: 8px 14px;
+    .preview-block {
+      margin: 25px auto;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.12);
+      padding: 15px;
+      max-width: 850px;
+    }
+    canvas {
+      border: 1px solid #ccc;
+      max-width: 100%;
+      border-radius: 8px;
+    }
+    #preview3d canvas {
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      display: block;
+      margin: auto;
+    }
+    button {
+      padding: 10px 16px;
       border: none;
       border-radius: 8px;
       cursor: pointer;
-      background: #00e0ff;
-      color: #000;
+      background: linear-gradient(135deg, #4a90e2, #357ABD);
+      color: white;
       font-weight: bold;
       transition: 0.3s;
     }
     button:hover {
-      background: #00b8cc;
+      background: linear-gradient(135deg, #357ABD, #24527a);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
     }
-    .preview {
-      margin-top: 15px;
-      background: #222;
-      padding: 10px;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.7);
-      max-width: 90%;
-      max-height: 70vh;
+    label {
+      font-size: 14px;
       display: flex;
-      justify-content: center;
       align-items: center;
+      gap: 6px;
     }
-    canvas, img {
-      max-width: 100%;
-      max-height: 70vh;
-      border-radius: 8px;
+    input[type="range"], input[type="number"], input[type="file"] {
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      padding: 4px;
+    }
+    h3 {
+      margin: 12px 0 8px;
+      color: #333;
+    }
+    #previewArea {
+      width: 100%;
+      height: 500px;
     }
   </style>
 </head>
 <body>
-  <header>🔧 CncAi Preview</header>
+  <header>🛠️ CNC AI Preview</header>
 
+  <!-- رفع الصورة -->
   <div class="controls">
-    <input type="file" id="upload" accept="image/*">
-    <button onclick="showOriginal()">الصورة الأصلية</button>
-    <button onclick="show2D()">معاينة 2D</button>
-    <button onclick="showHeatmap()">Heatmap</button>
-    <button onclick="show3D()">معاينة 3D</button>
+    <input type="file" id="fileInput" accept="image/*">
   </div>
 
-  <div class="preview" id="previewArea">
-    <p>قم برفع صورة للمعاينة</p>
+  <!-- الصورة الأصلية -->
+  <div class="preview-block">
+    <canvas id="preview2d"></canvas>
+    <h3>📷 الصورة الأصلية</h3>
   </div>
 
-  <!-- Three.js -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+  <!-- المعاينة ثلاثية الأبعاد -->
+  <div class="preview-block">
+    <div id="previewArea"></div>
+    <h3>🌀 المعاينة ثلاثية الأبعاد</h3>
+    <div class="controls">
+      <label>🔄 سرعة الدوران: 
+        <input type="range" id="rotationSpeed" min="0" max="0.05" step="0.001" value="0.01">
+      </label>
+      <label>🔍 زوم: 
+        <input type="range" id="zoomControl" min="50" max="500" step="10" value="200">
+      </label>
+    </div>
+  </div>
 
+  <!-- Heatmap -->
+  <div class="preview-block">
+    <canvas id="heatmap"></canvas>
+    <h3>🌈 خريطة الارتفاعات (Heatmap)</h3>
+    <div class="controls">
+      <button onclick="setColormap('jet')">Jet</button>
+      <button onclick="setColormap('hot')">Hot</button>
+      <button onclick="setColormap('cool')">Cool</button>
+      <button onclick="setColormap('gray')">Gray</button>
+    </div>
+  </div>
+
+  <!-- إعدادات G-code -->
+  <div class="gcode-controls">
+    <label>قطر الأداة (mm): <input type="number" id="toolDiameter" value="3" step="0.1"></label>
+    <label>Stepover: <input type="number" id="stepover" value="0.5" step="0.1"></label>
+    <label>أقصى عمق (mm): <input type="number" id="maxDepth" value="2" step="0.1"></label>
+    <button id="generateGcodeBtn">⚙️ توليد G-code</button>
+  </div>
+
+  <!-- مكتبات Three.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
+
+  <!-- سكربت -->
   <script>
-    let uploadedImage = null;
-    let heatmapCanvas = null;
     let scene, camera, renderer, controls, mesh;
+    let uploadedImage = null;
 
-    document.getElementById('upload').addEventListener('change', e => {
-      const file = e.target.files[0];
+    document.getElementById("fileInput").addEventListener("change", handleImage);
+
+    function handleImage(event) {
+      const file = event.target.files[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = ev => {
-        uploadedImage = new Image();
-        uploadedImage.src = ev.target.result;
-        uploadedImage.onload = () => {
-          showOriginal();
-        };
+      const img = new Image();
+      img.onload = () => {
+        uploadedImage = img;
+        draw2D(img);
+        show3D();
+        drawHeatmap(img);
       };
-      reader.readAsDataURL(file);
-    });
-
-    function clearPreview() {
-      const area = document.getElementById("previewArea");
-      area.innerHTML = "";
+      img.src = URL.createObjectURL(file);
     }
 
-    function showOriginal() {
-      if (!uploadedImage) return;
-      clearPreview();
-      const img = document.createElement("img");
-      img.src = uploadedImage.src;
-      document.getElementById("previewArea").appendChild(img);
-    }
-
-    function show2D() {
-      if (!uploadedImage) return;
-      clearPreview();
-      const canvas = document.createElement("canvas");
+    function draw2D(img) {
+      const canvas = document.getElementById("preview2d");
       const ctx = canvas.getContext("2d");
-      canvas.width = uploadedImage.width;
-      canvas.height = uploadedImage.height;
-      ctx.drawImage(uploadedImage, 0, 0);
-      document.getElementById("previewArea").appendChild(canvas);
-    }
-
-    function showHeatmap() {
-      if (!uploadedImage) return;
-      clearPreview();
-      heatmapCanvas = document.createElement("canvas");
-      const ctx = heatmapCanvas.getContext("2d");
-      heatmapCanvas.width = uploadedImage.width;
-      heatmapCanvas.height = uploadedImage.height;
-      ctx.drawImage(uploadedImage, 0, 0);
-      const imgData = ctx.getImageData(0, 0, heatmapCanvas.width, heatmapCanvas.height);
-      const data = imgData.data;
-      for (let i = 0; i < data.length; i += 4) {
-        const avg = (data[i] + data[i+1] + data[i+2]) / 3;
-        data[i] = avg;     // R
-        data[i+1] = 0;     // G
-        data[i+2] = 255-avg; // B
-      }
-      ctx.putImageData(imgData, 0, 0);
-      document.getElementById("previewArea").appendChild(heatmapCanvas);
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
     }
 
     function show3D() {
       if (!uploadedImage) return;
-      clearPreview();
 
-      // إعداد المشهد
+      const area = document.getElementById("previewArea");
+      area.innerHTML = ""; // مسح الرندر القديم
+      const width = area.clientWidth || 600;
+      const height = area.clientHeight || 500;
+
       scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+      camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
       renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setSize(500, 500);
-      document.getElementById("previewArea").appendChild(renderer.domElement);
+      renderer.setSize(width, height);
+      area.appendChild(renderer.domElement);
 
       controls = new THREE.OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
 
       const geometry = new THREE.PlaneGeometry(10, 10, 100, 100);
-      const material = new THREE.MeshPhongMaterial({ color: 0x00e0ff, wireframe: false });
+      const material = new THREE.MeshPhongMaterial({
+        color: 0x00e0ff,
+        side: THREE.DoubleSide,
+        flatShading: true
+      });
       mesh = new THREE.Mesh(geometry, material);
       scene.add(mesh);
 
@@ -167,7 +198,7 @@
       light.position.set(0, 10, 10);
       scene.add(light);
 
-      camera.position.z = 15;
+      camera.position.set(0, 0, 15);
 
       function animate() {
         requestAnimationFrame(animate);
@@ -175,6 +206,26 @@
         renderer.render(scene, camera);
       }
       animate();
+
+      window.addEventListener("resize", () => {
+        const w = area.clientWidth;
+        const h = area.clientHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      });
+    }
+
+    function drawHeatmap(img) {
+      const canvas = document.getElementById("heatmap");
+      const ctx = canvas.getContext("2d");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+    }
+
+    function setColormap(type) {
+      drawHeatmap(uploadedImage);
     }
   </script>
 </body>
