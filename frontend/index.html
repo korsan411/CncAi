@@ -2,136 +2,216 @@
 <html lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>CNC AI Preview</title>
+  <title>CncAi</title>
   <style>
     body {
-      font-family: 'Segoe UI', Arial, sans-serif;
-      background: #f4f6f9;
       margin: 0;
-      padding: 0;
-      text-align: center;
+      font-family: "Cairo", sans-serif;
+      background: #f4f4f4;
+      color: #222;
       direction: rtl;
     }
+
     header {
-      background: linear-gradient(90deg, #4a90e2, #357ABD);
-      color: white;
-      padding: 20px;
-      font-size: 24px;
-      font-weight: bold;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.15);
-      letter-spacing: 1px;
-    }
-    .controls, .gcode-controls {
-      margin: 15px auto;
-      padding: 12px;
-      display: flex;
-      justify-content: center;
-      flex-wrap: wrap;
-      gap: 12px;
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.1);
-      max-width: 850px;
-    }
-    .preview-block {
-      margin: 25px auto;
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.12);
+      background: #222;
+      color: #fff;
       padding: 15px;
-      max-width: 850px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
-    canvas {
-      border: 1px solid #ccc;
-      max-width: 100%;
-      border-radius: 8px;
+
+    header h1 {
+      font-size: 22px;
+      margin: 0;
     }
-    #preview3d canvas {
-      border: 1px solid #ccc;
-      border-radius: 8px;
+
+    .container {
+      display: flex;
+      gap: 20px;
+      padding: 20px;
     }
-    button {
-      padding: 10px 16px;
+
+    .controls {
+      flex: 1;
+      max-width: 250px;
+      background: #fff;
+      padding: 15px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .controls button, .controls input {
+      padding: 10px;
       border: none;
       border-radius: 8px;
+      background: #222;
+      color: #fff;
       cursor: pointer;
-      background: linear-gradient(135deg, #4a90e2, #357ABD);
-      color: white;
-      font-weight: bold;
       transition: 0.3s;
     }
-    button:hover {
-      background: linear-gradient(135deg, #357ABD, #24527a);
-      transform: translateY(-2px);
-      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+
+    .controls button:hover {
+      background: #444;
     }
-    label {
-      font-size: 14px;
+
+    .viewer {
+      flex: 3;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 10px;
       display: flex;
+      justify-content: center;
       align-items: center;
-      gap: 6px;
+      min-height: 500px;
+      overflow: hidden;
     }
-    input[type="range"], input[type="number"], input[type="file"] {
-      border-radius: 6px;
-      border: 1px solid #ccc;
-      padding: 4px;
-    }
-    h3 {
-      margin: 12px 0 8px;
-      color: #333;
+
+    canvas, img {
+      max-width: 100%;
+      max-height: 100%;
     }
   </style>
 </head>
 <body>
-  <header>🛠️ CNC AI Preview</header>
+  <header>
+    <h1>CncAi - محاكاة التصميم</h1>
+    <span>✨ معاينة ذكية للتصاميم قبل الـ CNC</span>
+  </header>
 
-  <!-- رفع الصورة -->
-  <div class="controls">
-    <input type="file" id="fileInput" accept="image/*">
-  </div>
-
-  <!-- الصورة الأصلية -->
-  <div class="preview-block">
-    <canvas id="preview2d"></canvas>
-    <h3>📷 الصورة الأصلية</h3>
-  </div>
-
-  <!-- المعاينة ثلاثية الأبعاد -->
-  <div class="preview-block">
-    <div id="preview3d"></div>
-    <h3>🌀 المعاينة ثلاثية الأبعاد</h3>
+  <div class="container">
     <div class="controls">
-      <label>🔄 سرعة الدوران: <input type="range" id="rotationSpeed" min="0" max="0.05" step="0.001" value="0.01"></label>
-      <label>🔍 زوم: <input type="range" id="zoomControl" min="50" max="500" step="10" value="200"></label>
+      <input type="file" id="upload" accept="image/*">
+      <button onclick="setView('original')">📷 الصورة الأصلية</button>
+      <button onclick="setView('2d')">🖼️ معاينة 2D</button>
+      <button onclick="setView('heatmap')">🌈 Heatmap</button>
+      <button onclick="setView('3d')">🔲 معاينة 3D</button>
+      <button onclick="zoomIn()">➕ تكبير</button>
+      <button onclick="zoomOut()">➖ تصغير</button>
+      <button onclick="rotate()">⟳ تدوير</button>
+      <button onclick="generateGcode()">⚙️ توليد G-code</button>
+    </div>
+
+    <div class="viewer" id="viewer">
+      <p>📌 حمّل صورة لبدء المحاكاة</p>
     </div>
   </div>
 
-  <!-- Heatmap -->
-  <div class="preview-block">
-    <canvas id="heatmap"></canvas>
-    <h3>🌈 خريطة الارتفاعات (Heatmap)</h3>
-    <div class="controls">
-      <button onclick="setColormap('jet')">Jet</button>
-      <button onclick="setColormap('hot')">Hot</button>
-      <button onclick="setColormap('cool')">Cool</button>
-      <button onclick="setColormap('gray')">Gray</button>
-    </div>
-  </div>
-
-  <!-- إعدادات G-code -->
-  <div class="gcode-controls">
-    <label>قطر الأداة (mm): <input type="number" id="toolDiameter" value="3" step="0.1"></label>
-    <label>Stepover: <input type="number" id="stepover" value="0.5" step="0.1"></label>
-    <label>أقصى عمق (mm): <input type="number" id="maxDepth" value="2" step="0.1"></label>
-    <button id="generateGcodeBtn">⚙️ توليد G-code</button>
-  </div>
-
-  <!-- مكتبة Three.js -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-
-  <!-- سكربت المشروع -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/examples/js/controls/OrbitControls.js"></script>
   <script>
-    // (الكود الداخلي زي ما هو، مفيش تغيير في المنطق)
+    let currentView = null;
+    let uploadedImage = null;
+    let scale = 1, rotation = 0;
+
+    const viewer = document.getElementById("viewer");
+
+    // رفع صورة
+    document.getElementById("upload").addEventListener("change", e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const img = document.createElement("img");
+      img.src = URL.createObjectURL(file);
+      img.onload = () => {
+        uploadedImage = img;
+        setView("original");
+      };
+    });
+
+    function clearViewer() {
+      viewer.innerHTML = "";
+    }
+
+    function setView(type) {
+      if (!uploadedImage) return alert("📌 من فضلك ارفع صورة أولاً!");
+      currentView = type;
+      clearViewer();
+
+      if (type === "original") {
+        viewer.appendChild(uploadedImage);
+      }
+
+      if (type === "2d") {
+        const canvas = document.createElement("canvas");
+        canvas.width = uploadedImage.width;
+        canvas.height = uploadedImage.height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(uploadedImage, 0, 0);
+        viewer.appendChild(canvas);
+      }
+
+      if (type === "heatmap") {
+        const canvas = document.createElement("canvas");
+        canvas.width = uploadedImage.width * 1.3; // تكبير شوية
+        canvas.height = uploadedImage.height * 1.3;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(uploadedImage, 0, 0, canvas.width, canvas.height);
+
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        for (let i = 0; i < imageData.data.length; i += 4) {
+          let brightness = (imageData.data[i] + imageData.data[i+1] + imageData.data[i+2]) / 3;
+          imageData.data[i] = brightness; // R
+          imageData.data[i+1] = 50;       // G ثابت
+          imageData.data[i+2] = 255 - brightness; // B
+        }
+        ctx.putImageData(imageData, 0, 0);
+        viewer.appendChild(canvas);
+      }
+
+      if (type === "3d") {
+        init3D();
+      }
+    }
+
+    function init3D() {
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(45, viewer.clientWidth / viewer.clientHeight, 0.1, 1000);
+      const renderer = new THREE.WebGLRenderer();
+      renderer.setSize(viewer.clientWidth, viewer.clientHeight);
+      viewer.appendChild(renderer.domElement);
+
+      const geometry = new THREE.PlaneGeometry(5, 5, 100, 100);
+      const material = new THREE.MeshStandardMaterial({ color: 0x888888, side: THREE.DoubleSide, wireframe: false });
+      const plane = new THREE.Mesh(geometry, material);
+      scene.add(plane);
+
+      const light = new THREE.DirectionalLight(0xffffff, 1);
+      light.position.set(5, 5, 5).normalize();
+      scene.add(light);
+
+      camera.position.z = 8;
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+    }
+
+    function zoomIn() {
+      scale += 0.1;
+      viewer.style.transform = `scale(${scale}) rotate(${rotation}deg)`;
+    }
+
+    function zoomOut() {
+      scale = Math.max(0.5, scale - 0.1);
+      viewer.style.transform = `scale(${scale}) rotate(${rotation}deg)`;
+    }
+
+    function rotate() {
+      rotation += 15;
+      viewer.style.transform = `scale(${scale}) rotate(${rotation}deg)`;
+    }
+
+    function generateGcode() {
+      alert("⚙️ توليد G-code (قريبًا)");
+    }
   </script>
 </body>
 </html>
