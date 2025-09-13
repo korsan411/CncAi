@@ -2,247 +2,180 @@
 <html lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>CNC AI Preview</title>
+  <title>CncAi Preview</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      background: #f9f9f9;
       margin: 0;
-      padding: 0;
-      text-align: center;
+      font-family: Arial, sans-serif;
+      background: #121212;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
     header {
-      background: #4a90e2;
-      color: white;
+      background: #1e1e1e;
+      width: 100%;
       padding: 15px;
+      text-align: center;
       font-size: 22px;
       font-weight: bold;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      color: #00e0ff;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.6);
     }
-    .controls, .gcode-controls {
-      margin: 15px auto;
-      padding: 10px;
+    .controls {
+      margin: 15px;
       display: flex;
-      justify-content: center;
+      gap: 10px;
       flex-wrap: wrap;
-      gap: 15px;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-      max-width: 800px;
+      justify-content: center;
     }
-    .preview-block {
-      margin: 20px auto;
-    }
-    canvas {
-      border: 1px solid #ccc;
-      max-width: 100%;
-    }
-    #preview3d canvas {
-      border: 1px solid #ccc;
-    }
-    button {
+    button, input[type=file] {
       padding: 8px 14px;
       border: none;
-      border-radius: 6px;
+      border-radius: 8px;
       cursor: pointer;
-      background: #4a90e2;
-      color: white;
+      background: #00e0ff;
+      color: #000;
       font-weight: bold;
+      transition: 0.3s;
     }
     button:hover {
-      background: #357ABD;
+      background: #00b8cc;
     }
-    label {
-      font-size: 14px;
+    .preview {
+      margin-top: 15px;
+      background: #222;
+      padding: 10px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.7);
+      max-width: 90%;
+      max-height: 70vh;
       display: flex;
+      justify-content: center;
       align-items: center;
-      gap: 5px;
+    }
+    canvas, img {
+      max-width: 100%;
+      max-height: 70vh;
+      border-radius: 8px;
     }
   </style>
 </head>
 <body>
-  <header>🛠️ CNC AI Preview</header>
+  <header>🔧 CncAi Preview</header>
 
   <div class="controls">
-    <input type="file" id="fileInput" accept="image/*">
+    <input type="file" id="upload" accept="image/*">
+    <button onclick="showOriginal()">الصورة الأصلية</button>
+    <button onclick="show2D()">معاينة 2D</button>
+    <button onclick="showHeatmap()">Heatmap</button>
+    <button onclick="show3D()">معاينة 3D</button>
   </div>
 
-  <div class="preview-block">
-    <canvas id="preview2d"></canvas>
-    <div>📷 الصورة الأصلية</div>
+  <div class="preview" id="previewArea">
+    <p>قم برفع صورة للمعاينة</p>
   </div>
 
-  <div class="preview-block">
-    <div id="preview3d"></div>
-    <div>🌀 المعاينة ثلاثية الأبعاد</div>
-    <div class="controls">
-      <label>🔄 سرعة الدوران: <input type="range" id="rotationSpeed" min="0" max="0.05" step="0.001" value="0.01"></label>
-      <label>🔍 زوم: <input type="range" id="zoomControl" min="50" max="500" step="10" value="200"></label>
-    </div>
-  </div>
-
-  <div class="preview-block">
-    <canvas id="heatmap"></canvas>
-    <div>🌈 خريطة الارتفاعات (Heatmap)</div>
-    <div class="controls">
-      <button onclick="setColormap('jet')">Jet</button>
-      <button onclick="setColormap('hot')">Hot</button>
-      <button onclick="setColormap('cool')">Cool</button>
-      <button onclick="setColormap('gray')">Gray</button>
-    </div>
-  </div>
-
-  <div class="gcode-controls">
-    <label>قطر الأداة (mm): <input type="number" id="toolDiameter" value="3" step="0.1"></label>
-    <label>Stepover: <input type="number" id="stepover" value="0.5" step="0.1"></label>
-    <label>أقصى عمق (mm): <input type="number" id="maxDepth" value="2" step="0.1"></label>
-    <button id="generateGcodeBtn">⚙️ توليد G-code</button>
-  </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <!-- Three.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
 
   <script>
-    const fileInput = document.getElementById('fileInput');
-    const canvas2d = document.getElementById('preview2d');
-    const ctx2d = canvas2d.getContext('2d');
-    const heatmap = document.getElementById('heatmap');
-    const ctxHeat = heatmap.getContext('2d');
-    const preview3d = document.getElementById('preview3d');
+    let uploadedImage = null;
+    let heatmapCanvas = null;
+    let scene, camera, renderer, controls, mesh;
 
-    const rotationSpeedInput = document.getElementById('rotationSpeed');
-    const zoomControl = document.getElementById('zoomControl');
+    document.getElementById('upload').addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        uploadedImage = new Image();
+        uploadedImage.src = ev.target.result;
+        uploadedImage.onload = () => {
+          showOriginal();
+        };
+      };
+      reader.readAsDataURL(file);
+    });
 
-    // 3D setup
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, 400/400, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer();
-    renderer.setSize(400, 400);
-    preview3d.appendChild(renderer.domElement);
+    function clearPreview() {
+      const area = document.getElementById("previewArea");
+      area.innerHTML = "";
+    }
 
-    const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(0, 1, 1).normalize();
-    scene.add(light);
-    camera.position.z = 200;
+    function showOriginal() {
+      if (!uploadedImage) return;
+      clearPreview();
+      const img = document.createElement("img");
+      img.src = uploadedImage.src;
+      document.getElementById("previewArea").appendChild(img);
+    }
 
-    let mesh;
-    let rotationSpeed = 0.01;
-    let currentColormap = 'jet';
-    let heightDataGlobal;
+    function show2D() {
+      if (!uploadedImage) return;
+      clearPreview();
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      canvas.width = uploadedImage.width;
+      canvas.height = uploadedImage.height;
+      ctx.drawImage(uploadedImage, 0, 0);
+      document.getElementById("previewArea").appendChild(canvas);
+    }
 
-    function createHeightMap(image) {
-      const w = image.width, h = image.height;
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = w; tempCanvas.height = h;
-      const tctx = tempCanvas.getContext('2d');
-      tctx.drawImage(image, 0, 0, w, h);
-      const imgData = tctx.getImageData(0, 0, w, h).data;
-
-      // height data
-      heightDataGlobal = [];
-      for (let y = 0; y < h; y++) {
-        let row = [];
-        for (let x = 0; x < w; x++) {
-          const idx = (y * w + x) * 4;
-          const brightness = imgData[idx]; // R channel
-          row.push(brightness/255);
-        }
-        heightDataGlobal.push(row);
+    function showHeatmap() {
+      if (!uploadedImage) return;
+      clearPreview();
+      heatmapCanvas = document.createElement("canvas");
+      const ctx = heatmapCanvas.getContext("2d");
+      heatmapCanvas.width = uploadedImage.width;
+      heatmapCanvas.height = uploadedImage.height;
+      ctx.drawImage(uploadedImage, 0, 0);
+      const imgData = ctx.getImageData(0, 0, heatmapCanvas.width, heatmapCanvas.height);
+      const data = imgData.data;
+      for (let i = 0; i < data.length; i += 4) {
+        const avg = (data[i] + data[i+1] + data[i+2]) / 3;
+        data[i] = avg;     // R
+        data[i+1] = 0;     // G
+        data[i+2] = 255-avg; // B
       }
+      ctx.putImageData(imgData, 0, 0);
+      document.getElementById("previewArea").appendChild(heatmapCanvas);
+    }
 
-      // 3D mesh
-      const geometry = new THREE.PlaneGeometry(100, 100, w-1, h-1);
-      const pos = geometry.attributes.position;
-      for (let i = 0; i < pos.count; i++) {
-        const x = i % w;
-        const y = Math.floor(i / w);
-        pos.setZ(i, heightDataGlobal[y][x] * 80);
-      }
-      pos.needsUpdate = true;
-      geometry.computeVertexNormals();
+    function show3D() {
+      if (!uploadedImage) return;
+      clearPreview();
 
-      const material = new THREE.MeshLambertMaterial({ color: 0xaaaaaa, side: THREE.DoubleSide, wireframe: false });
-      if (mesh) scene.remove(mesh);
+      // إعداد المشهد
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(500, 500);
+      document.getElementById("previewArea").appendChild(renderer.domElement);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+
+      const geometry = new THREE.PlaneGeometry(10, 10, 100, 100);
+      const material = new THREE.MeshPhongMaterial({ color: 0x00e0ff, wireframe: false });
       mesh = new THREE.Mesh(geometry, material);
       scene.add(mesh);
 
-      drawHeatmap(heightDataGlobal, w, h);
-    }
+      const light = new THREE.DirectionalLight(0xffffff, 1);
+      light.position.set(0, 10, 10);
+      scene.add(light);
 
-    function drawHeatmap(heightData, w, h) {
-      heatmap.width = w;
-      heatmap.height = h;
-      const heatData = ctxHeat.createImageData(w, h);
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          const idx = (y * w + x) * 4;
-          const norm = heightData[y][x];
-          const color = getHeatColor(norm, currentColormap);
-          heatData.data[idx] = color.r;
-          heatData.data[idx+1] = color.g;
-          heatData.data[idx+2] = color.b;
-          heatData.data[idx+3] = 255;
-        }
+      camera.position.z = 15;
+
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
       }
-      ctxHeat.putImageData(heatData, 0, 0);
+      animate();
     }
-
-    function getHeatColor(value, map) {
-      let r=0,g=0,b=0;
-      if(map==='jet'){ 
-        r = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-3),1),0));
-        g = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-2),1),0));
-        b = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-1),1),0));
-      } else if(map==='hot'){ 
-        r = Math.floor(255 * Math.min(1, 3*value));
-        g = Math.floor(255 * Math.min(1, 3*value-1));
-        g = Math.max(g,0);
-        b = Math.floor(255 * Math.min(1, 3*value-2));
-        b = Math.max(b,0);
-      } else if(map==='cool'){
-        r = Math.floor(255 * value);
-        g = Math.floor(255 * (1-value));
-        b = 255;
-      } else if(map==='gray'){
-        r=g=b=Math.floor(255*value);
-      }
-      return {r,g,b};
-    }
-
-    function setColormap(map) {
-      currentColormap = map;
-      if(heightDataGlobal){
-        drawHeatmap(heightDataGlobal, heatmap.width, heatmap.height);
-      }
-    }
-
-    function animate() {
-      requestAnimationFrame(animate);
-      if (mesh) mesh.rotation.y += rotationSpeed;
-      renderer.render(scene, camera);
-    }
-    animate();
-
-    fileInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const img = new Image();
-      img.onload = () => {
-        canvas2d.width = img.width;
-        canvas2d.height = img.height;
-        ctx2d.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
-        createHeightMap(img);
-      };
-      img.src = URL.createObjectURL(file);
-    });
-
-    rotationSpeedInput.addEventListener('input', () => {
-      rotationSpeed = parseFloat(rotationSpeedInput.value);
-    });
-
-    zoomControl.addEventListener('input', () => {
-      camera.position.z = parseFloat(zoomControl.value);
-    });
   </script>
 </body>
 </html>
