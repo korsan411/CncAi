@@ -1,185 +1,408 @@
 <!DOCTYPE html>
 <html lang="ar">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CncAi Preview</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CncAi — معاينة 3D من Heatmap</title>
   <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #f5f5f5;
-      color: #333;
-      text-align: center;
+    :root{--card-bg:#fff;--accent1:#4a90e2;--accent2:#357ABD}
+    body{
+      margin:0;font-family:Arial, sans-serif;direction:rtl;background:#f4f6f9;color:#222;
     }
-    header {
-      background: #222;
-      color: #fff;
-      padding: 15px;
-      font-size: 20px;
-      font-weight: bold;
+    header{
+      background:linear-gradient(90deg,var(--accent1),var(--accent2));
+      color:#fff;padding:14px 18px;font-weight:700;font-size:18px;display:flex;justify-content:space-between;align-items:center;
     }
-    #controls {
-      margin: 15px;
-    }
-    button {
-      margin: 5px;
-      padding: 10px 15px;
-      border: none;
-      border-radius: 8px;
-      background: #007bff;
-      color: #fff;
-      cursor: pointer;
-      transition: background 0.3s;
-    }
-    button:hover {
-      background: #0056b3;
-    }
-    #preview-container {
-      margin: 20px auto;
-      width: 90%;
-      height: 500px;
-      background: #fff;
-      border: 1px solid #ddd;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-      border-radius: 12px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    }
-    canvas, img {
-      max-width: 100%;
-      max-height: 100%;
-    }
+    .wrap{max-width:1100px;margin:18px auto;padding:0 12px;}
+    .controls, .preview-row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:center;margin-bottom:12px;}
+    .card{background:var(--card-bg);border-radius:10px;padding:12px;box-shadow:0 4px 14px rgba(0,0,0,0.08);width:100%;}
+    .card.inline{display:flex;gap:12px;align-items:center}
+    .left {flex:1;min-width:240px;max-width:320px;}
+    .main {flex:2;min-width:320px;}
+    label{font-size:13px}
+    input[type=file]{width:100%}
+    button{background:linear-gradient(135deg,var(--accent1),var(--accent2));color:#fff;border:0;padding:8px 12px;border-radius:8px;cursor:pointer}
+    button.secondary{background:#eee;color:#111}
+    canvas{display:block;max-width:100%;height:auto;border-radius:6px;border:1px solid #ddd}
+    #viewer3d{width:100%;height:420px;border-radius:6px;overflow:hidden;background:#222}
+    .small-input{width:80px;padding:6px;border-radius:6px;border:1px solid #ccc}
+    .row {display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center}
   </style>
 </head>
 <body>
   <header>
-    🛠️ CncAi – معاينة التصميم
+    <div>CncAi — معاينة صورة → Heatmap → 3D</div>
+    <div style="opacity:0.9">عرض اختبارى</div>
   </header>
 
-  <div id="controls">
-    <input type="file" id="upload" accept="image/*">
-    <button onclick="setMode('original')">الصورة الأصلية</button>
-    <button onclick="setMode('2d')">معاينة 2D</button>
-    <button onclick="setMode('heatmap')">Heatmap</button>
-    <button onclick="setMode('3d')">معاينة 3D</button>
+  <div class="wrap">
+    <div class="card card inline controls">
+      <div class="left">
+        <label>ارفع صورة (JPEG/PNG)</label><br>
+        <input id="fileInput" type="file" accept="image/*" />
+      </div>
+
+      <div class="row">
+        <button onclick="showMode('original')">الصورة الأصلية</button>
+        <button onclick="showMode('2d')">معاينة 2D</button>
+        <button onclick="showMode('heatmap')">Heatmap</button>
+        <button onclick="showMode('3d')">معاينة 3D</button>
+      </div>
+    </div>
+
+    <div class="preview-row">
+      <div class="card main">
+        <h3 style="margin:6px 0;text-align:center">المعاينة الرئيسية</h3>
+        <div id="previewArea" style="display:flex;justify-content:center;align-items:center;min-height:420px">
+          <p style="opacity:0.6">ارفع صورة لبدء المعاينة</p>
+        </div>
+
+        <div style="margin-top:10px;" class="row">
+          <label>🔄 سرعة الدوران</label>
+          <input id="rotationSpeed" type="range" min="0" max="0.05" step="0.001" value="0.008" />
+          <label style="margin-left:8px">🔍 زوم</label>
+          <input id="zoomControl" type="range" min="50" max="800" step="10" value="200" />
+        </div>
+      </div>
+
+      <div class="card left">
+        <h4 style="margin:6px 0;text-align:center">Heatmap (خيارات)</h4>
+
+        <div style="display:flex;gap:8px;justify-content:center;margin-bottom:8px">
+          <button onclick="setColormap('jet')">Jet</button>
+          <button onclick="setColormap('hot')">Hot</button>
+          <button onclick="setColormap('cool')">Cool</button>
+          <button onclick="setColormap('gray')">Gray</button>
+        </div>
+
+        <div style="text-align:center;margin-top:6px">
+          <label>قيمة ارتفاع قصوى (mm)</label><br>
+          <input id="maxHeight" class="small-input" type="number" step="1" value="20" />
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h4 style="text-align:center;margin:6px 0">خريطة الارتفاع (Heatmap) — عرض</h4>
+      <canvas id="heatmapCanvas" style="width:100%;height:auto"></canvas>
+    </div>
   </div>
 
-  <div id="preview-container">
-    <p>قم برفع صورة للمعاينة</p>
-  </div>
-
-  <!-- مكتبة 3D -->
+  <!-- three.js + OrbitControls (non-module) -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
 
   <script>
-    let currentMode = null;
-    let uploadedImage = null;
+  /* ========= متغيرات عامة ========= */
+  const fileInput = document.getElementById('fileInput');
+  const previewArea = document.getElementById('previewArea');
+  const heatmapCanvas = document.getElementById('heatmapCanvas');
+  const heatmapCtx = heatmapCanvas.getContext('2d');
+  const rotationSpeedEl = document.getElementById('rotationSpeed');
+  const zoomControlEl = document.getElementById('zoomControl');
+  const maxHeightEl = document.getElementById('maxHeight');
 
-    const container = document.getElementById("preview-container");
+  let loadedImage = null;        // Image object dataURL
+  let currentMode = null;        // 'original'|'2d'|'heatmap'|'3d'
+  let scene, camera, renderer, controls, mesh, heatTexture;
+  let segX=60, segY=60;         // default segments (will adapt to image)
+  const MAX_SEG = 220;          // safety limit for segments
+  let animating = false;
 
-    document.getElementById("upload").addEventListener("change", (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          uploadedImage = ev.target.result;
-          setMode("original");
-        };
-        reader.readAsDataURL(file);
-      }
-    });
+  /* ========= قراءة الصورة ========= */
+  fileInput.addEventListener('change', e=>{
+    const f = e.target.files && e.target.files[0];
+    if(!f) return;
+    const reader = new FileReader();
+    reader.onload = ev=>{
+      const img = new Image();
+      img.onload = ()=>{
+        loadedImage = img;
+        // show 2D by default and create heatmap + 3D
+        showMode('2d');
+        createAndApplyHeatmap(); // draws heatmapCanvas and updates 3D
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(f);
+  });
 
-    function setMode(mode) {
-      currentMode = mode;
-      container.innerHTML = "";
+  /* ========= أوضاع العرض ========= */
+  function clearPreviewArea(){ previewArea.innerHTML = ''; }
+  function showMode(mode){
+    currentMode = mode;
+    if(!loadedImage){ clearPreviewArea(); previewArea.innerHTML = '<p style="opacity:.6">الرجاء رفع صورة أولاً</p>'; return; }
+    if(mode==='original'){
+      clearPreviewArea();
+      const img = new Image(); img.src = loadedImage.src; img.style.maxWidth='100%'; previewArea.appendChild(img);
+    } else if(mode==='2d'){
+      clearPreviewArea();
+      const cvs = document.createElement('canvas'); cvs.width = loadedImage.width; cvs.height = loadedImage.height;
+      const ctx = cvs.getContext('2d'); ctx.drawImage(loadedImage,0,0);
+      previewArea.appendChild(cvs);
+    } else if(mode==='heatmap'){
+      clearPreviewArea();
+      previewArea.appendChild(heatmapCanvas);
+    } else if(mode==='3d'){
+      clearPreviewArea();
+      const wrapper = document.createElement('div'); wrapper.id = 'viewer3d'; wrapper.style.width='100%'; wrapper.style.height='420px';
+      previewArea.appendChild(wrapper);
+      // build (or update) scene
+      initOrUpdate3D();
+    }
+  }
 
-      if (!uploadedImage) {
-        container.innerHTML = "<p>الرجاء رفع صورة أولاً</p>";
-        return;
-      }
+  /* ========= تطبيق خريطة الألوان ورسم الـ Heatmap ========= */
+  function createAndApplyHeatmap(colormap = currentColormap){
+    if(!loadedImage) return;
+    // كائنان من الكانفس:
+    // - heatmapCanvas (للعرض) -> نقسمه بنفس أبعاد الصورة (لتكبير العرض كما طلبت)
+    // - smallCanvas (offscreen) -> بحجم (segX+1 x segY+1) للحصول على قيم الارتفاع
+    const img = loadedImage;
+    // set display heatmap canvas to image size (or cap width to container)
+    heatmapCanvas.width = img.width;
+    heatmapCanvas.height = img.height;
+    // draw image to temp and compute grayscale
+    const tmpC = document.createElement('canvas'); tmpC.width = img.width; tmpC.height = img.height;
+    const tctx = tmpC.getContext('2d'); tctx.drawImage(img,0,0,tmpC.width,tmpC.height);
+    const id = tctx.getImageData(0,0,tmpC.width,tmpC.height);
+    const d = id.data;
 
-      if (mode === "original") {
-        const img = document.createElement("img");
-        img.src = uploadedImage;
-        container.appendChild(img);
-      }
+    // apply colormap pixel-wise into heatmapCanvas
+    for(let i=0;i<d.length;i+=4){
+      const r=d[i], g=d[i+1], b=d[i+2];
+      const gray = (0.299*r + 0.587*g + 0.114*b)/255; // normalized [0..1]
+      const c = colormapGet(gray, colormap);
+      d[i]=c[0]; d[i+1]=c[1]; d[i+2]=c[2]; // alpha keep 255
+    }
+    heatmapCtx.putImageData(id, 0, 0);
 
-      else if (mode === "2d") {
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
-        const img = new Image();
-        img.onload = () => {
-          canvas.width = img.width;
-          canvas.height = img.height;
-          ctx.drawImage(img, 0, 0);
-        };
-        img.src = uploadedImage;
-        container.appendChild(canvas);
-      }
+    // determine segmentation based on image size but capped
+    const targetSegX = Math.min(MAX_SEG, Math.max(8, Math.floor(img.width/Math.max(1, Math.round(img.width/100)))));
+    const targetSegY = Math.min(MAX_SEG, Math.max(8, Math.floor(img.height/Math.max(1, Math.round(img.height/100)))));
+    segX = targetSegX; segY = targetSegY;
 
-      else if (mode === "heatmap") {
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
-        const img = new Image();
-        img.onload = () => {
-          canvas.width = img.width;
-          canvas.height = img.height;
-          ctx.drawImage(img, 0, 0);
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const data = imageData.data;
-          for (let i = 0; i < data.length; i += 4) {
-            const gray = (data[i] + data[i+1] + data[i+2]) / 3;
-            data[i] = gray;       
-            data[i+1] = 0;       
-            data[i+2] = 255 - gray; 
-          }
-          ctx.putImageData(imageData, 0, 0);
-        };
-        img.src = uploadedImage;
-        container.appendChild(canvas);
-      }
-
-      else if (mode === "3d") {
-        init3D(uploadedImage);
+    // create small canvas (segX+1 x segY+1) to sample heights (grayscale)
+    const small = document.createElement('canvas');
+    small.width = segX + 1;
+    small.height = segY + 1;
+    const sctx = small.getContext('2d');
+    // draw original image scaled down to small canvas (we sample brightness from original, not from colored heatmap)
+    sctx.drawImage(img, 0, 0, small.width, small.height);
+    const smallId = sctx.getImageData(0,0,small.width, small.height).data;
+    // build height array (row-major)
+    const heights = new Float32Array((segX+1)*(segY+1));
+    for(let y=0;y<small.height;y++){
+      for(let x=0;x<small.width;x++){
+        const idx = (y*small.width + x)*4;
+        const r=smallId[idx], g=smallId[idx+1], b=smallId[idx+2];
+        const gray = (0.299*r + 0.587*g + 0.114*b)/255;
+        heights[y*(segX+1)+x] = gray;
       }
     }
 
-    function init3D(imageSrc) {
-      container.innerHTML = "";
-
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-      const renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setSize(container.clientWidth, container.clientHeight);
-      container.appendChild(renderer.domElement);
-
-      const controls = new THREE.OrbitControls(camera, renderer.domElement);
-
-      const light = new THREE.DirectionalLight(0xffffff, 1);
-      light.position.set(1, 1, 1).normalize();
-      scene.add(light);
-
-      const textureLoader = new THREE.TextureLoader();
-      textureLoader.load(imageSrc, (texture) => {
-        const geometry = new THREE.PlaneGeometry(10, 10, 100, 100);
-        const material = new THREE.MeshPhongMaterial({ map: texture, side: THREE.DoubleSide });
-        const plane = new THREE.Mesh(geometry, material);
-        scene.add(plane);
-
-        camera.position.z = 15;
-
-        function animate() {
-          requestAnimationFrame(animate);
-          controls.update();
-          renderer.render(scene, camera);
-        }
-        animate();
-      });
+    // store current small sampling canvas & heights for mesh update
+    // we will reuse the big heatmapCanvas as texture for material
+    currentHeights = {arr:heights,w:small.width,h:small.height};
+    // if 3D already initialized, update mesh vertices & texture
+    if(mesh){
+      updateMeshFromHeights(currentHeights);
+      // update texture from heatmapCanvas
+      if(heatTexture){ heatTexture.needsUpdate = true; }
     }
+  }
+
+  // colormap mapping returns [r,g,b] integers
+  function colormapGet(v, cmap){
+    v = Math.max(0,Math.min(1,v));
+    if(cmap === 'gray'){
+      const c = Math.round(v*255); return [c,c,c];
+    }
+    if(cmap === 'hot'){
+      // simple hot: black->red->yellow->white
+      const r = Math.round(Math.min(1, v*2)*255);
+      const g = Math.round(Math.min(1, Math.max(0, v*2-1))*255);
+      const b = Math.round(Math.max(0, v*2-2)*255);
+      return [r,g,b];
+    }
+    if(cmap === 'cool'){
+      const r = Math.round(v*255);
+      const g = Math.round((1-v)*255);
+      const b = 255;
+      return [r,g,b];
+    }
+    // default jet-like approx
+    // ramp green/red/blue approximations
+    let r = Math.max(0, Math.min(1, 1.5 - Math.abs(4*v - 3)));
+    let g = Math.max(0, Math.min(1, 1.5 - Math.abs(4*v - 2)));
+    let b = Math.max(0, Math.min(1, 1.5 - Math.abs(4*v - 1)));
+    return [Math.round(r*255), Math.round(g*255), Math.round(b*255)];
+  }
+
+  /* ========= 3D: إنشاء المشهد أو تحديثه ========= */
+  let currentHeights = null;
+  function initOrUpdate3D(){
+    if(!loadedImage) return;
+    const wrapper = document.getElementById('previewArea').querySelector('#viewer3d') || document.createElement('div');
+    wrapper.id = 'viewer3d';
+    wrapper.style.width = '100%'; wrapper.style.height = '420px';
+    // if element wasn't appended, append:
+    if(!document.getElementById('viewer3d')){
+      const prev = previewArea.querySelector('canvas, img, div');
+      previewArea.innerHTML = ''; previewArea.appendChild(wrapper);
+    } else {
+      wrapper.innerHTML = '';
+    }
+
+    // init scene only once
+    if(!scene){
+      scene = new THREE.Scene();
+      const aspect = wrapper.clientWidth / wrapper.clientHeight;
+      camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 2000);
+      renderer = new THREE.WebGLRenderer({antialias:true});
+      renderer.setPixelRatio(window.devicePixelRatio || 1);
+      renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
+      wrapper.appendChild(renderer.domElement);
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      // lights
+      const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+      dir.position.set(1,2,3);
+      scene.add(dir);
+      scene.add(new THREE.AmbientLight(0x808080, 0.6));
+      window.addEventListener('resize', onWindowResize);
+    } else {
+      // clear wrapper (renderer.domElement already appended) -> ensure renderer uses this wrapper size
+      renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
+      camera.aspect = wrapper.clientWidth / wrapper.clientHeight;
+      camera.updateProjectionMatrix();
+    }
+
+    // create or update mesh
+    if(!currentHeights){
+      // no heights yet -> create from image (call createAndApplyHeatmap ensures heights)
+      createAndApplyHeatmap(currentColormap);
+      if(!currentHeights) return;
+    }
+    buildMeshFromHeights(currentHeights, loadedImage);
+    animate3D();
+  }
+
+  function buildMeshFromHeights(heightObj, img){
+    // dispose previous mesh
+    if(mesh){
+      mesh.geometry.dispose();
+      mesh.material.map && mesh.material.map.dispose && mesh.material.map.dispose();
+      mesh.material.dispose();
+      scene.remove(mesh);
+      mesh = null;
+    }
+    const wGrid = heightObj.w; const hGrid = heightObj.h;
+    // plane size normalized so largest side = 100 units
+    const maxSide = Math.max(img.width, img.height);
+    const scale = 100 / Math.max(1, maxSide);
+    const planeW = img.width * scale;
+    const planeH = img.height * scale;
+
+    // geometry subdivisions = grid-1
+    const segsX = Math.max(1, wGrid - 1);
+    const segsY = Math.max(1, hGrid - 1);
+    const geometry = new THREE.PlaneGeometry(planeW, planeH, segsX, segsY);
+
+    // set vertex heights (z) from height map array
+    const pos = geometry.attributes.position;
+    const arr = pos.array; // Float32Array
+    const vertsX = segsX + 1;
+    for(let i=0;i<pos.count;i++){
+      const vx = i % vertsX;
+      const vy = Math.floor(i / vertsX);
+      // map to height array indices (vy * vertsX + vx)
+      const hval = heightObj.arr[ vy * vertsX + vx ] || 0;
+      const maxH = parseFloat(maxHeightEl.value || 20); // mm-scale visual height
+      const z = hval * maxH;
+      arr[ i*3 + 2 ] = z;
+    }
+    pos.needsUpdate = true;
+    geometry.computeVertexNormals();
+
+    // texture from heatmapCanvas (display canvas)
+    heatTexture = new THREE.CanvasTexture(heatmapCanvas);
+    heatTexture.wrapS = heatTexture.wrapT = THREE.ClampToEdgeWrapping;
+    heatTexture.flipY = false;
+
+    const material = new THREE.MeshStandardMaterial({ map: heatTexture, side: THREE.DoubleSide, metalness:0.05, roughness:0.8 });
+    mesh = new THREE.Mesh(geometry, material);
+
+    // orient plane flat (so heights appear up)
+    mesh.rotation.x = -Math.PI/2;
+    scene.add(mesh);
+
+    // place camera to see whole plane
+    camera.position.set( planeW*0.6, planeH*0.6, Math.max( planeW, planeH ) * 0.9 );
+    camera.lookAt(0,0,0);
+    controls.target.set(0,0,0);
+    controls.update();
+  }
+
+  function updateMeshFromHeights(heightObj){
+    if(!mesh) { buildMeshFromHeights(heightObj, loadedImage); return; }
+    const geometry = mesh.geometry;
+    const pos = geometry.attributes.position;
+    const vertsX = geometry.parameters.widthSegments + 1;
+    for(let i=0;i<pos.count;i++){
+      const vx = i % vertsX;
+      const vy = Math.floor(i / vertsX);
+      const hval = heightObj.arr[ vy * vertsX + vx ] || 0;
+      const maxH = parseFloat(maxHeightEl.value || 20);
+      pos.array[i*3 + 2] = hval * maxH;
+    }
+    pos.needsUpdate = true;
+    geometry.computeVertexNormals();
+    if(heatTexture) heatTexture.needsUpdate = true;
+  }
+
+  /* ========= رسم حلقة الأنيميشن 3D ========= */
+  let rafId = null;
+  function animate3D(){
+    if(rafId) cancelAnimationFrame(rafId);
+    animating = true;
+    const loop = ()=>{
+      rafId = requestAnimationFrame(loop);
+      const sp = parseFloat(rotationSpeedEl.value || 0);
+      if(mesh) mesh.rotation.z += sp; // rotate around vertical axis after rotating plane
+      if(renderer && scene && camera) { controls.update(); renderer.render(scene, camera); }
+    };
+    loop();
+  }
+
+  function onWindowResize(){
+    const wrapper = document.getElementById('viewer3d');
+    if(!wrapper || !renderer || !camera) return;
+    renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
+    camera.aspect = wrapper.clientWidth / wrapper.clientHeight;
+    camera.updateProjectionMatrix();
+  }
+
+  /* ========= وظائف تغيير اللون وواجهة ========= */
+  let currentColormap = 'jet';
+  function setColormap(name){
+    currentColormap = name;
+    if(!loadedImage) return;
+    createAndApplyHeatmap(name);
+    // if in 2d/heatmap mode, refresh display
+    if(currentMode === 'heatmap') showMode('heatmap');
+    if(currentMode === '3d') initOrUpdate3D();
+  }
+  window.setColormap = setColormap;
+
+  // show heatmap also when clicking heatmap button
+  document.querySelectorAll('button').forEach(b=>{
+    // optional debug
+  });
+
+  // showMode default helper
+  showMode('original');
+
   </script>
 </body>
 </html>
