@@ -27,33 +27,17 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.15);
     }
 
-    .controls {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 12px;
-      margin: 15px 0;
-      padding: 10px 15px;
-      background: #fff;
-      border-radius: 10px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    .file-upload {
+      margin: 20px 0;
+      text-align: center;
     }
 
-    .controls input[type=file] {
-      padding: 5px;
-    }
-
-    .controls button {
-      padding: 7px 15px;
-      border: none;
+    .file-upload input[type=file] {
+      padding: 8px;
+      border: 1px solid #ccc;
       border-radius: 6px;
+      background: #fff;
       cursor: pointer;
-      background: #f0f0f0;
-      font-weight: 500;
-      transition: 0.3s;
-    }
-    .controls button:hover {
-      background: #e0e0e0;
     }
 
     .preview-block {
@@ -61,6 +45,9 @@
       flex-direction: column;
       align-items: center;
       margin-bottom: 25px;
+      width: 100%;
+      max-width: 700px;
+      padding: 0 10px;
     }
 
     .preview-block canvas, 
@@ -69,7 +56,8 @@
       border-radius: 6px;
       background: white;
       box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-      max-width: 90%;
+      max-width: 100%;
+      height: auto;
     }
 
     .preview-title {
@@ -94,24 +82,55 @@
     .options input[type=range] {
       vertical-align: middle;
     }
+
+    .colormap-controls {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 20px 0;
+    }
+
+    .colormap-controls button {
+      padding: 7px 15px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      background: #f0f0f0;
+      font-weight: 500;
+      transition: 0.3s;
+    }
+
+    .colormap-controls button:hover {
+      background: #e0e0e0;
+    }
+
+    @media (max-width: 600px) {
+      header {
+        font-size: 18px;
+      }
+      .options {
+        flex-direction: column;
+        align-items: center;
+      }
+    }
   </style>
 </head>
 <body>
   <header>🛠️ CNC AI Preview</header>
 
-  <div class="controls">
+  <!-- زر اختيار الصورة -->
+  <div class="file-upload">
     <input type="file" id="fileInput" accept="image/*">
-    <button onclick="setColormap('jet')">🌈 Jet</button>
-    <button onclick="setColormap('hot')">🔥 Hot</button>
-    <button onclick="setColormap('cool')">❄️ Cool</button>
-    <button onclick="setColormap('gray')">⚪ Gray</button>
   </div>
 
+  <!-- الصورة الأصلية -->
   <div class="preview-block">
     <canvas id="preview2d"></canvas>
     <div class="preview-title">📷 الصورة الأصلية</div>
   </div>
 
+  <!-- معاينة 3D -->
   <div class="preview-block">
     <div id="preview3d"></div>
     <div class="preview-title">🌀 المعاينة ثلاثية الأبعاد</div>
@@ -125,6 +144,15 @@
     </div>
   </div>
 
+  <!-- أزرار الألوان -->
+  <div class="colormap-controls">
+    <button onclick="setColormap('jet')">🌈 Jet</button>
+    <button onclick="setColormap('hot')">🔥 Hot</button>
+    <button onclick="setColormap('cool')">❄️ Cool</button>
+    <button onclick="setColormap('gray')">⚪ Gray</button>
+  </div>
+
+  <!-- Heatmap -->
   <div class="preview-block">
     <canvas id="heatmap"></canvas>
     <div class="preview-title">🌈 خريطة الارتفاعات (Heatmap)</div>
