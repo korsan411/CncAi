@@ -10,57 +10,68 @@
       flex-direction: column; 
       align-items: center; 
       gap: 20px; 
-      background: #f9f9f9;
+      background: #f4f6f9;
       margin: 0;
       padding: 0;
     }
     header {
       width: 100%;
-      background: #4a90e2;
+      background: linear-gradient(90deg, #4a90e2, #0078d7);
       color: white;
       padding: 15px;
       text-align: center;
-      font-size: 22px;
+      font-size: 24px;
       font-weight: bold;
       box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     }
     .controls {
       display: flex;
+      flex-direction: column;
       gap: 15px;
       align-items: center;
-      flex-wrap: wrap;
       justify-content: center;
       background: white;
-      padding: 10px 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      padding: 15px 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      max-width: 600px;
     }
-    .preview-block { 
-      display: flex; 
-      flex-direction: column; 
-      align-items: center; 
+    .sliders {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .buttons {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
     }
     canvas { 
       border: 1px solid #ccc; 
       margin-bottom: 8px; 
-      max-width: 400px;
-      height: auto;
     }
     #preview3d canvas {
       border: 1px solid #ccc;
-      display: block;
     }
     button {
-      padding: 6px 12px;
+      padding: 8px 14px;
       border: none;
-      border-radius: 5px;
+      border-radius: 6px;
       cursor: pointer;
-      background: #eee;
       font-weight: bold;
+      color: white;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      transition: 0.2s;
     }
     button:hover {
-      background: #ddd;
+      opacity: 0.8;
     }
+    .btn-jet { background: #0078d7; }
+    .btn-hot { background: #e63946; }
+    .btn-cool { background: #6a5acd; }
+    .btn-gray { background: #6c757d; }
   </style>
 </head>
 <body>
@@ -68,13 +79,16 @@
 
   <div class="controls">
     <input type="file" id="fileInput" accept="image/*">
-    <label>🔄 سرعة الدوران: <input type="range" id="rotationSpeed" min="0" max="0.05" step="0.001" value="0.01"></label>
-    <label>🔍 زوم: <input type="range" id="zoomControl" min="50" max="500" step="10" value="200"></label>
-    <div>
+    <div class="sliders">
+      <label>🔄 سرعة الدوران: <input type="range" id="rotationSpeed" min="0" max="0.05" step="0.001" value="0.01"></label>
+      <label>🔍 زوم: <input type="range" id="zoomControl" min="50" max="500" step="10" value="200"></label>
+    </div>
+    <div class="buttons">
       🌈 ألوان:
-      <button onclick="setColormap('jet')">Jet</button>
-      <button onclick="setColormap('hot')">Hot</button>
-      <button onclick="setColormap('cool')">Cool</button>
+      <button class="btn-jet" onclick="setColormap('jet')">Jet</button>
+      <button class="btn-hot" onclick="setColormap('hot')">Hot</button>
+      <button class="btn-cool" onclick="setColormap('cool')">Cool</button>
+      <button class="btn-gray" onclick="setColormap('gray')">Gray</button>
     </div>
   </div>
 
@@ -94,7 +108,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-
   <script>
     const fileInput = document.getElementById('fileInput');
     const canvas2d = document.getElementById('preview2d');
@@ -188,6 +201,8 @@
         r = Math.floor(255 * value);
         g = Math.floor(255 * (1-value));
         b = 255;
+      } else if(map==='gray'){
+        r = g = b = Math.floor(255 * value);
       }
       return {r,g,b};
     }
