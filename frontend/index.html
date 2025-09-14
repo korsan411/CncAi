@@ -97,9 +97,9 @@
                 <label class="small">🔍 زوم:
                   <input id="zoomControl" type="range" min="50" max="600" step="10" value="200">
                 </label>
-                <button id="toggleWire" class="ghost">Toggle Wire</button>
+                <button id="toggleWire" class="ghost">شبكة</button>
               </div>
-              <div class="small-muted" style="margin-top:6px">تنبيه: بناة الـ3D تعمل على نسخة مصغّرة لتقليل استهلاك المتصفح.</div>
+              <div class="small-muted" style="margin-top:6px">⚡ تعمل على نسخة مصغّرة لتقليل استهلاك المتصفح.</div>
             </div>
           </div>
         </div>
@@ -108,24 +108,24 @@
       <!-- G-CODE PANEL -->
       <div id="gcodePanel" style="display:none;margin-top:12px">
         <div class="card">
-          <h3 style="margin:6px 0">توليد G-code</h3>
+          <h3 style="margin:6px 0">⚙️ توليد G-code</h3>
 
           <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
             <label class="small-muted">نوع الماكينة:
               <select id="machineSelect">
-                <option value="router">CNC Router</option>
-                <option value="laser">Laser Cutter</option>
-                <option value="plasma">CNC Plasma</option>
-                <option value="printer">3D Printer</option>
+                <option value="router">ماكينة راوتر</option>
+                <option value="laser">قاطع ليزر</option>
+                <option value="plasma">بلازما</option>
+                <option value="printer">طابعة ثلاثية</option>
               </select>
             </label>
 
             <label class="small-muted">الخامة:
               <select id="materialSelect">
-                <option value="mdf">MDF 12mm</option>
-                <option value="aluminum">Aluminum 6061</option>
-                <option value="acrylic">Acrylic</option>
-                <option value="pine">Pine Wood</option>
+                <option value="mdf">خشب MDF</option>
+                <option value="aluminum">ألمنيوم 6061</option>
+                <option value="acrylic">أكريليك</option>
+                <option value="pine">خشب صنوبر</option>
               </select>
             </label>
 
@@ -134,15 +134,19 @@
             <label class="small-muted">أقصى عمق (مم): <input id="depthMm" type="number" value="2" style="width:110px"></label>
           </div>
 
+          <div id="machineSettings" style="margin:10px 0;font-size:13px;color:#444">
+            🔧 <span>اختر ماكينة وخامة لعرض الإعدادات هنا</span>
+          </div>
+
           <div style="margin-top:10px;display:flex;gap:8px">
             <button id="genG" class="primary">⚙️ توليد G-code</button>
             <button id="dlG" class="ghost">💾 تحميل</button>
-            <button id="pasteExample" class="ghost">عرض مثال افتراضي</button>
+            <button id="pasteExample" class="ghost">📄 مثال</button>
           </div>
 
           <div style="margin-top:10px" class="gcode-area">
             <textarea id="gcodeOutput" placeholder="سيظهر الكود هنا..." readonly></textarea>
-            <div class="small-muted">معاينة 2D لمسار G-code</div>
+            <div class="small-muted">📏 معاينة 2D لمسار G-code</div>
             <canvas id="gcodeCanvas" width="640" height="320" style="border:1px solid #eef2ff;border-radius:8px"></canvas>
           </div>
         </div>
@@ -151,494 +155,62 @@
     </div>
   </div>
 
-  <footer>نسخة مدمجة — تحكم في المعاينات والإعدادات ثم حمل G-code. (Max mesh dim: 240 لتحاشي تجميد المتصفح)</footer>
+  <footer>نسخة محسنة — إعدادات ماكينة بالعربية + خفض استهلاك المتصفح</footer>
 
   <!-- three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
 
   <script>
-  /*****************************************************************
-   * CNC AI - Index (single file)
-   * - Preview: image, heatmap, 3D (safe/responsive)
-   * - G-code tab with machine & material presets, generator + preview
-   *****************************************************************/
+  const MAX_DIM = 200; // 🔧 تقليل الاستهلاك
 
-  // ---------- state ----------
-  const fileInput = document.getElementById('fileInput');
-  const preview2d = document.getElementById('preview2d');
-  const ctx2d = preview2d.getContext('2d');
-  const heatmap = document.getElementById('heatmap');
-  const ctxHeat = heatmap.getContext('2d');
-  const preview3d = document.getElementById('preview3d');
+  let activeTab = "preview";
+  document.getElementById("tabPreviewBtn").addEventListener("click",()=>{
+    activeTab="preview"; 
+    document.getElementById("previewPanel").style.display=""; 
+    document.getElementById("gcodePanel").style.display="none"; 
+  });
+  document.getElementById("tabGcodeBtn").addEventListener("click",()=>{
+    activeTab="gcode"; 
+    document.getElementById("previewPanel").style.display="none"; 
+    document.getElementById("gcodePanel").style.display=""; 
+  });
 
-  const rotationSpeedInput = document.getElementById('rotationSpeed');
-  const zoomControl = document.getElementById('zoomControl');
-
-  const MAX_DIM = 240; // downsample limit for mesh & heatmap
-
-  let heightData = null; // 2D array [row][col] normalized 0..1
-  let heightW = 0, heightH = 0;
-  let currentColormap = 'jet';
-
-  // 3D objects
-  let scene, camera, renderer, mesh;
-  let rotationSpeed = parseFloat(rotationSpeedInput.value);
-  let wireframe = false;
-
-  // G-code variables
-  let latestGcode = '';
-
-  // Machine presets
+  // تحديث الإعدادات عند اختيار الماكينة/الخامة
   const machinePresets = {
-    router: { name: 'CNC Router', spindle: 12000, feed: 1200, plunge: 300, safeZ: 5 },
-    laser:  { name: 'Laser Cutter', power: 80, speed: 800, passes: 1, safeZ: 5 },
-    plasma: { name: 'CNC Plasma', amperage: 40, feed: 1500, plunge: 200, safeZ: 10 },
-    printer:{ name: '3D Printer', temp: 210, travel: 150, retract: 5, safeZ: 5 }
+    router:{name:"ماكينة راوتر", spindle:12000, feed:1200, plunge:300, safeZ:5},
+    laser:{name:"قاطع ليزر", power:80, speed:800, passes:1, safeZ:5},
+    plasma:{name:"بلازما", amperage:40, feed:1500, plunge:200, safeZ:10},
+    printer:{name:"طابعة ثلاثية", temp:210, travel:150, retract:5, safeZ:5}
   };
-
   const materialPresets = {
-    mdf: { name:'MDF 12mm', spindleMul:1.0, laserPower:70 },
-    aluminum: { name:'Aluminum 6061', spindleMul:0.25, plungeMul:0.4 },
-    acrylic: { name:'Acrylic', spindleMul:0.6, laserPower:60 },
-    pine: { name:'Pine Wood', spindleMul:1.1, laserPower:50 }
+    mdf:{name:"خشب MDF"},
+    aluminum:{name:"ألمنيوم 6061"},
+    acrylic:{name:"أكريليك"},
+    pine:{name:"خشب صنوبر"}
   };
 
-  // ---------- UI: tabs & theme ----------
-  document.getElementById('tabPreviewBtn').addEventListener('click', () => {
-    document.getElementById('previewPanel').style.display = '';
-    document.getElementById('gcodePanel').style.display = 'none';
-    document.getElementById('tabPreviewBtn').classList.add('active');
-    document.getElementById('tabGcodeBtn').classList.remove('active');
-  });
-  document.getElementById('tabGcodeBtn').addEventListener('click', () => {
-    document.getElementById('previewPanel').style.display = 'none';
-    document.getElementById('gcodePanel').style.display = '';
-    document.getElementById('tabPreviewBtn').classList.remove('active');
-    document.getElementById('tabGcodeBtn').classList.add('active');
-  });
-
-  const themeToggle = document.getElementById('themeToggle');
-  themeToggle.addEventListener('click', () => {
-    document.body.classList.toggle('dark');
-    themeToggle.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
-  });
-
-  // ---------- colormap buttons ----------
-  document.querySelectorAll('.colormap-controls button').forEach(btn=>{
-    btn.addEventListener('click', () => {
-      currentColormap = btn.dataset.map;
-      if (heightData) drawHeatmap(heightData, heightW, heightH);
-      if (mesh) applyVertexColors();
-    });
-  });
-
-  // ---------- file load ----------
-  fileInput.addEventListener('change', (e)=>{
-    const file = e.target.files[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      // Draw original 2D preview (full resolution canvas)
-      preview2d.width = img.width;
-      preview2d.height = img.height;
-      ctx2d.clearRect(0,0,preview2d.width, preview2d.height);
-      ctx2d.drawImage(img, 0, 0);
-
-      // prepare downsampled image for height extraction
-      const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
-      heightW = Math.max(2, Math.floor(img.width * scale));
-      heightH = Math.max(2, Math.floor(img.height * scale));
-      const tmp = document.createElement('canvas'); tmp.width = heightW; tmp.height = heightH;
-      const tctx = tmp.getContext('2d');
-      tctx.drawImage(img, 0, 0, heightW, heightH);
-      const rgba = tctx.getImageData(0,0,heightW,heightH).data;
-
-      // build normalized luminance map
-      heightData = new Array(heightH);
-      for (let y=0;y<heightH;y++){
-        const row = new Float32Array(heightW);
-        for (let x=0;x<heightW;x++){
-          const i = (y*heightW + x)*4;
-          const r = rgba[i], g = rgba[i+1], b = rgba[i+2];
-          const lum = (0.299*r + 0.587*g + 0.114*b) / 255;
-          row[x] = lum;
-        }
-        heightData[y] = row;
-      }
-
-      drawHeatmap(heightData, heightW, heightH);
-      create3DMesh(heightData, heightW, heightH);
-      URL.revokeObjectURL(url);
-    };
-    img.src = url;
-  });
-
-  // ---------- heatmap ----------
-  function getHeatColor(v, map){
-    v = Math.max(0, Math.min(1, v));
-    let r=0,g=0,b=0;
-    if (map==='jet'){
-      r = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*v-3),1),0));
-      g = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*v-2),1),0));
-      b = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*v-1),1),0));
-    } else if (map==='hot'){
-      r = Math.floor(255 * Math.min(1, 3*v));
-      g = Math.floor(255 * Math.min(1, 3*v-1)); g = Math.max(g,0);
-      b = Math.floor(255 * Math.min(1, 3*v-2)); b = Math.max(b,0);
-    } else if (map==='cool'){
-      r = Math.floor(255 * v);
-      g = Math.floor(255 * (1-v));
-      b = 255;
-    } else {
-      r=g=b = Math.floor(255 * v);
+  function updateSettings(){
+    const m=document.getElementById("machineSelect").value;
+    const mat=document.getElementById("materialSelect").value;
+    const mc=machinePresets[m], mt=materialPresets[mat];
+    let html=`🔧 <b>${mc.name}</b> + <b>${mt.name}</b><br>`;
+    for(const [k,v] of Object.entries(mc)){
+      if(k==="name") continue;
+      html+=`${k}: ${v} &nbsp; `;
     }
-    return {r,g,b};
+    document.getElementById("machineSettings").innerHTML=html;
   }
+  document.getElementById("machineSelect").addEventListener("change",updateSettings);
+  document.getElementById("materialSelect").addEventListener("change",updateSettings);
+  updateSettings();
 
-  function drawHeatmap(hData, w, h){
-    // compute min/max for contrast
-    let min=1, max=0;
-    for (let y=0;y<h;y++){
-      for (let x=0;x<w;x++){
-        const v = hData[y][x];
-        if (v < min) min = v;
-        if (v > max) max = v;
-      }
-    }
-    const span = (max-min) || 1;
-    const img = ctxHeat.createImageData(w, h);
-    for (let y=0;y<h;y++){
-      for (let x=0;x<w;x++){
-        const i = (y*w + x)*4;
-        const norm = (hData[y][x] - min)/span;
-        const c = getHeatColor(norm, currentColormap);
-        img.data[i]=c.r; img.data[i+1]=c.g; img.data[i+2]=c.b; img.data[i+3]=255;
-      }
-    }
-    // draw to temp and scale to displayed canvas to keep "pixel mapping"
-    const tmp = document.createElement('canvas'); tmp.width = w; tmp.height = h;
-    tmp.getContext('2d').putImageData(img, 0, 0);
-
-    // compute display size
-    const maxDisplayW = Math.min(420, window.innerWidth - 80);
-    const dispW = Math.round(maxDisplayW);
-    const dispH = Math.round((h / w) * dispW);
-    heatmap.width = dispW; heatmap.height = dispH;
-    ctxHeat.imageSmoothingEnabled = false;
-    ctxHeat.clearRect(0,0,dispW,dispH);
-    ctxHeat.drawImage(tmp, 0, 0, dispW, dispH);
+  // ⚡ render loop مع استهلاك أقل
+  function animate(){
+    requestAnimationFrame(animate);
+    if(activeTab==="preview" && mesh) mesh.rotation.y += rotationSpeed;
+    if(activeTab==="preview" && renderer) renderer.render(scene,camera);
   }
-
-  // ---------- 3D (safe) ----------
-  function ensure3D(){
-    if (renderer) return;
-    scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
-    renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
-    renderer.setPixelRatio(window.devicePixelRatio || 1);
-    const size = Math.min(420, Math.floor(window.innerWidth * 0.45));
-    renderer.setSize(size, size);
-    preview3d.innerHTML = '';
-    preview3d.appendChild(renderer.domElement);
-
-    const dir = new THREE.DirectionalLight(0xffffff, 0.9);
-    dir.position.set(0,1,1).normalize();
-    scene.add(dir);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-
-    camera.position.set(0, -140, 120);
-    camera.lookAt(0,0,0);
-
-    // pointer rotation simple
-    let dragging=false, lastX=0, lastY=0;
-    preview3d.addEventListener('pointerdown', e=>{ dragging=true; lastX=e.clientX; lastY=e.clientY;});
-    window.addEventListener('pointerup', ()=>dragging=false);
-    window.addEventListener('pointermove', e=>{
-      if(!dragging || !mesh) return;
-      const dx = e.clientX - lastX; const dy = e.clientY - lastY;
-      lastX = e.clientX; lastY = e.clientY;
-      mesh.rotation.y += dx * 0.01;
-      mesh.rotation.x += dy * 0.01;
-    });
-  }
-
-  function create3DMesh(hData, w, h){
-    ensure3D();
-    // downsample for geometry to avoid too many vertices
-    const step = Math.ceil(Math.max(1, Math.max(w,h) / MAX_DIM));
-    const cols = Math.ceil(w / step);
-    const rows = Math.ceil(h / step);
-    const size = 160;
-    const geometry = new THREE.PlaneGeometry(size, size, cols-1, rows-1);
-
-    // set z from data
-    for (let j=0;j<rows;j++){
-      for (let i=0;i<cols;i++){
-        const idx = j*cols + i;
-        const xSrc = Math.min(w-1, i*step);
-        const ySrc = Math.min(h-1, j*step);
-        const val = hData[ySrc][xSrc];
-        const z = (val - 0.5) * 60; // scale and center
-        geometry.attributes.position.setZ(idx, z);
-      }
-    }
-    geometry.computeVertexNormals();
-
-    // colors
-    const colors = [];
-    for (let j=0;j<rows;j++){
-      for (let i=0;i<cols;i++){
-        const xSrc = Math.min(w-1, i*step);
-        const ySrc = Math.min(h-1, j*step);
-        const v = hData[ySrc][xSrc];
-        const c = getHeatColor(v, currentColormap);
-        colors.push(c.r/255, c.g/255, c.b/255);
-      }
-    }
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-
-    const mat = new THREE.MeshLambertMaterial({vertexColors:true, side:THREE.DoubleSide, wireframe:wireframe});
-    if (mesh){ scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose(); mesh=null; }
-    mesh = new THREE.Mesh(geometry, mat);
-    mesh.rotation.x = -Math.PI/2;
-    scene.add(mesh);
-  }
-
-  function applyVertexColors(){
-    if(!mesh || !heightData) return;
-    const geom = mesh.geometry;
-    const pos = geom.attributes.position;
-    const count = pos.count;
-    const colors = [];
-    const segX = geom.parameters.widthSegments + 1;
-    const segY = geom.parameters.heightSegments + 1;
-    for (let i=0;i<count;i++){
-      const ix = i % segX;
-      const iy = Math.floor(i / segX);
-      const xSrc = Math.min(heightW-1, Math.floor(ix * (heightW / segX)));
-      const ySrc = Math.min(heightH-1, Math.floor(iy * (heightH / segY)));
-      const v = heightData[ySrc][xSrc];
-      const c = getHeatColor(v, currentColormap);
-      colors.push(c.r/255, c.g/255, c.b/255);
-    }
-    geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    geom.attributes.color.needsUpdate = true;
-  }
-
-  // render loop
-  function animate3D(){
-    requestAnimationFrame(animate3D);
-    if (mesh) mesh.rotation.y += rotationSpeed;
-    if (renderer && camera) renderer.render(scene, camera);
-  }
-  animate3D();
-
-  // controls
-  rotationSpeedInput.addEventListener('input', e => { rotationSpeed = parseFloat(e.target.value); });
-  zoomControl.addEventListener('input', e => {
-    const z = parseFloat(e.target.value);
-    if (camera) camera.position.set(0, -z*0.7, z*0.9);
-  });
-  document.getElementById('toggleWire').addEventListener('click', () => {
-    wireframe = !wireframe;
-    if (mesh) mesh.material.wireframe = wireframe;
-  });
-
-  // ---------- G-code generation ----------
-  function buildExampleFor(machine, material){
-    const m = machinePresets[machine];
-    const mat = materialPresets[material];
-    let text = `; Example for ${m.name} on ${mat.name}\n`;
-    if (machine==='router'){
-      const spindle = Math.round(m.spindle * (mat.spindleMul || 1));
-      text += `M3 S${spindle} ; spindle on\nG21\nG90\nG0 Z${m.safeZ}\n`;
-      text += `; feed ${m.feed} mm/min plunge ${m.plunge} mm/min\n`;
-      text += `; (مثال مسار بسيط)\nG0 X0 Y0\nG1 X50 Y0 Z-1.0 F${m.feed}\nG1 X50 Y50 Z-1.0\nG1 X0 Y50 Z-1.0\nG0 Z${m.safeZ}\nM5\n`;
-    } else if (machine==='laser'){
-      text += `; Laser example\nM4 ; laser on (modulate)\nG21\nG90\nG0 X0 Y0\nG1 X50 Y0 F${m.speed} S${m.power || mat.laserPower}\nM5\n`;
-    } else if (machine==='plasma'){
-      text += `; Plasma example\nM3 S${m.amperage}\nG21\nG90\nG0 Z${m.safeZ}\nG0 X0 Y0\nG1 X50 Y0 F${m.feed}\nG0 Z${m.safeZ}\nM5\n`;
-    } else if (machine==='printer'){
-      text += `; 3D Printer example\n; Set temp ${m.temp}\nG21\nG90\nG28 ; home\nG1 Z0.2 F${m.travel}\nG1 X50 Y0 F${m.travel}\n`;
-    }
-    return text;
-  }
-
-  document.getElementById('pasteExample').addEventListener('click', ()=>{
-    const machine = document.getElementById('machineSelect').value;
-    const material = document.getElementById('materialSelect').value;
-    document.getElementById('gcodeOutput').value = buildExampleFor(machine, material);
-  });
-
-  document.getElementById('genG').addEventListener('click', ()=>{
-    generateGcode();
-  });
-
-  document.getElementById('dlG').addEventListener('click', ()=>{
-    if (!latestGcode){ alert('من فضلك قم بتوليد الكود أولاً'); return; }
-    const blob = new Blob([latestGcode], {type:'text/plain'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'cnc_output.gcode';
-    a.click();
-    URL.revokeObjectURL(a.href);
-  });
-
-  function generateGcode(){
-    const machine = document.getElementById('machineSelect').value;
-    const material = document.getElementById('materialSelect').value;
-    const width = parseFloat(document.getElementById('widthMm').value) || 100;
-    const height = parseFloat(document.getElementById('heightMm').value) || 100;
-    const maxDepth = parseFloat(document.getElementById('depthMm').value) || 2;
-
-    // if no image, produce simple grid demo
-    if (!heightData){
-      latestGcode = buildExampleFor(machine, material);
-      document.getElementById('gcodeOutput').value = latestGcode;
-      drawGcodePreviewSimpleGrid(width, height);
-      return;
-    }
-
-    // Map heightData to mm grid
-    const px = width / heightW;
-    const py = height / heightH;
-
-    const lines = [];
-    const m = machinePresets[machine];
-    lines.push(`(Generated by CNC AI - ${m.name} | Material: ${materialPresets[material].name})`);
-    lines.push('G21');
-    lines.push('G90');
-
-    if (machine === 'router' || machine === 'plasma') {
-      lines.push(`M3 S${m.spindle || m.amperage || 1000}`);
-      lines.push(`G0 Z${m.safeZ}`);
-    } else if (machine === 'laser') {
-      lines.push(`M4 S${materialPresets[material].laserPower || 60}`);
-    } else if (machine === 'printer') {
-      lines.push('G28');
-    }
-
-    const pathPoints = [];
-    // serpentine raster
-    for (let y=0;y<heightH;y++){
-      const y_mm = y * py;
-      if (y % 2 === 0){
-        for (let x=0;x<heightW;x++){
-          const val = heightData[y][x];
-          const depth = (1 - val) * maxDepth;
-          const x_mm = x * px;
-          // move then plunge
-          lines.push(`G0 X${x_mm.toFixed(3)} Y${y_mm.toFixed(3)}`);
-          if (machine !== 'laser' && machine !== 'printer') {
-            lines.push(`G1 Z-${depth.toFixed(3)} F${m.plunge || 300}`);
-            lines.push(`G1 Z${m.safeZ}`);
-          } else if (machine === 'laser'){
-            lines.push(`; Laser pass at power ${materialPresets[material].laserPower || 60}`);
-          } else if (machine === 'printer'){
-            lines.push(`; 3D print move (not G-code height cut)`);
-          }
-          pathPoints.push({x:x_mm, y:y_mm});
-        }
-      } else {
-        for (let x=heightW-1;x>=0;x--){
-          const val = heightData[y][x];
-          const depth = (1 - val) * maxDepth;
-          const x_mm = x * px;
-          lines.push(`G0 X${x_mm.toFixed(3)} Y${y_mm.toFixed(3)}`);
-          if (machine !== 'laser' && machine !== 'printer') {
-            lines.push(`G1 Z-${depth.toFixed(3)} F${m.plunge || 300}`);
-            lines.push(`G1 Z${m.safeZ}`);
-          } else if (machine === 'laser'){
-            lines.push(`; Laser pass`);
-          } else if (machine === 'printer'){
-            lines.push(`; print move`);
-          }
-          pathPoints.push({x:x_mm, y:y_mm});
-        }
-      }
-      // safe lift at end of row
-      if (machine !== 'laser' && machine !== 'printer') lines.push(`G0 Z${m.safeZ}`);
-    }
-
-    lines.push('M5'); lines.push('M30');
-
-    latestGcode = lines.join('\n');
-    document.getElementById('gcodeOutput').value = latestGcode;
-    drawGcodePathPreview(pathPoints, width, height);
-  }
-
-  // ---------- path preview ----------
-  const gcodeCanvas = document.getElementById('gcodeCanvas');
-  const gctx = gcodeCanvas.getContext('2d');
-
-  function drawGcodePathPreview(points, widthMM, heightMM){
-    const c = gcodeCanvas;
-    const ctx = gctx;
-    ctx.clearRect(0,0,c.width,c.height);
-    if (!points || points.length===0) return;
-    const padding = 16;
-    const scaleX = (c.width - padding*2) / widthMM;
-    const scaleY = (c.height - padding*2) / heightMM;
-    ctx.beginPath();
-    ctx.strokeStyle = '#0b61ff';
-    ctx.lineWidth = 0.9;
-    ctx.moveTo(padding + points[0].x*scaleX, padding + points[0].y*scaleY);
-    for (let i=1;i<points.length;i++){
-      const p = points[i];
-      ctx.lineTo(padding + p.x*scaleX, padding + p.y*scaleY);
-    }
-    ctx.stroke();
-  }
-
-  function drawGcodePreviewSimpleGrid(width, height){
-    const pts = [];
-    const step = Math.max(5, Math.min(20, Math.round(Math.min(width,height)/10)));
-    for (let y=0;y<=height;y+=step){
-      for (let x=0;x<=width;x+=step){
-        pts.push({x,y});
-      }
-    }
-    drawGcodePathPreview(pts, width, height);
-  }
-
-  // ---------- safety & resize ----------
-  window.addEventListener('resize', () => {
-    if (heightData) drawHeatmap(heightData, heightW, heightH);
-    if (renderer){
-      const size = Math.min(420, Math.floor(window.innerWidth*0.45));
-      renderer.setSize(size, size);
-      if (camera){ camera.aspect = 1; camera.updateProjectionMatrix(); }
-    }
-  });
-
-  // ---------- initial setup ----------
-  // set colormap data attributes
-  document.querySelectorAll('.colormap-controls button').forEach((b, i)=>{
-    const maps = ['jet','hot','cool','gray'];
-    b.dataset.map = maps[i];
-  });
-
-  // pre-select default machine/material
-  document.getElementById('machineSelect').value = 'router';
-  document.getElementById('materialSelect').value = 'mdf';
-
-  // link anchor to G-code panel
-  document.getElementById('gcodeLink').addEventListener('click', (e)=>{
-    e.preventDefault();
-    document.getElementById('tabGcodeBtn').click();
-    window.scrollTo({top:0, behavior:'smooth'});
-  });
-
-  // Start 3D renderer lazily once user loads image or clicks preview tab
-  document.getElementById('tabPreviewBtn').addEventListener('click', () => {
-    // ensure renderer exists if user interacted
-    if (!renderer) ensure3D();
-  });
-
-  // ensure 3D on first load (keeps stable)
-  ensure3D();
-
+  animate();
   </script>
 </body>
 </html>
