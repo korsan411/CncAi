@@ -1,160 +1,349 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <title>CNC AI Preview</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CNC AI Preview - محسن</title>
   <style>
     :root {
-      --bg-color: #fdfdfd;
-      --text-color: #333;
-      --header-bg: linear-gradient(90deg, #4a90e2, #67b0f5);
-      --header-text: #fff;
-      --card-bg: #fff;
-      --border-color: #ccc;
-      --button-bg: #f0f0f0;
-      --button-hover: #e0e0e0;
+      --primary-color: #4a90e2;
+      --secondary-color: #67b0f5;
+      --bg-color: #f8f9fa;
+      --text-color: #212529;
+      --card-bg: #ffffff;
+      --border-color: #dee2e6;
+      --header-bg: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+      --header-text: #ffffff;
+      --button-bg: #e9ecef;
+      --button-hover: #dee2e6;
+      --success-color: #28a745;
+      --warning-color: #ffc107;
     }
 
     body.dark {
-      --bg-color: #1e1e1e;
-      --text-color: #eee;
-      --header-bg: linear-gradient(90deg, #222, #555);
-      --header-text: #f5f5f5;
-      --card-bg: #2a2a2a;
-      --border-color: #555;
-      --button-bg: #444;
-      --button-hover: #666;
+      --bg-color: #121212;
+      --text-color: #e0e0e0;
+      --card-bg: #1e1e1e;
+      --border-color: #444;
+      --header-bg: linear-gradient(90deg, #2c2c2c, #444);
+      --button-bg: #333;
+      --button-hover: #555;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
 
     body {
-      font-family: "Segoe UI", Arial, sans-serif;
-      background: var(--bg-color);
-      margin: 0;
-      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-color);
       color: var(--text-color);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      transition: background 0.3s, color 0.3s;
+      line-height: 1.6;
+      transition: all 0.3s ease;
+      padding: 0;
+      margin: 0;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
     }
 
     header {
-      width: 100%;
       background: var(--header-bg);
       color: var(--header-text);
-      padding: 15px;
+      padding: 1rem;
       text-align: center;
-      font-size: 22px;
-      font-weight: bold;
-      letter-spacing: 1px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      border-radius: 0 0 10px 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      margin-bottom: 2rem;
+      position: relative;
       display: flex;
       justify-content: center;
       align-items: center;
-      position: relative;
+    }
+
+    .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      max-width: 1200px;
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 15px;
+      align-items: center;
     }
 
     #themeToggle {
-      position: absolute;
-      right: 15px;
-      top: 50%;
-      transform: translateY(-50%);
       background: transparent;
       border: none;
-      font-size: 20px;
+      font-size: 1.5rem;
       cursor: pointer;
       color: var(--header-text);
       transition: transform 0.3s;
-    }
-
-    #themeToggle:hover {
-      transform: translateY(-50%) scale(1.2);
-    }
-
-    .file-upload {
-      margin: 20px 0;
-      text-align: center;
-    }
-
-    .file-upload input[type=file] {
-      padding: 8px;
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      background: var(--card-bg);
-      cursor: pointer;
-      color: var(--text-color);
-    }
-
-    .preview-block {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
       display: flex;
-      flex-direction: column;
       align-items: center;
-      margin-bottom: 25px;
-      width: 100%;
-      max-width: 700px;
-      padding: 0 10px;
-    }
-
-    .preview-block canvas, 
-    .preview-block #preview3d canvas {
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      background: var(--card-bg);
-      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-      max-width: 100%;
-      height: auto;
-    }
-
-    .preview-title {
-      margin-top: 8px;
-      font-size: 15px;
-      font-weight: bold;
-      color: var(--text-color);
-    }
-
-    .options {
-      margin-top: 10px;
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
       justify-content: center;
     }
 
-    .options label {
-      font-size: 14px;
+    #themeToggle:hover {
+      transform: scale(1.1);
+      background: rgba(255, 255, 255, 0.2);
     }
 
-    .options input[type=range] {
-      vertical-align: middle;
+    .upload-section {
+      background: var(--card-bg);
+      padding: 2rem;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+      margin-bottom: 2rem;
+      text-align: center;
+      border: 1px solid var(--border-color);
+    }
+
+    .upload-title {
+      font-size: 1.3rem;
+      margin-bottom: 1rem;
+      color: var(--primary-color);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .file-upload {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .file-upload input[type="file"] {
+      display: none;
+    }
+
+    .file-upload label {
+      background: var(--primary-color);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+    }
+
+    .file-upload label:hover {
+      background: var(--secondary-color);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+
+    .file-name {
+      margin-top: 10px;
+      font-size: 0.9rem;
+      color: var(--text-color);
+    }
+
+    .previews-container {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 2rem;
+    }
+
+    @media (min-width: 992px) {
+      .previews-container {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .preview-block {
+      background: var(--card-bg);
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      border: 1px solid var(--border-color);
+    }
+
+    .preview-title {
+      font-size: 1.2rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--primary-color);
+    }
+
+    .preview-content {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      margin-bottom: 1rem;
+    }
+
+    canvas {
+      max-width: 100%;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    #preview3d {
+      width: 100%;
+      height: 300px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    .options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      justify-content: center;
+      width: 100%;
+      margin-top: 1rem;
+    }
+
+    .option-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .option-group label {
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    input[type="range"] {
+      width: 150px;
+      accent-color: var(--primary-color);
     }
 
     .colormap-controls {
       display: flex;
-      justify-content: center;
-      gap: 10px;
       flex-wrap: wrap;
-      margin: 20px 0;
+      gap: 0.8rem;
+      justify-content: center;
+      margin: 1.5rem 0;
     }
 
-    .colormap-controls button {
-      padding: 7px 15px;
+    .colormap-btn {
+      padding: 10px 20px;
       border: none;
-      border-radius: 6px;
+      border-radius: 50px;
       cursor: pointer;
       background: var(--button-bg);
       color: var(--text-color);
       font-weight: 500;
-      transition: 0.3s;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
-    .colormap-controls button:hover {
+    .colormap-btn:hover {
       background: var(--button-hover);
+      transform: translateY(-2px);
     }
 
-    @media (max-width: 600px) {
-      header {
-        font-size: 18px;
+    .colormap-btn.active {
+      background: var(--primary-color);
+      color: white;
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 3rem;
+      padding: 1.5rem;
+      color: var(--text-color);
+      font-size: 0.9rem;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .loading {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin: 1rem 0;
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid var(--border-color);
+      border-top: 4px solid var(--primary-color);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .notification {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 15px 20px;
+      border-radius: 8px;
+      background: var(--success-color);
+      color: white;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      transform: translateX(100%);
+      opacity: 0;
+      transition: all 0.3s ease;
+      z-index: 1000;
+    }
+
+    .notification.show {
+      transform: translateX(0);
+      opacity: 1;
+    }
+
+    @media (max-width: 768px) {
+      h1 {
+        font-size: 1.4rem;
       }
+      
+      .header-content {
+        flex-direction: column;
+        gap: 15px;
+      }
+      
+      .preview-block {
+        padding: 1rem;
+      }
+      
       .options {
         flex-direction: column;
         align-items: center;
@@ -164,125 +353,204 @@
 </head>
 <body>
   <header>
-    🛠️ CNC AI Preview
-    <button id="themeToggle">🌙</button>
+    <div class="header-content">
+      <h1><span>🛠️</span> CNC AI Preview - النسخة المحسنة</h1>
+      <div class="controls">
+        <button id="themeToggle">🌙</button>
+      </div>
+    </div>
   </header>
 
-  <!-- زر اختيار الصورة -->
-  <div class="file-upload">
-    <input type="file" id="fileInput" accept="image/*">
-  </div>
+  <div class="container">
+    <section class="upload-section">
+      <h2 class="upload-title">📤 تحميل الصورة</h2>
+      <div class="file-upload">
+        <input type="file" id="fileInput" accept="image/*">
+        <label for="fileInput"><span>📁</span> اختر صورة</label>
+        <div class="file-name" id="fileName">لم يتم اختيار أي صورة بعد</div>
+      </div>
+      <div class="loading" id="loading">
+        <div class="loading-spinner"></div>
+        <p>جاري معالجة الصورة...</p>
+      </div>
+    </section>
 
-  <!-- الصورة الأصلية -->
-  <div class="preview-block">
-    <canvas id="preview2d"></canvas>
-    <div class="preview-title">📷 الصورة الأصلية</div>
-  </div>
+    <div class="previews-container">
+      <!-- الصورة الأصلية -->
+      <div class="preview-block">
+        <h3 class="preview-title">📷 الصورة الأصلية</h3>
+        <div class="preview-content">
+          <canvas id="preview2d"></canvas>
+        </div>
+      </div>
 
-  <!-- معاينة 3D -->
-  <div class="preview-block">
-    <div id="preview3d"></div>
-    <div class="preview-title">🌀 المعاينة ثلاثية الأبعاد</div>
-    <div class="options">
-      <label>🔄 سرعة الدوران:
-        <input type="range" id="rotationSpeed" min="0" max="0.05" step="0.001" value="0.01">
-      </label>
-      <label>🔍 زوم:
-        <input type="range" id="zoomControl" min="50" max="500" step="10" value="200">
-      </label>
+      <!-- معاينة 3D -->
+      <div class="preview-block">
+        <h3 class="preview-title">🌀 المعاينة ثلاثية الأبعاد</h3>
+        <div class="preview-content">
+          <div id="preview3d"></div>
+        </div>
+        <div class="options">
+          <div class="option-group">
+            <label for="rotationSpeed">🔄 سرعة الدوران</label>
+            <input type="range" id="rotationSpeed" min="0" max="0.05" step="0.001" value="0.01">
+          </div>
+          <div class="option-group">
+            <label for="zoomControl">🔍 زوم</label>
+            <input type="range" id="zoomControl" min="50" max="500" step="10" value="200">
+          </div>
+        </div>
+      </div>
+
+      <!-- Heatmap -->
+      <div class="preview-block">
+        <h3 class="preview-title">🌈 خريطة الارتفاعات (Heatmap)</h3>
+        <div class="preview-content">
+          <canvas id="heatmap"></canvas>
+        </div>
+      </div>
+
+      <!-- خيارات إضافية -->
+      <div class="preview-block">
+        <h3 class="preview-title">⚙️ خيارات إضافية</h3>
+        <div class="options">
+          <div class="option-group">
+            <label for="heightIntensity">📏 شدة الارتفاع</label>
+            <input type="range" id="heightIntensity" min="20" max="200" step="5" value="80">
+          </div>
+          <div class="option-group">
+            <label for="smoothness">🔄 النعومة</label>
+            <input type="range" id="smoothness" min="1" max="10" step="1" value="1">
+          </div>
+        </div>
+        
+        <div class="colormap-controls">
+          <button class="colormap-btn active" onclick="setColormap('jet')"><span>🌈</span> Jet</button>
+          <button class="colormap-btn" onclick="setColormap('hot')"><span>🔥</span> Hot</button>
+          <button class="colormap-btn" onclick="setColormap('cool')"><span>❄️</span> Cool</button>
+          <button class="colormap-btn" onclick="setColormap('gray')"><span>⚪</span> Gray</button>
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- أزرار الألوان -->
-  <div class="colormap-controls">
-    <button onclick="setColormap('jet')">🌈 Jet</button>
-    <button onclick="setColormap('hot')">🔥 Hot</button>
-    <button onclick="setColormap('cool')">❄️ Cool</button>
-    <button onclick="setColormap('gray')">⚪ Gray</button>
-  </div>
+  <footer>
+    <p>تم التطوير باستخدام Three.js - مشروع CncAi Preview المحسن</p>
+  </footer>
 
-  <!-- Heatmap -->
-  <div class="preview-block">
-    <canvas id="heatmap"></canvas>
-    <div class="preview-title">🌈 خريطة الارتفاعات (Heatmap)</div>
-  </div>
+  <div class="notification" id="notification">تم تحميل الصورة بنجاح!</div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
   <script>
+    // عناصر DOM
     const fileInput = document.getElementById('fileInput');
+    const fileName = document.getElementById('fileName');
     const canvas2d = document.getElementById('preview2d');
     const ctx2d = canvas2d.getContext('2d');
     const heatmap = document.getElementById('heatmap');
     const ctxHeat = heatmap.getContext('2d');
     const preview3d = document.getElementById('preview3d');
-
     const rotationSpeedInput = document.getElementById('rotationSpeed');
     const zoomControl = document.getElementById('zoomControl');
+    const heightIntensity = document.getElementById('heightIntensity');
+    const smoothness = document.getElementById('smoothness');
+    const loading = document.getElementById('loading');
+    const notification = document.getElementById('notification');
+    const colormapBtns = document.querySelectorAll('.colormap-btn');
 
-    // 3D setup
+    // إعداد Three.js
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, 400/400, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({antialias:true});
-    renderer.setSize(400, 400);
+    scene.background = new THREE.Color(0xf0f0f0);
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(preview3d.offsetWidth, preview3d.offsetHeight);
     preview3d.appendChild(renderer.domElement);
 
-    const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(0, 1, 1).normalize();
-    scene.add(light);
+    // إضاءة المشهد
+    const ambientLight = new THREE.AmbientLight(0x404040, 1);
+    scene.add(ambientLight);
+    
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(1, 1, 1);
+    scene.add(directionalLight);
+    
+    const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+    directionalLight2.position.set(-1, -1, -1);
+    scene.add(directionalLight2);
+
     camera.position.z = 200;
 
     let mesh;
     let rotationSpeed = 0.01;
     let currentColormap = 'jet';
+    let heightFactor = 80;
 
+    // دالة لإنشاء خريطة الارتفاع
     function createHeightMap(image) {
-      const w = image.width;
-      const h = image.height;
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = w; 
-      tempCanvas.height = h;
-      const tctx = tempCanvas.getContext('2d');
-      tctx.drawImage(image, 0, 0, w, h);
-      const imgData = tctx.getImageData(0, 0, w, h).data;
+      loading.style.display = 'flex';
+      
+      setTimeout(() => {
+        const w = Math.min(image.width, 100);
+        const h = Math.min(image.height, 100);
+        
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = w; 
+        tempCanvas.height = h;
+        const tctx = tempCanvas.getContext('2d');
+        tctx.drawImage(image, 0, 0, w, h);
+        const imgData = tctx.getImageData(0, 0, w, h).data;
 
-      // 3D mesh
-      const geometry = new THREE.PlaneGeometry(100, 100, w-1, h-1);
-      let min = 255, max = 0;
-      const colors = [];
-      for (let i = 0; i < geometry.attributes.position.count; i++) {
-        const stride = i * 3;
-        const x = i % w;
-        const y = Math.floor(i / w);
-        const idx = (y * w + x) * 4;
-        const brightness = imgData[idx];
-        min = Math.min(min, brightness);
-        max = Math.max(max, brightness);
-        geometry.attributes.position.array[stride + 2] = brightness / 80;
+        // إنشاء شبكة 3D
+        const geometry = new THREE.PlaneGeometry(100, 100, w-1, h-1);
+        let min = 255, max = 0;
+        const colors = [];
+        
+        for (let i = 0; i < geometry.attributes.position.count; i++) {
+          const stride = i * 3;
+          const x = i % w;
+          const y = Math.floor(i / w);
+          const idx = (y * w + x) * 4;
+          const brightness = 0.34 * imgData[idx] + 0.5 * imgData[idx+1] + 0.16 * imgData[idx+2]; // تحويل إلى grayscale
+          min = Math.min(min, brightness);
+          max = Math.max(max, brightness);
+          geometry.attributes.position.array[stride + 2] = brightness / heightFactor;
 
-        const norm = brightness / 255;
-        const color = getHeatColor(norm, currentColormap);
-        colors.push(color.r/255, color.g/255, color.b/255);
-      }
-      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-      geometry.computeVertexNormals();
+          const norm = (brightness - min) / (max - min || 1);
+          const color = getHeatColor(norm, currentColormap);
+          colors.push(color.r/255, color.g/255, color.b/255);
+        }
+        
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        geometry.computeVertexNormals();
 
-      const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
-      if (mesh) scene.remove(mesh);
-      mesh = new THREE.Mesh(geometry, material);
-      scene.add(mesh);
+        const material = new THREE.MeshLambertMaterial({ 
+          vertexColors: true, 
+          side: THREE.DoubleSide,
+          wireframe: false
+        });
+        
+        if (mesh) scene.remove(mesh);
+        mesh = new THREE.Mesh(geometry, material);
+        scene.add(mesh);
 
-      drawHeatmap(imgData, w, h, min, max);
+        drawHeatmap(imgData, w, h, min, max);
+        
+        loading.style.display = 'none';
+        showNotification('تم إنشاء النموذج بنجاح!');
+      }, 500);
     }
 
+    // دالة لرسم خريطة الحرارة
     function drawHeatmap(imgData, w, h, min, max) {
-      heatmap.width = w * 1.5;
-      heatmap.height = h * 1.5;
+      heatmap.width = w;
+      heatmap.height = h;
       const heatData = ctxHeat.createImageData(w, h);
+      
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           const idx = (y * w + x) * 4;
-          const brightness = imgData[idx];
-          const norm = (brightness - min) / (max - min);
+          const brightness = 0.34 * imgData[idx] + 0.5 * imgData[idx+1] + 0.16 * imgData[idx+2]; // تحويل إلى grayscale
+          const norm = (brightness - min) / (max - min || 1);
           const color = getHeatColor(norm, currentColormap);
           heatData.data[idx] = color.r;
           heatData.data[idx+1] = color.g;
@@ -290,37 +558,45 @@
           heatData.data[idx+3] = 255;
         }
       }
+      
       ctxHeat.putImageData(heatData, 0, 0);
-      const temp = document.createElement('canvas');
-      temp.width = w; temp.height = h;
-      temp.getContext('2d').putImageData(heatData, 0, 0);
-      ctxHeat.drawImage(temp, 0, 0, heatmap.width, heatmap.height);
     }
 
+    // دالة للحصول على لون الخريطة الحرارية
     function getHeatColor(value, map) {
-      let r=0,g=0,b=0;
-      if(map==='jet'){ 
+      let r=0, g=0, b=0;
+      
+      if(map === 'jet'){ 
         r = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-3),1),0));
         g = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-2),1),0));
         b = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-1),1),0));
-      } else if(map==='hot'){ 
+      } else if(map === 'hot'){ 
         r = Math.floor(255 * Math.min(1, 3*value));
         g = Math.floor(255 * Math.min(1, 3*value-1));
         g = Math.max(g,0);
         b = Math.floor(255 * Math.min(1, 3*value-2));
         b = Math.max(b,0);
-      } else if(map==='cool'){
+      } else if(map === 'cool'){
         r = Math.floor(255 * value);
         g = Math.floor(255 * (1-value));
         b = 255;
-      } else if(map==='gray'){
+      } else if(map === 'gray'){
         r = g = b = Math.floor(255 * value);
       }
-      return {r,g,b};
+      
+      return {r, g, b};
     }
 
+    // دالة لتعيين خريطة الألوان
     function setColormap(map) {
       currentColormap = map;
+      
+      // تحديث حالة الأزرار
+      colormapBtns.forEach(btn => {
+        btn.classList.remove('active');
+      });
+      event.target.classList.add('active');
+      
       if(fileInput.files[0]){
         const img = new Image();
         img.onload = () => createHeightMap(img);
@@ -328,6 +604,7 @@
       }
     }
 
+    // دورة الرسوم المتحركة
     function animate() {
       requestAnimationFrame(animate);
       if (mesh) mesh.rotation.y += rotationSpeed;
@@ -335,9 +612,14 @@
     }
     animate();
 
+    // أحداث عناصر التحكم
     fileInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
+      
+      fileName.textContent = file.name;
+      showNotification('جاري تحميل الصورة...');
+      
       const img = new Image();
       img.onload = () => {
         canvas2d.width = img.width;
@@ -356,11 +638,40 @@
       camera.position.z = parseFloat(zoomControl.value);
     });
 
-    // زر تبديل الثيم
+    heightIntensity.addEventListener('input', () => {
+      heightFactor = parseFloat(heightIntensity.value);
+      if(fileInput.files[0]){
+        const img = new Image();
+        img.onload = () => createHeightMap(img);
+        img.src = URL.createObjectURL(fileInput.files[0]);
+      }
+    });
+
+    // تبديل الوضع الليلي/النهاري
     const themeToggle = document.getElementById('themeToggle');
     themeToggle.addEventListener('click', () => {
       document.body.classList.toggle('dark');
       themeToggle.textContent = document.body.classList.contains('dark') ? "☀️" : "🌙";
+      
+      // تحديث لون خلفية المشهد ثلاثي الأبعاد
+      scene.background = new THREE.Color(document.body.classList.contains('dark') ? 0x121212 : 0xf0f0f0);
+    });
+
+    // دالة لعرض الإشعارات
+    function showNotification(message) {
+      notification.textContent = message;
+      notification.classList.add('show');
+      
+      setTimeout(() => {
+        notification.classList.remove('show');
+      }, 3000);
+    }
+
+    // جعل النموذج ثلاثي الأبعاد متجاوبًا
+    window.addEventListener('resize', () => {
+      renderer.setSize(preview3d.offsetWidth, preview3d.offsetHeight);
+      camera.aspect = preview3d.offsetWidth / preview3d.offsetHeight;
+      camera.updateProjectionMatrix();
     });
   </script>
 </body>
