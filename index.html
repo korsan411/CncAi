@@ -2,257 +2,184 @@
 <html lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>CNC AI - معاينات و G-code</title>
+  <title>CncAi - معاينات و G-code</title>
   <style>
     body {
-      margin: 0;
       font-family: Arial, sans-serif;
-      background: #f5f5f5;
-      color: #333;
-      direction: rtl;
+      margin: 0;
+      padding: 0;
+      background: #f8f9fa;
+      color: #222;
     }
     header {
-      background: #4a90e2;
+      background: #343a40;
       color: white;
       padding: 10px 20px;
-      text-align: center;
-    }
-    header h1 {
-      margin: 0;
-      font-size: 22px;
-    }
-    .tabs {
       display: flex;
-      justify-content: center;
-      background: #eee;
-      padding: 10px;
-      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
     }
-    .tabs button {
-      padding: 10px 20px;
-      border: none;
-      background: #ddd;
-      margin: 3px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: bold;
-    }
-    .tabs button.active {
-      background: #4a90e2;
-      color: white;
-    }
-    .tab-content {
-      display: none;
-      padding: 15px;
+    header h1 { font-size: 20px; }
+    .container {
+      padding: 20px;
       text-align: center;
-    }
-    .tab-content.active {
-      display: block;
     }
     canvas {
+      border: 1px solid #ccc;
+      margin: 10px 0;
       max-width: 100%;
-      border: 1px solid #ccc;
-      margin-top: 10px;
     }
-    textarea {
-      width: 100%;
-      height: 200px;
-      margin-top: 10px;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      resize: vertical;
-      font-family: monospace;
+    .buttons {
+      margin: 15px 0;
     }
-    input, button {
-      margin: 5px 0;
-      padding: 8px;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-    }
-    button.action {
-      background: #4a90e2;
-      color: white;
+    button {
+      padding: 8px 15px;
+      margin: 5px;
       border: none;
+      border-radius: 6px;
       cursor: pointer;
-      transition: 0.3s;
+      background: #007bff;
+      color: white;
+      font-size: 14px;
     }
-    button.action:hover {
-      background: #357abd;
-    }
-    #threeContainer {
-      width: 100%;
-      height: 400px;
-      border: 1px solid #ccc;
+    button:hover { background: #0056b3; }
+    #downloadLink {
+      display: none;
       margin-top: 15px;
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>🔧 CNC AI - معاينات و G-code</h1>
+    <h1>CncAi</h1>
+    <input type="file" id="upload" accept="image/*">
   </header>
 
-  <div class="tabs">
-    <button class="active" onclick="openTab(event,'preview')">📷 المعاينة</button>
-    <button onclick="openTab(event,'gcode')">⚙️ إعدادات G-code</button>
+  <div class="container">
+    <div class="buttons">
+      <button onclick="showOriginal()">الصورة الأصلية</button>
+      <button onclick="show2D()">معاينة 2D</button>
+      <button onclick="showHeatmap()">Heatmap</button>
+      <button onclick="show3D()">معاينة 3D</button>
+      <button onclick="generateGcode()">توليد G-code</button>
+    </div>
+    <canvas id="canvas"></canvas>
+    <a id="downloadLink" download="output.gcode">تحميل G-code</a>
   </div>
 
-  <!-- تبويب المعاينة -->
-  <div id="preview" class="tab-content active">
-    <h2>📊 معاينة 3D</h2>
-    <input type="range" id="scaleZ" min="5" max="100" value="30" oninput="updateScaleZ(this.value)">
-    <label for="scaleZ">تحكم في ارتفاع Z</label>
-    <div id="threeContainer"></div>
-  </div>
-
-  <!-- تبويب G-code -->
-  <div id="gcode" class="tab-content">
-    <h2>توليد G-code</h2>
-    <label>📏 العرض (مم):</label>
-    <input type="number" id="widthMm" value="100"><br>
-    <label>📐 الطول (مم):</label>
-    <input type="number" id="heightMm" value="100"><br>
-    <label>⬇️ عمق القطع (Z بالملليمتر):</label>
-    <input type="number" id="depthMm" value="2"><br>
-
-    <button class="action" onclick="generateGcode()">⚙️ توليد الكود</button>
-    <button class="action" onclick="downloadGcode()">💾 تحميل</button>
-
-    <textarea id="gcodeOutput" readonly placeholder="هنا سيظهر كود G-code..."></textarea>
-
-    <h3>📊 معاينة 2D للمسار</h3>
-    <canvas id="gcodeCanvas" width="500" height="500"></canvas>
-  </div>
-
-  <!-- مكتبة Three.js -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/examples/js/controls/OrbitControls.js"></script>
-
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
-    let gcodeText = "";
-    let scene, camera, renderer, controls, mesh;
-    let scaleZ = 30;
+    let canvas = document.getElementById("canvas");
+    let ctx = canvas.getContext("2d");
+    let img = new Image();
+    let currentMode = "original";
+    let imageData;
 
-    function openTab(evt, tabId) {
-      document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
-      document.querySelectorAll(".tabs button").forEach(el => el.classList.remove("active"));
-      document.getElementById(tabId).classList.add("active");
-      evt.currentTarget.classList.add("active");
+    // تحميل الصورة
+    document.getElementById("upload").addEventListener("change", e => {
+      let file = e.target.files[0];
+      if (!file) return;
+      let reader = new FileReader();
+      reader.onload = ev => {
+        img.onload = () => {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // معاينة الصورة الأصلية
+    function showOriginal() {
+      currentMode = "original";
+      ctx.drawImage(img, 0, 0);
     }
 
-    // ========== معاينة 3D ==========
-    function init3D() {
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(45, window.innerWidth / 400, 0.1, 1000);
-      camera.position.set(0, -150, 150);
+    // معاينة 2D (رمادي)
+    function show2D() {
+      currentMode = "2d";
+      let gray = ctx.createImageData(imageData);
+      for (let i = 0; i < imageData.data.length; i += 4) {
+        let avg = (imageData.data[i] + imageData.data[i+1] + imageData.data[i+2]) / 3;
+        gray.data[i] = gray.data[i+1] = gray.data[i+2] = avg;
+        gray.data[i+3] = 255;
+      }
+      ctx.putImageData(gray, 0, 0);
+    }
 
-      renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setSize(window.innerWidth * 0.8, 400);
-      document.getElementById("threeContainer").appendChild(renderer.domElement);
+    // معاينة Heatmap
+    function showHeatmap() {
+      currentMode = "heatmap";
+      let heat = ctx.createImageData(imageData);
+      for (let i = 0; i < imageData.data.length; i += 4) {
+        let avg = (imageData.data[i] + imageData.data[i+1] + imageData.data[i+2]) / 3;
+        let r = avg, g = 0, b = 255 - avg;
+        heat.data[i] = r;
+        heat.data[i+1] = g;
+        heat.data[i+2] = b;
+        heat.data[i+3] = 255;
+      }
+      ctx.putImageData(heat, 0, 0);
+    }
 
-      controls = new THREE.OrbitControls(camera, renderer.domElement);
+    // معاينة 3D
+    function show3D() {
+      currentMode = "3d";
+      let width = canvas.width, height = canvas.height;
 
-      const light = new THREE.DirectionalLight(0xffffff, 1);
-      light.position.set(0, -1, 1).normalize();
-      scene.add(light);
+      let scene = new THREE.Scene();
+      let camera = new THREE.PerspectiveCamera(45, canvas.clientWidth/canvas.clientHeight, 0.1, 1000);
+      let renderer = new THREE.WebGLRenderer({canvas: canvas});
+      renderer.setSize(canvas.clientWidth, canvas.clientHeight);
 
+      let geometry = new THREE.PlaneGeometry(width/100, height/100, width/10, height/10);
+      let material = new THREE.MeshNormalMaterial({wireframe: false, side: THREE.DoubleSide});
+      let plane = new THREE.Mesh(geometry, material);
+
+      // تعديل الارتفاعات حسب التدرج
+      let pos = geometry.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        let x = Math.floor((i % (width/10)) * 10);
+        let y = Math.floor((i / (width/10)) * 10);
+        let idx = (y * width + x) * 4;
+        let avg = (imageData.data[idx] + imageData.data[idx+1] + imageData.data[idx+2]) / 3;
+        pos.setZ(i, avg / 50);
+      }
+      pos.needsUpdate = true;
+
+      scene.add(plane);
+      camera.position.z = 5;
+
+      let animate = function() {
+        requestAnimationFrame(animate);
+        plane.rotation.y += 0.01;
+        renderer.render(scene, camera);
+      };
       animate();
     }
 
-    function create3DPlane(width = 50, height = 50) {
-      if (mesh) scene.remove(mesh);
-      const geometry = new THREE.PlaneGeometry(width, height, 50, 50);
-      const material = new THREE.MeshPhongMaterial({ color: 0x4a90e2, wireframe: false, flatShading: true });
-      mesh = new THREE.Mesh(geometry, material);
-
-      // تعديل الإحداثيات Z
-      geometry.attributes.position.array.forEach((val, i) => {
-        if ((i + 1) % 3 === 0) {
-          geometry.attributes.position.array[i] = (Math.random() - 0.5) * scaleZ;
-        }
-      });
-      geometry.computeVertexNormals();
-
-      scene.add(mesh);
-    }
-
-    function updateScaleZ(value) {
-      scaleZ = value;
-      create3DPlane();
-    }
-
-    function animate() {
-      requestAnimationFrame(animate);
-      renderer.render(scene, camera);
-    }
-
-    // ========== G-code ==========
+    // توليد G-code
     function generateGcode() {
-      const width = parseFloat(document.getElementById("widthMm").value);
-      const height = parseFloat(document.getElementById("heightMm").value);
-      const depth = parseFloat(document.getElementById("depthMm").value);
-
-      gcodeText = `; G-code Generated by CNC AI\n`;
-      gcodeText += `G21 ; Set units to millimeters\n`;
-      gcodeText += `G90 ; Absolute positioning\n`;
-      gcodeText += `G1 Z5 F500 ; رفع الأداة\n`;
-      gcodeText += `G0 X0 Y0 ; الذهاب لنقطة البداية\n`;
-
-      const stepX = width / 10;
-      const stepY = height / 10;
-      let path = [];
-
-      for (let y = 0; y <= height; y += stepY) {
-        for (let x = 0; x <= width; x += stepX) {
-          gcodeText += `G1 X${x.toFixed(2)} Y${y.toFixed(2)} Z-${depth} F300\n`;
-          path.push({x, y});
+      if (!imageData) { alert("حمّل صورة أولاً"); return; }
+      let gcode = ["G21 ; Set units to mm", "G90 ; Absolute positioning"];
+      let step = 10;
+      for (let y = 0; y < canvas.height; y += step) {
+        for (let x = 0; x < canvas.width; x += step) {
+          let idx = (y * canvas.width + x) * 4;
+          let avg = (imageData.data[idx] + imageData.data[idx+1] + imageData.data[idx+2]) / 3;
+          let z = (avg / 255) * -5;
+          gcode.push(`G1 X${(x/10).toFixed(2)} Y${(y/10).toFixed(2)} Z${z.toFixed(2)} F1000`);
         }
       }
-
-      gcodeText += `G1 Z5 F500 ; رفع الأداة\n`;
-      gcodeText += `M30 ; نهاية البرنامج\n`;
-
-      document.getElementById("gcodeOutput").value = gcodeText;
-      drawGcodePath(path, width, height);
+      let blob = new Blob([gcode.join("\n")], {type: "text/plain"});
+      let url = URL.createObjectURL(blob);
+      let link = document.getElementById("downloadLink");
+      link.href = url;
+      link.style.display = "block";
     }
-
-    function drawGcodePath(path, width, height) {
-      const canvas = document.getElementById("gcodeCanvas");
-      const ctx = canvas.getContext("2d");
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      const scaleX = canvas.width / width;
-      const scaleY = canvas.height / height;
-
-      ctx.beginPath();
-      ctx.moveTo(path[0].x * scaleX, path[0].y * scaleY);
-      for (let i = 1; i < path.length; i++) {
-        ctx.lineTo(path[i].x * scaleX, path[i].y * scaleY);
-      }
-      ctx.strokeStyle = "blue";
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-    }
-
-    function downloadGcode() {
-      if (!gcodeText) {
-        alert("من فضلك قم بتوليد الكود أولاً!");
-        return;
-      }
-      const blob = new Blob([gcodeText], {type: "text/plain"});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "cnc_output.gcode";
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-
-    window.onload = () => {
-      init3D();
-      create3DPlane();
-    };
   </script>
 </body>
 </html>
