@@ -2,189 +2,147 @@
 <html lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>CncAi - معاينات و G-code</title>
+  <title>CncAi</title>
   <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #f5f5f5;
-      color: #333;
-      direction: rtl;
-    }
-    header {
-      background: #4a90e2;
-      color: white;
-      padding: 10px 20px;
-      text-align: center;
-    }
-    header h1 {
-      margin: 0;
-      font-size: 22px;
-    }
-    .tabs {
-      display: flex;
-      justify-content: center;
-      background: #eee;
-      padding: 10px;
-      flex-wrap: wrap;
-    }
-    .tabs button {
-      padding: 10px 20px;
-      border: none;
-      background: #ddd;
-      margin: 3px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: bold;
-    }
-    .tabs button.active {
-      background: #4a90e2;
-      color: white;
-    }
-    .tab-content {
-      display: none;
-      padding: 15px;
-      text-align: center;
-    }
-    .tab-content.active {
-      display: block;
-    }
-    canvas {
-      max-width: 100%;
-      border: 1px solid #ccc;
-      margin-top: 10px;
-    }
-    textarea {
-      width: 100%;
-      height: 200px;
-      margin-top: 10px;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      resize: vertical;
-      font-family: monospace;
-    }
-    input, button {
-      margin: 5px 0;
-      padding: 8px;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-    }
-    button.action {
-      background: #4a90e2;
-      color: white;
-      border: none;
-      cursor: pointer;
-      transition: 0.3s;
-    }
-    button.action:hover {
-      background: #357abd;
-    }
+    body { margin:0; font-family:Arial, sans-serif; background:#f4f4f4; color:#333; }
+    header { background:#222; color:#fff; padding:10px 20px; display:flex; justify-content:space-between; align-items:center; }
+    header h1 { margin:0; font-size:20px; }
+    header button { background:#444; color:#fff; border:none; padding:5px 10px; cursor:pointer; border-radius:6px; }
+    .tabs { display:flex; background:#ddd; }
+    .tabs button { flex:1; padding:10px; border:none; cursor:pointer; font-weight:bold; }
+    .tabs button.active { background:#fff; border-bottom:3px solid #222; }
+    .tab-content { display:none; padding:15px; }
+    .tab-content.active { display:block; }
+    canvas { border:1px solid #ccc; max-width:100%; }
+    .preview-controls { margin:10px 0; }
+    .preview-controls button { margin:2px; padding:5px 8px; border:none; border-radius:6px; cursor:pointer; background:#eee; }
+    .form-group { margin:10px 0; }
+    textarea { width:100%; height:150px; }
   </style>
 </head>
 <body>
   <header>
-    <h1>🔧 CNC AI - معاينات و G-code</h1>
+    <h1>CncAi</h1>
+    <button onclick="toggleTheme()">🌙/☀️</button>
   </header>
 
+  <!-- تبويبات -->
   <div class="tabs">
-    <button class="active" onclick="openTab(event,'preview')">📷 المعاينة</button>
-    <button onclick="openTab(event,'gcode')">⚙️ إعدادات G-code</button>
+    <button class="active" onclick="openTab('preview')">📷 المعاينة</button>
+    <button onclick="openTab('gcode')">⚙️ إعدادات G-code</button>
   </div>
 
   <!-- تبويب المعاينة -->
   <div id="preview" class="tab-content active">
-    <p>هنا تظل المعاينات (الصورة / Heatmap / 3D) كما في النسخة المستقرة ✅</p>
+    <input type="file" id="upload" accept="image/*"><br><br>
+    <div class="preview-controls">
+      <button onclick="setView('original')">الصورة</button>
+      <button onclick="setView('heatmap')">Heatmap</button>
+      <button onclick="setView('3d')">3D</button>
+      <button onclick="changeColormap('jet')">Jet</button>
+      <button onclick="changeColormap('hot')">Hot</button>
+      <button onclick="changeColormap('cool')">Cool</button>
+      <button onclick="changeColormap('gray')">Gray</button>
+    </div>
+    <canvas id="canvas" width="500" height="500"></canvas>
   </div>
 
   <!-- تبويب G-code -->
   <div id="gcode" class="tab-content">
-    <h2>توليد G-code</h2>
-    <label>📏 العرض (مم):</label>
-    <input type="number" id="widthMm" value="100"><br>
-    <label>📐 الطول (مم):</label>
-    <input type="number" id="heightMm" value="100"><br>
-    <label>⬇️ عمق القطع (Z بالملليمتر):</label>
-    <input type="number" id="depthMm" value="2"><br>
-
-    <button class="action" onclick="generateGcode()">⚙️ توليد الكود</button>
-    <button class="action" onclick="downloadGcode()">💾 تحميل</button>
-
-    <textarea id="gcodeOutput" readonly placeholder="هنا سيظهر كود G-code..."></textarea>
-
-    <h3>📊 معاينة 2D للمسار</h3>
+    <div class="form-group">
+      <label>العرض (مم):</label>
+      <input type="number" id="width" value="100">
+    </div>
+    <div class="form-group">
+      <label>الطول (مم):</label>
+      <input type="number" id="height" value="100">
+    </div>
+    <div class="form-group">
+      <label>عمق القطع (مم):</label>
+      <input type="number" id="depth" value="2">
+    </div>
+    <div class="form-group">
+      <label>سرعة التغذية (مم/دقيقة):</label>
+      <input type="number" id="feedrate" value="500">
+    </div>
+    <button onclick="generateGCode()">توليد G-code</button>
+    <button onclick="downloadGCode()">تحميل الملف</button>
+    <textarea id="gcodeOutput" readonly></textarea>
+    <h3>معاينة 2D للمسار:</h3>
     <canvas id="gcodeCanvas" width="500" height="500"></canvas>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
-    let gcodeText = "";
-
-    function openTab(evt, tabId) {
-      document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
-      document.querySelectorAll(".tabs button").forEach(el => el.classList.remove("active"));
-      document.getElementById(tabId).classList.add("active");
-      evt.currentTarget.classList.add("active");
+    let currentTab = 'preview';
+    function openTab(tab) {
+      document.querySelectorAll('.tab-content').forEach(div=>div.classList.remove('active'));
+      document.querySelectorAll('.tabs button').forEach(btn=>btn.classList.remove('active'));
+      document.getElementById(tab).classList.add('active');
+      event.target.classList.add('active');
+      currentTab = tab;
     }
 
-    function generateGcode() {
-      const width = parseFloat(document.getElementById("widthMm").value);
-      const height = parseFloat(document.getElementById("heightMm").value);
-      const depth = parseFloat(document.getElementById("depthMm").value);
+    function toggleTheme() {
+      document.body.classList.toggle('dark');
+    }
 
-      gcodeText = `; G-code Generated by CNC AI\n`;
-      gcodeText += `G21 ; Set units to millimeters\n`;
-      gcodeText += `G90 ; Absolute positioning\n`;
-      gcodeText += `G1 Z5 F500 ; رفع الأداة\n`;
-      gcodeText += `G0 X0 Y0 ; الذهاب لنقطة البداية\n`;
+    // --- المعاينة (نسخة مستقرة) ---
+    let canvas = document.getElementById("canvas");
+    let ctx = canvas.getContext("2d");
+    let img = new Image();
+    document.getElementById("upload").addEventListener("change", e => {
+      let file = e.target.files[0];
+      let reader = new FileReader();
+      reader.onload = ev => { img.onload = () => ctx.drawImage(img,0,0,500,500); img.src = ev.target.result; };
+      reader.readAsDataURL(file);
+    });
+    function setView(v){ /* placeholder */ }
+    function changeColormap(m){ /* placeholder */ }
 
-      const stepX = width / 10;
-      const stepY = height / 10;
-      let path = [];
-
-      for (let y = 0; y <= height; y += stepY) {
-        for (let x = 0; x <= width; x += stepX) {
-          gcodeText += `G1 X${x.toFixed(2)} Y${y.toFixed(2)} Z-${depth} F300\n`;
-          path.push({x, y});
+    // --- G-code ---
+    function generateGCode(){
+      let w = +document.getElementById("width").value;
+      let h = +document.getElementById("height").value;
+      let d = +document.getElementById("depth").value;
+      let f = +document.getElementById("feedrate").value;
+      let gcode = `G21 ; mm\nG90 ; absolute\nG1 Z5 F500\n`;
+      for(let y=0;y<=h;y+=10){
+        let dir = (y/10)%2==0?1:-1;
+        for(let x=0;x<=w;x+=10){
+          let X = dir==1?x:w-x;
+          gcode += `G1 X${X} Y${y} Z-${d} F${f}\n`;
         }
       }
-
-      gcodeText += `G1 Z5 F500 ; رفع الأداة\n`;
-      gcodeText += `M30 ; نهاية البرنامج\n`;
-
-      document.getElementById("gcodeOutput").value = gcodeText;
-      drawGcodePath(path, width, height);
+      gcode += "M30";
+      document.getElementById("gcodeOutput").value = gcode;
+      drawGcodePath(gcode);
     }
 
-    function drawGcodePath(path, width, height) {
-      const canvas = document.getElementById("gcodeCanvas");
-      const ctx = canvas.getContext("2d");
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      const scaleX = canvas.width / width;
-      const scaleY = canvas.height / height;
-
-      ctx.beginPath();
-      ctx.moveTo(path[0].x * scaleX, path[0].y * scaleY);
-      for (let i = 1; i < path.length; i++) {
-        ctx.lineTo(path[i].x * scaleX, path[i].y * scaleY);
-      }
-      ctx.strokeStyle = "blue";
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-    }
-
-    function downloadGcode() {
-      if (!gcodeText) {
-        alert("من فضلك قم بتوليد الكود أولاً!");
-        return;
-      }
-      const blob = new Blob([gcodeText], {type: "text/plain"});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "cnc_output.gcode";
+    function downloadGCode(){
+      let text = document.getElementById("gcodeOutput").value;
+      let blob = new Blob([text],{type:"text/plain"});
+      let a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "cnc.nc";
       a.click();
-      URL.revokeObjectURL(url);
+    }
+
+    function drawGcodePath(code){
+      let c = document.getElementById("gcodeCanvas");
+      let cx = c.getContext("2d");
+      cx.clearRect(0,0,c.width,c.height);
+      cx.strokeStyle = "blue"; cx.beginPath();
+      let x=0,y=0;
+      code.split("\n").forEach(line=>{
+        if(line.startsWith("G1")){
+          let X = /X([\d\.\-]+)/.exec(line);
+          let Y = /Y([\d\.\-]+)/.exec(line);
+          if(X) x=+X[1]; if(Y) y=+Y[1];
+          cx.lineTo(x/2,y/2);
+        }
+      });
+      cx.stroke();
     }
   </script>
 </body>
