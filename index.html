@@ -32,9 +32,6 @@
       margin: 0;
       padding: 0;
       color: var(--text-color);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
       transition: background 0.3s, color 0.3s;
     }
 
@@ -43,14 +40,9 @@
       background: var(--header-bg);
       color: var(--header-text);
       padding: 15px;
-      text-align: center;
-      font-size: 22px;
+      font-size: 20px;
       font-weight: bold;
-      letter-spacing: 1px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      text-align: center;
       position: relative;
     }
 
@@ -64,327 +56,137 @@
       font-size: 20px;
       cursor: pointer;
       color: var(--header-text);
-      transition: transform 0.3s;
     }
 
-    #themeToggle:hover {
-      transform: translateY(-50%) scale(1.2);
+    nav {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin: 15px 0;
     }
 
-    #gcodeLink {
-      position: absolute;
-      left: 15px;
-      top: 50%;
-      transform: translateY(-50%);
-      text-decoration: none;
-      color: var(--header-text);
-      background: rgba(255,255,255,0.1);
-      padding: 6px 12px;
+    nav button {
+      padding: 8px 16px;
+      border: none;
       border-radius: 6px;
-      transition: 0.3s;
-      font-size: 14px;
-    }
-
-    #gcodeLink:hover {
-      background: rgba(255,255,255,0.25);
-    }
-
-    .file-upload {
-      margin: 20px 0;
-      text-align: center;
-    }
-
-    .file-upload input[type=file] {
-      padding: 8px;
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      background: var(--card-bg);
+      background: var(--button-bg);
       cursor: pointer;
-      color: var(--text-color);
+      font-weight: bold;
+    }
+
+    nav button.active {
+      background: #4a90e2;
+      color: white;
+    }
+
+    section {
+      display: none;
+      padding: 15px;
+      max-width: 800px;
+      margin: auto;
+    }
+
+    section.active {
+      display: block;
     }
 
     .preview-block {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin-bottom: 25px;
-      width: 100%;
-      max-width: 700px;
-      padding: 0 10px;
+      text-align: center;
+      margin-bottom: 20px;
     }
 
-    .preview-block canvas, 
-    .preview-block #preview3d canvas {
+    textarea {
+      width: 100%;
+      height: 300px;
+      padding: 10px;
       border: 1px solid var(--border-color);
       border-radius: 6px;
       background: var(--card-bg);
-      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-      max-width: 100%;
-      height: auto;
-    }
-
-    .preview-title {
-      margin-top: 8px;
-      font-size: 15px;
-      font-weight: bold;
       color: var(--text-color);
-    }
-
-    .options {
-      margin-top: 10px;
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-
-    .options label {
+      font-family: monospace;
       font-size: 14px;
+      resize: vertical;
     }
 
-    .options input[type=range] {
-      vertical-align: middle;
-    }
-
-    .colormap-controls {
-      display: flex;
-      justify-content: center;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin: 20px 0;
-    }
-
-    .colormap-controls button {
-      padding: 7px 15px;
+    .download-btn {
+      margin-top: 10px;
+      padding: 10px 20px;
       border: none;
       border-radius: 6px;
+      background: #4a90e2;
+      color: white;
+      font-weight: bold;
       cursor: pointer;
-      background: var(--button-bg);
-      color: var(--text-color);
-      font-weight: 500;
-      transition: 0.3s;
-    }
-
-    .colormap-controls button:hover {
-      background: var(--button-hover);
-    }
-
-    @media (max-width: 600px) {
-      header {
-        font-size: 18px;
-      }
-      .options {
-        flex-direction: column;
-        align-items: center;
-      }
-      #gcodeLink {
-        font-size: 12px;
-        padding: 5px 10px;
-      }
     }
   </style>
 </head>
 <body>
   <header>
-    🛠️ CNC AI Preview
+    🛠️ CNC AI
     <button id="themeToggle">🌙</button>
-    <a href="gcode.html" id="gcodeLink">⚙️ توليد G-code</a>
   </header>
 
-  <!-- زر اختيار الصورة -->
-  <div class="file-upload">
-    <input type="file" id="fileInput" accept="image/*">
-  </div>
+  <nav>
+    <button class="tab active" data-tab="preview">المعاينة</button>
+    <button class="tab" data-tab="gcode">G-code</button>
+  </nav>
 
-  <!-- الصورة الأصلية -->
-  <div class="preview-block">
-    <canvas id="preview2d"></canvas>
-    <div class="preview-title">📷 الصورة الأصلية</div>
-  </div>
-
-  <!-- معاينة 3D -->
-  <div class="preview-block">
-    <div id="preview3d"></div>
-    <div class="preview-title">🌀 المعاينة ثلاثية الأبعاد</div>
-    <div class="options">
-      <label>🔄 سرعة الدوران:
-        <input type="range" id="rotationSpeed" min="0" max="0.05" step="0.001" value="0.01">
-      </label>
-      <label>🔍 زوم:
-        <input type="range" id="zoomControl" min="50" max="500" step="10" value="200">
-      </label>
+  <!-- قسم المعاينة -->
+  <section id="preview" class="active">
+    <div class="preview-block">
+      <input type="file" id="fileInput" accept="image/*">
     </div>
-  </div>
+    <div class="preview-block">
+      <canvas id="preview2d"></canvas>
+      <div>📷 الصورة الأصلية</div>
+    </div>
+    <div class="preview-block">
+      <div id="preview3d"></div>
+      <div>🌀 المعاينة ثلاثية الأبعاد</div>
+    </div>
+    <div class="preview-block">
+      <canvas id="heatmap"></canvas>
+      <div>🌈 خريطة الارتفاعات</div>
+    </div>
+  </section>
 
-  <!-- أزرار الألوان -->
-  <div class="colormap-controls">
-    <button onclick="setColormap('jet')">🌈 Jet</button>
-    <button onclick="setColormap('hot')">🔥 Hot</button>
-    <button onclick="setColormap('cool')">❄️ Cool</button>
-    <button onclick="setColormap('gray')">⚪ Gray</button>
-  </div>
-
-  <!-- Heatmap -->
-  <div class="preview-block">
-    <canvas id="heatmap"></canvas>
-    <div class="preview-title">🌈 خريطة الارتفاعات (Heatmap)</div>
-  </div>
+  <!-- قسم G-code -->
+  <section id="gcode">
+    <h2>💾 توليد وتحميل G-code</h2>
+    <textarea id="gcodeOutput" placeholder="سيظهر كود G-code هنا..."></textarea>
+    <br>
+    <button class="download-btn" onclick="downloadGcode()">⬇️ تحميل G-code</button>
+  </section>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
   <script>
-    const fileInput = document.getElementById('fileInput');
-    const canvas2d = document.getElementById('preview2d');
-    const ctx2d = canvas2d.getContext('2d');
-    const heatmap = document.getElementById('heatmap');
-    const ctxHeat = heatmap.getContext('2d');
-    const preview3d = document.getElementById('preview3d');
-
-    const rotationSpeedInput = document.getElementById('rotationSpeed');
-    const zoomControl = document.getElementById('zoomControl');
-
-    // 3D setup
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, 400/400, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({antialias:true});
-    renderer.setSize(400, 400);
-    preview3d.appendChild(renderer.domElement);
-
-    const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(0, 1, 1).normalize();
-    scene.add(light);
-    camera.position.z = 200;
-
-    let mesh;
-    let rotationSpeed = 0.01;
-    let currentColormap = 'jet';
-
-    function createHeightMap(image) {
-      const w = image.width;
-      const h = image.height;
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = w; 
-      tempCanvas.height = h;
-      const tctx = tempCanvas.getContext('2d');
-      tctx.drawImage(image, 0, 0, w, h);
-      const imgData = tctx.getImageData(0, 0, w, h).data;
-
-      // 3D mesh
-      const geometry = new THREE.PlaneGeometry(100, 100, w-1, h-1);
-      let min = 255, max = 0;
-      const colors = [];
-      for (let i = 0; i < geometry.attributes.position.count; i++) {
-        const stride = i * 3;
-        const x = i % w;
-        const y = Math.floor(i / w);
-        const idx = (y * w + x) * 4;
-        const brightness = imgData[idx];
-        min = Math.min(min, brightness);
-        max = Math.max(max, brightness);
-        geometry.attributes.position.array[stride + 2] = brightness / 80;
-
-        const norm = brightness / 255;
-        const color = getHeatColor(norm, currentColormap);
-        colors.push(color.r/255, color.g/255, color.b/255);
-      }
-      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-      geometry.computeVertexNormals();
-
-      const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
-      if (mesh) scene.remove(mesh);
-      mesh = new THREE.Mesh(geometry, material);
-      scene.add(mesh);
-
-      drawHeatmap(imgData, w, h, min, max);
-    }
-
-    function drawHeatmap(imgData, w, h, min, max) {
-      heatmap.width = w * 1.5;
-      heatmap.height = h * 1.5;
-      const heatData = ctxHeat.createImageData(w, h);
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          const idx = (y * w + x) * 4;
-          const brightness = imgData[idx];
-          const norm = (brightness - min) / (max - min);
-          const color = getHeatColor(norm, currentColormap);
-          heatData.data[idx] = color.r;
-          heatData.data[idx+1] = color.g;
-          heatData.data[idx+2] = color.b;
-          heatData.data[idx+3] = 255;
-        }
-      }
-      ctxHeat.putImageData(heatData, 0, 0);
-      const temp = document.createElement('canvas');
-      temp.width = w; temp.height = h;
-      temp.getContext('2d').putImageData(heatData, 0, 0);
-      ctxHeat.drawImage(temp, 0, 0, heatmap.width, heatmap.height);
-    }
-
-    function getHeatColor(value, map) {
-      let r=0,g=0,b=0;
-      if(map==='jet'){ 
-        r = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-3),1),0));
-        g = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-2),1),0));
-        b = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-1),1),0));
-      } else if(map==='hot'){ 
-        r = Math.floor(255 * Math.min(1, 3*value));
-        g = Math.floor(255 * Math.min(1, 3*value-1));
-        g = Math.max(g,0);
-        b = Math.floor(255 * Math.min(1, 3*value-2));
-        b = Math.max(b,0);
-      } else if(map==='cool'){
-        r = Math.floor(255 * value);
-        g = Math.floor(255 * (1-value));
-        b = 255;
-      } else if(map==='gray'){
-        r = g = b = Math.floor(255 * value);
-      }
-      return {r,g,b};
-    }
-
-    function setColormap(map) {
-      currentColormap = map;
-      if(fileInput.files[0]){
-        const img = new Image();
-        img.onload = () => createHeightMap(img);
-        img.src = URL.createObjectURL(fileInput.files[0]);
-      }
-    }
-
-    function animate() {
-      requestAnimationFrame(animate);
-      if (mesh) mesh.rotation.y += rotationSpeed;
-      renderer.render(scene, camera);
-    }
-    animate();
-
-    fileInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const img = new Image();
-      img.onload = () => {
-        canvas2d.width = img.width;
-        canvas2d.height = img.height;
-        ctx2d.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
-        createHeightMap(img);
-      };
-      img.src = URL.createObjectURL(file);
+    // التنقل بين التبويبات
+    document.querySelectorAll('.tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('section').forEach(sec => sec.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.tab).classList.add('active');
+      });
     });
 
-    rotationSpeedInput.addEventListener('input', () => {
-      rotationSpeed = parseFloat(rotationSpeedInput.value);
-    });
+    // زر تحميل G-code
+    function downloadGcode() {
+      const gcode = document.getElementById("gcodeOutput").value;
+      if (!gcode.trim()) {
+        alert("⚠️ لا يوجد كود G-code للتنزيل!");
+        return;
+      }
+      const blob = new Blob([gcode], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "output.gcode";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
 
-    zoomControl.addEventListener('input', () => {
-      camera.position.z = parseFloat(zoomControl.value);
-    });
-
-    // زر تبديل الثيم
-    const themeToggle = document.getElementById('themeToggle');
-    themeToggle.addEventListener('click', () => {
-      document.body.classList.toggle('dark');
-      themeToggle.textContent = document.body.classList.contains('dark') ? "☀️" : "🌙";
-    });
+    // 🔹 باقي أكواد المعاينة (من النسخة المستقرة) هتتنسخ هنا لاحقًا
   </script>
 </body>
 </html>
