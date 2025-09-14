@@ -2,81 +2,78 @@
 <html lang="ar">
 <head>
   <meta charset="utf-8" />
-  <title>CNC AI — معاينات & G-code</title>
+  <title>CNC AI — معاينات و G-code</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     :root{
-      --bg:#fdfdfd; --muted:#666; --accent:#4a90e2; --card:#fff;
+      --bg:#fdfdfd; --card:#fff; --muted:#666; --accent:#4a90e2;
     }
-    body{font-family: "Segoe UI", Arial, sans-serif; margin:0; padding:0; background:var(--bg); color:#222; direction:rtl}
-    header{background:linear-gradient(90deg,var(--accent),#67b0f5); color:#fff; padding:14px 16px; display:flex; align-items:center; justify-content:center; position:relative}
-    header h1{margin:0; font-size:18px}
-    #themeToggle{position:absolute; left:12px; top:50%; transform:translateY(-50%); background:transparent; border:none; color:#fff; font-size:18px; cursor:pointer}
-    main{max-width:1100px; margin:18px auto; padding:12px; display:grid; grid-template-columns: 1fr; gap:16px}
-    /* layout */
-    .top-controls{display:flex; gap:12px; justify-content:center; flex-wrap:wrap}
-    .file-upload input[type=file]{padding:8px; border-radius:6px; border:1px solid #ccc; background:var(--card)}
-    .preview-card{background:var(--card); border-radius:10px; padding:12px; box-shadow:0 6px 18px rgba(0,0,0,0.06)}
-    .row{display:flex; gap:12px; flex-wrap:wrap}
-    .col{flex:1 1 320px; min-width:260px}
-    .small{flex:0 0 260px}
-    .title{font-weight:700; margin-bottom:8px}
-    canvas{width:100%; height:auto; border-radius:8px; border:1px solid #ddd; background:#fff; display:block}
-    #preview3d canvas{height:360px !important}
-    .controls{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px}
-    .controls label{font-size:13px; color:var(--muted)}
+    body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:#222;direction:rtl}
+    header{background:linear-gradient(90deg,var(--accent),#67b0f5);color:#fff;padding:14px 18px;text-align:center;position:relative}
+    header h1{margin:0;font-size:18px}
+    #themeToggle{position:absolute;left:14px;top:50%;transform:translateY(-50%);background:transparent;border:0;color:#fff;font-size:18px;cursor:pointer}
+    .tabs{display:flex;gap:8px;justify-content:center;background:#f0f4fb;padding:10px;flex-wrap:wrap}
+    .tabs button{border:0;padding:8px 14px;border-radius:8px;background:#e6eefc;cursor:pointer;font-weight:600}
+    .tabs button.active{background:var(--accent);color:#fff}
+    .container{max-width:1100px;margin:20px auto;padding:0 12px;display:grid;grid-template-columns:1fr;gap:18px}
+    .row{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+    .card{background:var(--card);border-radius:10px;padding:12px;box-shadow:0 6px 18px rgba(0,0,0,0.06);width:100%}
+    .file-center{display:flex;justify-content:center;padding:8px}
+    input[type=file]{padding:8px;border-radius:8px;border:1px solid #ddd;background:#fff}
+    .preview-grid{display:grid;grid-template-columns:1fr 420px;gap:18px}
+    .preview-block{display:flex;flex-direction:column;align-items:center}
+    canvas{max-width:100%;border-radius:8px;border:1px solid #ddd;background:#fff}
+    #preview3d canvas{width:420px;height:420px;display:block}
+    .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;margin-top:8px}
+    label{font-size:13px;color:var(--muted)}
     input[type=range]{vertical-align:middle}
-    .colormap-controls{display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-top:8px}
-    .colormap-controls button{padding:8px 12px; border-radius:8px; border:none; cursor:pointer; background:#eee}
-    .colormap-controls button.active{box-shadow:0 6px 14px rgba(0,0,0,0.08); background:linear-gradient(90deg,var(--accent),#357ABD); color:#fff}
-    /* tabs */
-    .tabs{display:flex; gap:6px; justify-content:center; margin-bottom:12px}
-    .tabs button{padding:8px 14px; border-radius:8px; border:none; background:#eee; cursor:pointer}
-    .tabs button.active{background:var(--accent); color:#fff}
-    /* gcode panel */
-    .form-row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
-    input[type=number], input[type=text], select{padding:8px; border-radius:6px; border:1px solid #ccc; min-width:110px}
-    button.action{background:var(--accent); color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer}
-    textarea{width:100%; height:220px; padding:10px; border-radius:8px; border:1px solid #ddd; font-family:monospace; resize:vertical}
-    @media (min-width:900px){
-      main{grid-template-columns: 1fr 420px}
+    .colormap-controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:8px}
+    .colormap-controls button{padding:8px 12px;border-radius:8px;border:0;background:#f0f0f0;cursor:pointer;font-weight:600}
+    .gcode-area{display:flex;flex-direction:column;gap:8px}
+    textarea{width:100%;height:220px;padding:10px;border-radius:8px;border:1px solid #ddd;font-family:monospace;background:#fafafa;resize:vertical}
+    .small{font-size:13px;color:var(--muted)}
+    /* responsive */
+    @media (max-width:980px){
+      .preview-grid{grid-template-columns:1fr}
+      #preview3d canvas{width:100%;height:300px}
     }
-    @media (max-width:420px){
-      header h1{font-size:15px}
-    }
+    body.dark{background:#111;color:#eee}
+    body.dark .card{background:#1b1b1b}
+    body.dark .tabs button{background:#2b2b2b;color:#ddd}
+    body.dark .tabs button.active{background:#3b82f6;color:#fff}
   </style>
 </head>
 <body>
   <header>
+    <h1>🛠️ CNC AI — معاينات و G-code</h1>
     <button id="themeToggle" title="تبديل الثيم">🌙</button>
-    <h1>🛠️ CNC AI — معاينات و توليد G-code</h1>
   </header>
 
-  <main>
-    <!-- LEFT: المعاينات -->
-    <section class="preview-card">
-      <div class="top-controls">
-        <div class="file-upload"><input id="fileInput" type="file" accept="image/*"></div>
-        <div class="tabs" role="tablist" aria-label="tabs">
-          <button class="active" data-tab="tab_preview">المعاينة</button>
-          <button data-tab="tab_gcode">G-code</button>
-        </div>
+  <div class="tabs" role="tablist">
+    <button class="active" id="tabPreviewBtn">📷 المعاينة</button>
+    <button id="tabGcodeBtn">⚙️ إعدادات G-code</button>
+  </div>
+
+  <div class="container">
+
+    <!-- PREVIEW TAB (default) -->
+    <div id="previewTab" class="card">
+      <div class="file-center">
+        <input id="fileInput" type="file" accept="image/*">
       </div>
 
-      <!-- content tabs -->
-      <div id="tab_preview" class="tab-pane">
-        <div class="row">
-          <div class="col preview-block">
-            <div class="title">📷 الصورة الأصلية</div>
+      <div class="preview-grid">
+        <div>
+          <div class="preview-block card" style="padding:12px;">
+            <div class="small">📷 الصورة الأصلية</div>
             <canvas id="preview2d"></canvas>
           </div>
 
-          <div class="col preview-block">
-            <div class="title">🌈 Heatmap (خريطة الارتفاع)</div>
+          <div class="preview-block card" style="margin-top:12px;">
+            <div class="small">🌈 خريطة الارتفاعات (Heatmap)</div>
             <canvas id="heatmap"></canvas>
-
-            <div class="colormap-controls" id="colormapBtns">
-              <button data-map="jet" class="active">Jet</button>
+            <div class="colormap-controls" aria-label="colormap controls">
+              <button data-map="jet">Jet</button>
               <button data-map="hot">Hot</button>
               <button data-map="cool">Cool</button>
               <button data-map="gray">Gray</button>
@@ -84,165 +81,151 @@
           </div>
         </div>
 
-        <div class="preview-block" style="margin-top:12px">
-          <div class="title">🌀 معاينة ثلاثية الأبعاد</div>
-          <div id="preview3d"></div>
-          <div class="controls">
-            <label>🔄 سرعة الدوران: <input id="rotationSpeed" type="range" min="0" max="0.05" step="0.001" value="0.01"></label>
-            <label>🔍 زوم: <input id="zoomControl" type="range" min="80" max="700" step="10" value="200"></label>
-            <label style="margin-left:8px"><input id="autoRotate" type="checkbox" checked> دوران تلقائي</label>
+        <div>
+          <div class="preview-block card">
+            <div class="small">🌀 المعاينة ثلاثية الأبعاد</div>
+            <div id="preview3d"></div>
+            <div class="controls">
+              <label>🔄 سرعة:
+                <input id="rotationSpeed" type="range" min="0" max="0.05" step="0.001" value="0.01">
+              </label>
+              <label>🔍 زوم:
+                <input id="zoomControl" type="range" min="50" max="600" step="10" value="200">
+              </label>
+              <button id="toggleWire">Toggle Wire</button>
+            </div>
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- G-code tab is also included in left column for quick preview small controls (but main gcode area on right) -->
-      <div id="tab_gcode" class="tab-pane" style="display:none">
-        <div class="preview-block">
-          <div class="title">⚙️ إعدادات سريعة لتجربة G-code (انقل للإعدادات الكاملة في اليمين)</div>
-          <div class="form-row">
-            <label>حجم بكسل (مم):</label>
-            <input id="pixelSizeMM_quick" type="number" value="0.5" step="0.1">
-            <label>أقصى عمق (مم):</label>
-            <input id="maxDepth_quick" type="number" value="2" step="0.1">
-            <button class="action" onclick="generateGcodeFromCurrent()">توليد سريع & معاينة</button>
-          </div>
+    <!-- G-CODE TAB -->
+    <div id="gcodeTab" class="card" style="display:none">
+      <h3 style="margin:6px 0">توليد G-code (مع معاينة 2D لمسار)</h3>
+      <div class="gcode-area">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <label class="small">عرض (مم): <input id="widthMm" type="number" value="100" style="width:110px"></label>
+          <label class="small">طول (مم): <input id="heightMm" type="number" value="100" style="width:110px"></label>
+          <label class="small">أقصى عمق (مم): <input id="depthMm" type="number" value="2" style="width:110px"></label>
+        </div>
+
+        <div style="display:flex;gap:8px">
+          <button id="genG" class="action">⚙️ توليد</button>
+          <button id="dlG" class="action">💾 تحميل</button>
+        </div>
+
+        <textarea id="gcodeOutput" placeholder="سيظهر الكود هنا..." readonly></textarea>
+
+        <div>
+          <div class="small">معاينة 2D لمسار G-code</div>
+          <canvas id="gcodeCanvas" width="640" height="400" style="border:1px solid #eee;border-radius:6px"></canvas>
         </div>
       </div>
-    </section>
+    </div>
 
-    <!-- RIGHT: G-code + settings -->
-    <aside class="preview-card small">
-      <div class="title">⚙️ إعدادات G-code و معاينة 2D للمسار</div>
+  </div>
 
-      <div style="margin-bottom:8px">
-        <label>حجم البكسل (مم)</label>
-        <input id="pixelSizeMM" type="number" value="0.5" step="0.1">
-      </div>
-
-      <div style="margin-bottom:8px">
-        <label>أقصى عمق (مم)</label>
-        <input id="maxDepth" type="number" value="2" step="0.1">
-      </div>
-
-      <div style="margin-bottom:8px">
-        <label>قطر الأداة (مم)</label>
-        <input id="toolDiameter" type="number" value="3" step="0.1">
-      </div>
-
-      <div style="margin-bottom:8px">
-        <label>Stepover (نسبة من القطر)</label>
-        <input id="stepover" type="number" value="0.5" step="0.1">
-      </div>
-
-      <div style="margin-bottom:8px">
-        <label>عكس الارتفاعات (invert)</label>
-        <select id="invertSelect">
-          <option value="false">لا</option>
-          <option value="true">نعم</option>
-        </select>
-      </div>
-
-      <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap">
-        <button class="action" onclick="generateGcode()">⚙️ توليد G-code</button>
-        <button onclick="downloadGcode()" style="padding:8px 12px; border-radius:6px; border:1px solid #ccc">💾 تحميل</button>
-        <button onclick="preview2DPath()" style="padding:8px 12px; border-radius:6px; border:1px solid #ccc">👁 معاينة 2D</button>
-      </div>
-
-      <div style="margin-top:12px">
-        <div class="title" style="font-size:14px; margin-bottom:6px">📊 معاينة 2D للمسارات</div>
-        <canvas id="gcodeCanvas" width="360" height="360" style="border-radius:6px"></canvas>
-      </div>
-
-      <div style="margin-top:12px">
-        <div class="title" style="font-size:14px; margin-bottom:6px">📜 الكود</div>
-        <textarea id="gcodeOutput" readonly placeholder="توليد G-code هنا ..."></textarea>
-      </div>
-    </aside>
-  </main>
-
-  <!-- three + OrbitControls -->
+  <!-- three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
 
   <script>
-  // ====== عناصر DOM ======
+  // ---------- Helpers & state ----------
   const fileInput = document.getElementById('fileInput');
-  const canvas2d = document.getElementById('preview2d');
-  const ctx2d = canvas2d.getContext('2d');
-  const heatmapCanvas = document.getElementById('heatmap');
-  const ctxHeat = heatmapCanvas.getContext('2d');
-  const preview3dDiv = document.getElementById('preview3d');
+  const preview2d = document.getElementById('preview2d');
+  const ctx2d = preview2d.getContext('2d');
+  const heatmap = document.getElementById('heatmap');
+  const ctxHeat = heatmap.getContext('2d');
+  const preview3d = document.getElementById('preview3d');
 
-  const rotationSpeedInput = document.getElementById('rotationSpeed');
-  const zoomControl = document.getElementById('zoomControl');
-  const autoRotateChk = document.getElementById('autoRotate');
-
-  const colormapBtns = document.getElementById('colormapBtns');
-
-  const pixelSizeMMInput = document.getElementById('pixelSizeMM');
-  const maxDepthInput = document.getElementById('maxDepth');
-  const toolDiameterInput = document.getElementById('toolDiameter');
-  const stepoverInput = document.getElementById('stepover');
-  const invertSelect = document.getElementById('invertSelect');
-
-  const gcodeOutput = document.getElementById('gcodeOutput');
   const gcodeCanvas = document.getElementById('gcodeCanvas');
   const gctx = gcodeCanvas.getContext('2d');
 
-  // tabs
-  document.querySelectorAll('.tabs button').forEach(btn=>{
-    btn.addEventListener('click', (ev)=>{
-      document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));
-      document.querySelectorAll('.tab-pane').forEach(p=>p.style.display='none');
-      btn.classList.add('active');
-      document.getElementById(btn.dataset.tab || 'tab_preview').style.display='block';
+  let heightData = null;     // 2D array normalized [0..1]
+  let heightW = 0, heightH = 0;
+  let currentColormap = 'jet';
+  let mesh, renderer, scene, camera;
+  let rotationSpeed = 0.01;
+  let wireframe = false;
+
+  // downsample large images to this max for mesh/heatmap to keep memory low
+  const MAX_DIM = 240;
+
+  // ---------- Theme toggle ----------
+  const themeToggle = document.getElementById('themeToggle');
+  themeToggle.addEventListener('click', () => {
+    document.body.classList.toggle('dark');
+    themeToggle.textContent = document.body.classList.contains('dark') ? "☀️" : "🌙";
+  });
+
+  // ---------- Tabs ----------
+  document.getElementById('tabPreviewBtn').addEventListener('click', () => {
+    document.getElementById('previewTab').style.display = '';
+    document.getElementById('gcodeTab').style.display = 'none';
+    document.getElementById('tabPreviewBtn').classList.add('active');
+    document.getElementById('tabGcodeBtn').classList.remove('active');
+  });
+  document.getElementById('tabGcodeBtn').addEventListener('click', () => {
+    document.getElementById('previewTab').style.display = 'none';
+    document.getElementById('gcodeTab').style.display = '';
+    document.getElementById('tabPreviewBtn').classList.remove('active');
+    document.getElementById('tabGcodeBtn').classList.add('active');
+  });
+
+  // ---------- Colormap buttons ----------
+  document.querySelectorAll('.colormap-controls button').forEach(b=>{
+    b.addEventListener('click', () => {
+      currentColormap = b.dataset.map;
+      if (heightData) drawHeatmap(heightData, heightW, heightH);
+      if (mesh) applyVertexColors();
     });
   });
 
-  // ====== حالة وبيانات ======
-  let heightData = null; // مصفوفة 2D من [0..1]
-  let heightW = 0, heightH = 0;
-  let currentColormap = 'jet';
+  // ---------- File load ----------
+  fileInput.addEventListener('change', (e)=>{
+    const f = e.target.files[0];
+    if (!f) return;
+    const url = URL.createObjectURL(f);
+    const img = new Image();
+    img.onload = () => {
+      // draw 2D preview at natural size but constrained width
+      preview2d.width = img.width; preview2d.height = img.height;
+      ctx2d.clearRect(0,0,preview2d.width,preview2d.height);
+      ctx2d.drawImage(img,0,0);
 
-  // ====== 3D SETUP ======
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
-  const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
-  renderer.setSize(500, 360);
-  preview3dDiv.appendChild(renderer.domElement);
+      // prepare downsampled image for height extraction
+      const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
+      heightW = Math.max(2, Math.floor(img.width * scale));
+      heightH = Math.max(2, Math.floor(img.height * scale));
+      const tmp = document.createElement('canvas'); tmp.width = heightW; tmp.height = heightH;
+      const tctx = tmp.getContext('2d');
+      tctx.drawImage(img, 0, 0, heightW, heightH);
+      const rgba = tctx.getImageData(0,0,heightW,heightH).data;
 
-  const controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  camera.position.set(0, 120, 220);
-  controls.update();
+      // build heightData normalized (0..1) using luminance
+      heightData = new Array(heightH);
+      for (let y=0;y<heightH;y++){
+        const row = new Float32Array(heightW);
+        for (let x=0;x<heightW;x++){
+          const i = (y*heightW + x) * 4;
+          // convert to luminance (more robust than single channel)
+          const r=rgba[i], g=rgba[i+1], b=rgba[i+2];
+          const lum = (0.299*r + 0.587*g + 0.114*b) / 255;
+          row[x] = lum;
+        }
+        heightData[y] = row;
+      }
 
-  const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
-  dirLight.position.set(0, 1, 1);
-  scene.add(dirLight);
-  const amb = new THREE.AmbientLight(0x888888);
-  scene.add(amb);
+      // draw heatmap and 3D
+      drawHeatmap(heightData, heightW, heightH);
+      create3DMesh(heightData, heightW, heightH);
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  });
 
-  let mesh3d = null;
-  let rotationSpeed = parseFloat(rotationSpeedInput.value) || 0.01;
-
-  rotationSpeedInput.addEventListener('input', ()=> rotationSpeed = parseFloat(rotationSpeedInput.value));
-  zoomControl.addEventListener('input', ()=> { camera.position.z = parseFloat(zoomControl.value); });
-  autoRotateChk.addEventListener('change', ()=> { /* handled in animate */ });
-
-  // animate
-  function animate(){
-    requestAnimationFrame(animate);
-    if (autoRotateChk.checked && mesh3d){
-      mesh3d.rotation.y += rotationSpeed;
-    }
-    controls.update();
-    renderer.render(scene, camera);
-  }
-  animate();
-
-  // ====== util: colormaps ======
+  // ---------- Heatmap rendering ----------
   function getHeatColor(value, map){
-    // clamp
+    // value in [0..1]
     value = Math.max(0, Math.min(1, value));
     let r=0,g=0,b=0;
     if(map==='jet'){
@@ -263,322 +246,263 @@
     return {r,g,b};
   }
 
-  // colormap buttons
-  colormapBtns.querySelectorAll('button').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      colormapBtns.querySelectorAll('button').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      currentColormap = btn.dataset.map || btn.textContent.toLowerCase();
-      if (heightData) drawHeatmapFromData();
-      if (mesh3d) recolorMesh();
-    });
-  });
-
-  // ====== load image and build heightmap ======
-  fileInput.addEventListener('change', async (e)=>{
-    const f = e.target.files[0];
-    if (!f) return;
-    const img = await loadImageFromFile(f);
-    // draw 2D original (full natural size but limited to canvas display size)
-    canvas2d.width = img.naturalWidth;
-    canvas2d.height = img.naturalHeight;
-    // scale down canvas visual width for layout but keep pixel data
-    ctx2d.clearRect(0,0,canvas2d.width,canvas2d.height);
-    ctx2d.drawImage(img,0,0);
-
-    // build heightData with constrained resolution for performance
-    buildHeightDataFromImage(img);
-  });
-
-  function loadImageFromFile(file){
-    return new Promise((res,rej)=>{
-      const img = new Image();
-      img.onload = ()=>res(img);
-      img.onerror = rej;
-      img.src = URL.createObjectURL(file);
-    });
-  }
-
-  function buildHeightDataFromImage(img){
-    // Limit resolution to avoid huge geometries (maxDimension)
-    const maxDimension = 200; // عدد النقاط في أي بُعد — قابل للتعديل للسرعة/دقة
-    let w = img.naturalWidth, h = img.naturalHeight;
-    const scale = Math.min(1, maxDimension / Math.max(w,h));
-    const tw = Math.max(2, Math.round(w * scale));
-    const th = Math.max(2, Math.round(h * scale));
-
-    const temp = document.createElement('canvas');
-    temp.width = tw; temp.height = th;
-    const tctx = temp.getContext('2d');
-    tctx.drawImage(img, 0, 0, tw, th);
-    const id = tctx.getImageData(0,0,tw,th).data;
-
-    // produce heightData normalized 0..1 using luminance
-    heightW = tw; heightH = th;
-    heightData = new Array(th);
-    for (let y=0;y<th;y++){
-      const row = new Array(tw);
-      for (let x=0;x<tw;x++){
-        const idx = (y*tw + x)*4;
-        // luminance: use R channel is okay for many images; use weighted for robustness
-        const r=id[idx], g=id[idx+1], b=id[idx+2];
-        const lum = (0.299*r + 0.587*g + 0.114*b) / 255;
-        row[x] = lum; // 0..1
-      }
-      heightData[y] = row;
-    }
-
-    // draw heatmap & build 3d
-    drawHeatmapFromData();
-    buildMeshFromHeight();
-  }
-
-  // ====== draw heatmap scaled up for display ======
-  function drawHeatmapFromData(){
-    if(!heightData) return;
-    const w = heightW, h = heightH;
-    // we'll draw raw image first then scale to display size
-    const imgData = ctxHeat.createImageData(w,h);
+  function drawHeatmap(hData, w, h){
+    // prepare imageData at native resolution then upscale to canvas to keep crispness
+    const img = ctxHeat.createImageData(w,h);
+    // compute min/max for contrast stretch
+    let min=1, max=0;
     for (let y=0;y<h;y++){
       for (let x=0;x<w;x++){
-        const v = heightData[y][x];
-        const c = getHeatColor(v, currentColormap);
-        const idx = (y*w + x)*4;
-        imgData.data[idx] = c.r;
-        imgData.data[idx+1] = c.g;
-        imgData.data[idx+2] = c.b;
-        imgData.data[idx+3] = 255;
+        const v=hData[y][x];
+        if (v<min) min=v;
+        if (v>max) max=v;
       }
     }
-    // set canvas larger for nicer preview (scale factor)
-    const scale = Math.min(3, Math.floor(400 / Math.max(w,h))); // keep visible but not huge
-    heatmapCanvas.width = w * scale;
-    heatmapCanvas.height = h * scale;
-    // draw to temporary then scale
-    const tmp = document.createElement('canvas');
-    tmp.width = w; tmp.height = h;
-    tmp.getContext('2d').putImageData(imgData,0,0);
-    ctxHeat.clearRect(0,0,heatmapCanvas.width, heatmapCanvas.height);
-    ctxHeat.drawImage(tmp, 0, 0, heatmapCanvas.width, heatmapCanvas.height);
+    const span = (max-min) || 1;
+    for (let y=0;y<h;y++){
+      for (let x=0;x<w;x++){
+        const i=(y*w+x)*4;
+        const norm = (hData[y][x] - min) / span;
+        const c = getHeatColor(norm, currentColormap);
+        img.data[i]=c.r; img.data[i+1]=c.g; img.data[i+2]=c.b; img.data[i+3]=255;
+      }
+    }
+    // put on a temp canvas then scale to displayed canvas to enlarge while keeping pixel mapping
+    const tmp = document.createElement('canvas'); tmp.width=w; tmp.height=h;
+    tmp.getContext('2d').putImageData(img,0,0);
+
+    // compute display size to fit layout while keeping aspect
+    const maxDisplayW = Math.min(420, window.innerWidth - 80);
+    let dispW = Math.round(maxDisplayW);
+    let dispH = Math.round((h / w) * dispW);
+    heatmap.width = dispW; heatmap.height = dispH;
+    ctxHeat.imageSmoothingEnabled = false;
+    ctxHeat.clearRect(0,0,heatmap.width,heatmap.height);
+    ctxHeat.drawImage(tmp, 0, 0, dispW, dispH);
   }
 
-  // ====== build 3D mesh from heightData ======
-  function buildMeshFromHeight(){
-    if(!heightData) return;
-    // clear old
-    if(mesh3d){ scene.remove(mesh3d); mesh3d.geometry.dispose(); mesh3d.material.dispose(); mesh3d = null; }
+  // ---------- 3D: initialize scene on first use ----------
+  function ensure3D(){
+    if (renderer) return;
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
+    renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
+    renderer.setSize(420,420);
+    preview3d.innerHTML = '';
+    preview3d.appendChild(renderer.domElement);
 
-    const w = heightW, h = heightH;
-    // plane geometry: width,height segments = w-1,h-1
-    const geometry = new THREE.PlaneGeometry(200, 200, w-1, h-1); // 200x200 mm virtual
-    // position array reference
-    const pos = geometry.attributes.position.array; // Float32Array
-    const colorArr = new Float32Array( (w*h) * 3 );
+    const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+    dir.position.set(0,1,1).normalize();
+    scene.add(dir);
+    const amb = new THREE.AmbientLight(0xffffff,0.4);
+    scene.add(amb);
 
-    // mesh vertex order matches grid rows: iterate vertices and set z from heightData
-    let vi = 0, ci = 0;
-    for (let j=0;j<h;j++){
-      for (let i=0;i<w;i++){
-        // find attribute vertex index: geometry stores (x,y,z) sequentially
-        // vertex index in attributes = j*w + i (assuming PlaneGeometry ordering)
-        const vertexIndex = j*w + i;
-        const stride = vertexIndex * 3;
-        const v = heightData[j][i];
-        const z = v * 40; // ارتفاع مضروب بمعامل (تعديل حسب الرغبة)
-        pos[stride + 2] = z; // set z
-        // set color
-        const col = getHeatColor(v, currentColormap);
-        colorArr[ci++] = col.r/255;
-        colorArr[ci++] = col.g/255;
-        colorArr[ci++] = col.b/255;
-        vi++;
+    camera.position.set(0, -140, 120);
+    camera.lookAt(0,0,0);
+
+    // simple orbit via mouse: minimal handling to avoid adding OrbitControls lib
+    let isDown=false, lastX=0, lastY=0;
+    preview3d.addEventListener('pointerdown', e=>{isDown=true; lastX=e.clientX; lastY=e.clientY;});
+    window.addEventListener('pointerup', ()=>isDown=false);
+    window.addEventListener('pointermove', (e)=>{
+      if(!isDown) return;
+      const dx = (e.clientX - lastX); const dy = (e.clientY - lastY);
+      lastX = e.clientX; lastY = e.clientY;
+      if (mesh) mesh.rotation.y += dx * 0.01;
+      if (mesh) mesh.rotation.x += dy * 0.01;
+    });
+  }
+
+  function create3DMesh(hData, w, h){
+    ensure3D();
+
+    // reduce resolution if too big
+    const step = Math.ceil(Math.max(1, Math.max(w,h)/MAX_DIM));
+    const cols = Math.ceil(w/step);
+    const rows = Math.ceil(h/step);
+
+    // geometry plane of size 160 x 160 (arbitrary), with cols-1 and rows-1 segments
+    const size = 160;
+    const geometry = new THREE.PlaneGeometry(size, size, cols-1, rows-1);
+    // fill z positions using downsampled heights
+    for (let j=0;j<rows;j++){
+      for (let i=0;i<cols;i++){
+        const vx = i, vy = j;
+        const idx = j*cols + i;
+        const xSrc = Math.min(w-1, i*step);
+        const ySrc = Math.min(h-1, j*step);
+        const val = hData[ySrc][xSrc];
+        const z = (val - 0.5) * 60; // center and scale
+        geometry.attributes.position.setZ(idx, z);
       }
     }
 
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colorArr, 3));
     geometry.computeVertexNormals();
 
-    const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
-    mesh3d = new THREE.Mesh(geometry, material);
-    // rotate plane so X horizontal Y vertical
-    mesh3d.rotation.x = -Math.PI/2; // make Z up
-    scene.add(mesh3d);
-
-    // center camera and controls
-    mesh3d.position.set(0,0,0);
-    camera.position.set(0, 120, 220);
-    controls.target.set(0,0,0);
-    controls.update();
-  }
-
-  function recolorMesh(){
-    if(!mesh3d || !heightData) return;
-    const w = heightW, h = heightH;
-    const colorAttr = mesh3d.geometry.attributes.color;
-    const arr = colorAttr.array;
-    let idx = 0;
-    for (let j=0;j<h;j++){
-      for (let i=0;i<w;i++){
-        const v = heightData[j][i];
+    // vertex colors from current colormap
+    const colors = [];
+    for (let j=0;j<rows;j++){
+      for (let i=0;i<cols;i++){
+        const xSrc = Math.min(w-1, i*step);
+        const ySrc = Math.min(h-1, j*step);
+        const v = hData[ySrc][xSrc];
         const c = getHeatColor(v, currentColormap);
-        arr[idx++] = c.r/255;
-        arr[idx++] = c.g/255;
-        arr[idx++] = c.b/255;
+        colors.push(c.r/255, c.g/255, c.b/255);
       }
     }
-    colorAttr.needsUpdate = true;
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+    const mat = new THREE.MeshLambertMaterial({vertexColors:true, side:THREE.DoubleSide, wireframe:wireframe});
+    if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose(); mesh = null; }
+    mesh = new THREE.Mesh(geometry, mat);
+    mesh.rotation.x = -Math.PI/2; // lay flat with Y up
+    scene.add(mesh);
   }
 
-  // ====== G-code generation (from heightData) ======
-  let lastGeneratedGcode = "";
+  function applyVertexColors(){
+    if (!mesh) return;
+    const geom = mesh.geometry;
+    // geom attribute size equals (cols*rows). We'll map using existing heightData sampling logic
+    const pos = geom.attributes.position;
+    const count = pos.count;
+    const colors = [];
+    for (let i=0;i<count;i++){
+      // map geometry vertex index to a sample from heightData via nearest projection
+      // rough approach: map i to u,v using geometry parameters (works for PlaneGeometry created above)
+      // PlaneGeometry indexes positions in grid order; infer cols/rows:
+      const segmentsX = geom.parameters.widthSegments + 1;
+      const ix = i % segmentsX;
+      const iy = Math.floor(i / segmentsX);
+      // map ix,iy back to heightData coordinates
+      const xSrc = Math.min(heightW-1, Math.floor(ix * (heightW / segmentsX)));
+      const ySrc = Math.min(heightH-1, Math.floor(iy * (heightH / (geom.parameters.heightSegments + 1))));
+      const v = heightData[ySrc][xSrc];
+      const c = getHeatColor(v, currentColormap);
+      colors.push(c.r/255, c.g/255, c.b/255);
+    }
+    geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geom.attributes.color.needsUpdate = true;
+  }
+
+  // animation loop
+  function animate3D(){
+    requestAnimationFrame(animate3D);
+    if (mesh) { mesh.rotation.y += rotationSpeed; }
+    if (renderer && camera) renderer.render(scene, camera);
+  }
+  animate3D();
+
+  // controls handlers
+  document.getElementById('rotationSpeed').addEventListener('input', (e)=> rotationSpeed = parseFloat(e.target.value));
+  document.getElementById('zoomControl').addEventListener('input', (e)=>{
+    const z = parseFloat(e.target.value);
+    if (camera) camera.position.set(0, -z*0.7, z*0.9);
+  });
+  document.getElementById('toggleWire').addEventListener('click', ()=>{
+    wireframe = !wireframe;
+    if (mesh) mesh.material.wireframe = wireframe;
+  });
+
+  // ---------- G-code generation (simple height-based simulation) ----------
+  let latestGcode = '';
+  document.getElementById('genG').addEventListener('click', generateGcode);
+  document.getElementById('dlG').addEventListener('click', downloadGcode);
 
   function generateGcode(){
-    if(!heightData){
-      alert('من فضلك ارفع صورة أولاً لإنشاء خريطة الارتفاعات.');
-      return;
-    }
-    const pixelSizeMM = parseFloat(pixelSizeMMInput.value) || 0.5;
-    const maxDepth = parseFloat(maxDepthInput.value) || 2.0;
-    const toolDiameter = parseFloat(toolDiameterInput.value) || 3.0;
-    const stepoverRatio = parseFloat(stepoverInput.value) || 0.5;
-    const invert = (invertSelect.value === 'true');
+    if (!heightData) { alert('ارفع صورة أولاً في تبويب المعاينة'); return; }
+    const width = parseFloat(document.getElementById('widthMm').value) || 100;
+    const height = parseFloat(document.getElementById('heightMm').value) || 100;
+    const maxDepth = parseFloat(document.getElementById('depthMm').value) || 2;
 
-    // We'll do a simple raster pass: for each Y row -> move along X, set Z per column
-    const w = heightW, h = heightH;
-    const widthMM = w * pixelSizeMM;
-    const heightMM = h * pixelSizeMM;
+    // map heightData to grid with pixelSize
+    const px = width / heightW;
+    const py = height / heightH;
 
+    // simple serpentine raster
     const lines = [];
-    lines.push(`(Generated by CNC AI)`);
-    lines.push(`G21 ; mm`);
-    lines.push(`G90 ; absolute`);
-    lines.push(`M3 S12000`);
-    lines.push(`G0 Z5.000`);
-    lines.push(``);
+    lines.push('(Generated by CNC AI)');
+    lines.push('G21');
+    lines.push('G90');
+    lines.push('M3 S12000');
+    lines.push('G0 Z5');
 
-    // serpentine lines
-    for (let row = 0; row < h; row++){
-      const y_mm = row * pixelSizeMM;
-      const leftToRight = (row % 2 === 0);
-      if(leftToRight){
-        lines.push(`(Row ${row} Y=${y_mm.toFixed(3)})`);
-        // rapid to start of row
-        lines.push(`G0 X0.000 Y${y_mm.toFixed(3)}`);
-        for (let col=0; col<w; col++){
-          const x_mm = col * pixelSizeMM;
-          const v = heightData[row][col]; // 0..1
-          // depth mapping: if invert false -> dark=0 -> deep -> depth = maxDepth * v? Choose: depth = maxDepth * (1 - v) gives darker -> larger depth
-          const depth = invert ? maxDepth * v : maxDepth * (1 - v);
-          const targetZ = -depth;
-          lines.push(`G1 Z${targetZ.toFixed(3)} F300`);
-          lines.push(`G1 X${x_mm.toFixed(3)} Y${y_mm.toFixed(3)} F800`);
+    const pathPoints = [];
+    for (let y=0;y<heightH;y++){
+      const y_mm = (y) * py;
+      if (y % 2 === 0) {
+        for (let x=0;x<heightW;x++){
+          const val = heightData[y][x]; // 0..1
+          const depth = (1 - val) * maxDepth; // darker -> deeper
+          const z = -depth;
+          const x_mm = x * px;
+          lines.push(`G0 X${x_mm.toFixed(3)} Y${y_mm.toFixed(3)}`);
+          lines.push(`G1 Z${z.toFixed(3)} F300`);
+          pathPoints.push({x:x_mm,y:y_mm});
         }
       } else {
-        lines.push(`(Row ${row} Y=${y_mm.toFixed(3)})`);
-        lines.push(`G0 X${(widthMM).toFixed(3)} Y${y_mm.toFixed(3)}`);
-        for (let col = w-1; col>=0; col--){
-          const x_mm = col * pixelSizeMM;
-          const v = heightData[row][col];
-          const depth = invert ? maxDepth * v : maxDepth * (1 - v);
-          const targetZ = -depth;
-          lines.push(`G1 Z${targetZ.toFixed(3)} F300`);
-          lines.push(`G1 X${x_mm.toFixed(3)} Y${y_mm.toFixed(3)} F800`);
+        for (let x=heightW-1;x>=0;x--){
+          const val = heightData[y][x];
+          const depth = (1 - val) * maxDepth;
+          const z = -depth;
+          const x_mm = x * px;
+          lines.push(`G0 X${x_mm.toFixed(3)} Y${y_mm.toFixed(3)}`);
+          lines.push(`G1 Z${z.toFixed(3)} F300`);
+          pathPoints.push({x:x_mm,y:y_mm});
         }
       }
-      lines.push(`G0 Z5.000`); // retract between rows for safety
+      lines.push('G0 Z5');
     }
 
-    lines.push(`G0 Z5.000`);
-    lines.push(`G0 X0 Y0`);
-    lines.push(`M5`);
-    lines.push(`M30`);
+    lines.push('M5');
+    lines.push('M30');
+    latestGcode = lines.join('\n');
+    document.getElementById('gcodeOutput').value = latestGcode;
 
-    lastGeneratedGcode = lines.join('\n');
-    gcodeOutput.value = lastGeneratedGcode;
-    // also draw 2D preview
-    drawGcodeOnCanvas(pixelSizeMM);
-    alert('تم توليد G-code — يمكنك معاينته وتحميله.');
+    // draw path preview scaled to canvas
+    drawGcodePathPreview(pathPoints, width, height);
   }
 
-  function generateGcodeFromCurrent(){
-    // quick wrapper for left quick controls
-    const quickPixel = parseFloat(document.getElementById('pixelSizeMM_quick').value) || 0.5;
-    document.getElementById('pixelSizeMM').value = quickPixel;
-    document.getElementById('maxDepth').value = parseFloat(document.getElementById('maxDepth_quick').value) || 2.0;
-    generateGcode();
+  function drawGcodePathPreview(points, widthMM, heightMM){
+    const c = gcodeCanvas;
+    const ctx = gctx;
+    ctx.clearRect(0,0,c.width,c.height);
+    if (!points || points.length===0) return;
+    // compute margins and scaling
+    const padding = 20;
+    const scaleX = (c.width - padding*2) / widthMM;
+    const scaleY = (c.height - padding*2) / heightMM;
+    ctx.beginPath();
+    ctx.strokeStyle = '#1677ff';
+    ctx.lineWidth = 1.2;
+    // move to first
+    ctx.moveTo(padding + points[0].x * scaleX, padding + points[0].y*scaleY);
+    for (let i=1;i<points.length;i++){
+      const p = points[i];
+      ctx.lineTo(padding + p.x*scaleX, padding + p.y*scaleY);
+    }
+    ctx.stroke();
   }
 
   function downloadGcode(){
-    if(!lastGeneratedGcode){
-      alert('من فضلك توليد G-code أولاً.');
-      return;
-    }
-    const blob = new Blob([lastGeneratedGcode], {type:'text/plain'});
+    if (!latestGcode) { alert('من فضلك اضغط توليد أولاً'); return; }
+    const blob = new Blob([latestGcode], {type:'text/plain'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'output.nc';
+    a.download = 'cnc_output.gcode';
     a.click();
     URL.revokeObjectURL(a.href);
   }
 
-  // ====== Draw 2D path of generated gcode (simple) ======
-  function drawGcodeOnCanvas(pixelSizeMM){
-    if(!heightData) return;
-    const w = heightW, h = heightH;
-    const canvas = gcodeCanvas;
-    const ctx = gctx;
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    // scale so that full width/height fits
-    const widthMM = w * pixelSizeMM;
-    const heightMM = h * pixelSizeMM;
-    const margin = 12;
-    const scaleX = (canvas.width - 2*margin) / widthMM;
-    const scaleY = (canvas.height - 2*margin) / heightMM;
-    const scale = Math.min(scaleX, scaleY);
-
-    ctx.save();
-    ctx.translate(margin, margin);
-    ctx.fillStyle = '#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
-    // draw raster as blue lines
-    ctx.strokeStyle = '#0077cc';
-    ctx.lineWidth = 1;
-    for (let row=0; row<h; row++){
-      let y = row * pixelSizeMM * scale;
-      ctx.beginPath();
-      if (row%2===0){
-        ctx.moveTo(0, y);
-        ctx.lineTo(widthMM * scale, y);
-      } else {
-        ctx.moveTo(widthMM * scale, y);
-        ctx.lineTo(0, y);
-      }
-      ctx.stroke();
+  // ---------- small safety/resize handling ----------
+  window.addEventListener('resize', ()=> {
+    if (heightData) drawHeatmap(heightData, heightW, heightH);
+    // adjust renderer size
+    if (renderer) {
+      const size = Math.min(420, Math.floor(window.innerWidth*0.45));
+      renderer.setSize(size, size);
+      if (camera) camera.aspect = 1; camera.updateProjectionMatrix();
     }
-    ctx.restore();
-  }
-
-  function preview2DPath(){
-    // use current options, draw path overlay (no gcode generation)
-    if(!heightData){ alert('لا توجد بيانات — ارفع صورة أولاً.'); return; }
-    const pixelSizeMM = parseFloat(pixelSizeMMInput.value) || 0.5;
-    drawGcodeOnCanvas(pixelSizeMM);
-  }
-
-  // ====== helpers/ui ======
-  function showError(msg){ alert(msg); }
-
-  // theme toggle simple
-  const themeToggle = document.getElementById('themeToggle');
-  themeToggle.addEventListener('click', ()=>{
-    document.body.classList.toggle('dark');
-    themeToggle.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
-  });
-
-  // initial state: hide gcode tab pane
-  document.getElementById('tab_gcode').style.display = 'none';
-  // wire colormap buttons dataset
-  colormapBtns.querySelectorAll('button').forEach(b=>{
-    if(!b.dataset.map) b.dataset.map = b.textContent.trim().toLowerCase();
   });
 
   </script>
