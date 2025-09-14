@@ -1,216 +1,216 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <title>CNC AI — معاينات و G-code (Index)</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="UTF-8">
+  <title>CncAi – معاينة وتحضير</title>
   <style>
-    :root{
-      --bg:#fbfdff; --card:#fff; --muted:#6b7280; --accent:#2563eb;
-      --accent-2:#4a90e2;
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+      direction: rtl;
     }
-    *{box-sizing:border-box}
-    body{margin:0;font-family:Inter, "Segoe UI", Arial; background:var(--bg); color:#111; direction:rtl}
-    header{background:linear-gradient(90deg,var(--accent),var(--accent-2)); color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between}
-    header h1{margin:0;font-size:18px}
-    header .controls{display:flex;gap:10px;align-items:center}
-    .container{max-width:1200px;margin:18px auto;padding:12px;display:grid;grid-template-columns:1fr;gap:14px}
-    .card{background:var(--card);border-radius:10px;padding:12px;box-shadow:0 8px 20px rgba(2,6,23,0.06)}
-    .file-row{display:flex;justify-content:center;padding:8px}
-    input[type=file]{padding:8px;border-radius:8px;border:1px solid #e6edf8;background:#fff}
-    .layout{display:grid;grid-template-columns:1fr 420px;gap:14px}
-    @media(max-width:980px){ .layout{grid-template-columns:1fr} }
-    .preview-block{display:flex;flex-direction:column;gap:10px;align-items:center}
-    canvas{max-width:100%;border-radius:8px;border:1px solid #e6eef8;background:#fff;display:block}
-    #preview3d canvas{width:420px;height:420px;display:block}
-    .controls-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center}
-    label.small{font-size:13px;color:var(--muted)}
-    .colormap-controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
-    .colormap-controls button{padding:8px 12px;border-radius:8px;border:0;background:#f3f6fb;cursor:pointer;font-weight:600}
-    .gcode-area{display:flex;flex-direction:column;gap:8px}
-    textarea{width:100%;height:220px;padding:10px;border-radius:8px;border:1px solid #e6eef8;font-family:monospace;background:#fbfcff;resize:vertical}
-    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-    select,input[type=number]{padding:8px;border-radius:8px;border:1px solid #e6eef8}
-    button.primary{background:var(--accent);color:#fff;border:0;padding:9px 12px;border-radius:8px;cursor:pointer;font-weight:600}
-    button.ghost{background:#f3f6fb;border:0;padding:8px 10px;border-radius:8px;cursor:pointer}
-    .tabs{display:flex;gap:8px;justify-content:center;margin-bottom:8px}
-    .tabs button{padding:8px 12px;border-radius:8px;border:0;background:#eff6ff;cursor:pointer}
-    .tabs button.active{background:var(--accent);color:#fff}
-    .small-muted{font-size:13px;color:var(--muted)}
-    footer{max-width:1200px;margin:12px auto;text-align:center;color:var(--muted);font-size:13px}
-    /* dark */
-    body.dark{background:#0b1220;color:#e6eef8}
-    body.dark .card{background:#0f1724}
-    body.dark input, body.dark select, body.dark textarea{background:#071026;color:#e6eef8;border-color:#112233}
-    body.dark .colormap-controls button{background:#0b1b33;color:#fff}
+    header {
+      background: #222;
+      color: #fff;
+      padding: 10px;
+      font-size: 18px;
+    }
+    .controls {
+      margin: 15px;
+    }
+    input, select, button {
+      margin: 5px;
+      padding: 6px;
+      font-size: 14px;
+    }
+    canvas {
+      border: 1px solid #aaa;
+      margin: 10px 0;
+      max-width: 95%;
+    }
+    #viewer3d {
+      width: 600px;
+      height: 400px;
+      margin: auto;
+    }
+    .machine-settings {
+      background: #fff;
+      padding: 10px;
+      margin: 15px auto;
+      width: 90%;
+      max-width: 400px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      text-align: right;
+    }
+    .machine-settings h3 {
+      margin-top: 0;
+      color: #444;
+    }
+    label {
+      display: block;
+      margin: 6px 0 2px;
+    }
   </style>
 </head>
 <body>
   <header>
-    <h1>🛠️ CNC AI — معاينات و G-code</h1>
-    <div class="controls">
-      <button id="themeToggle" class="ghost" title="تبديل الثيم">🌙</button>
-      <a id="gcodeLink" class="ghost" href="#gcode">⚙️ اذهب إلى G-code</a>
-    </div>
+    🛠️ CncAi – معاينة و إعداد
   </header>
 
-  <div class="container">
-    <div class="card">
-      <div class="tabs" role="tablist">
-        <button id="tabPreviewBtn" class="active">📷 المعاينة</button>
-        <button id="tabGcodeBtn">⚙️ إعدادات G-code</button>
-      </div>
-
-      <!-- PREVIEW PANEL -->
-      <div id="previewPanel">
-        <div class="file-row">
-          <input id="fileInput" type="file" accept="image/*">
-        </div>
-
-        <div class="layout">
-          <div>
-            <div class="preview-block card">
-              <div class="small-muted">📷 الصورة الأصلية</div>
-              <canvas id="preview2d"></canvas>
-            </div>
-
-            <div class="preview-block card" style="margin-top:12px">
-              <div class="small-muted">🌈 خريطة الارتفاعات (Heatmap)</div>
-              <canvas id="heatmap"></canvas>
-              <div class="colormap-controls" aria-label="colormap controls">
-                <button data-map="jet">Jet</button>
-                <button data-map="hot">Hot</button>
-                <button data-map="cool">Cool</button>
-                <button data-map="gray">Gray</button>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <div class="preview-block card">
-              <div class="small-muted">🌀 المعاينة ثلاثية الأبعاد</div>
-              <div id="preview3d"></div>
-              <div class="controls-row">
-                <label class="small">🔄 سرعة:
-                  <input id="rotationSpeed" type="range" min="0" max="0.05" step="0.001" value="0.01">
-                </label>
-                <label class="small">🔍 زوم:
-                  <input id="zoomControl" type="range" min="50" max="600" step="10" value="200">
-                </label>
-                <button id="toggleWire" class="ghost">شبكة</button>
-              </div>
-              <div class="small-muted" style="margin-top:6px">⚡ تعمل على نسخة مصغّرة لتقليل استهلاك المتصفح.</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- G-CODE PANEL -->
-      <div id="gcodePanel" style="display:none;margin-top:12px">
-        <div class="card">
-          <h3 style="margin:6px 0">⚙️ توليد G-code</h3>
-
-          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-            <label class="small-muted">نوع الماكينة:
-              <select id="machineSelect">
-                <option value="router">ماكينة راوتر</option>
-                <option value="laser">قاطع ليزر</option>
-                <option value="plasma">بلازما</option>
-                <option value="printer">طابعة ثلاثية</option>
-              </select>
-            </label>
-
-            <label class="small-muted">الخامة:
-              <select id="materialSelect">
-                <option value="mdf">خشب MDF</option>
-                <option value="aluminum">ألمنيوم 6061</option>
-                <option value="acrylic">أكريليك</option>
-                <option value="pine">خشب صنوبر</option>
-              </select>
-            </label>
-
-            <label class="small-muted">عرض (مم): <input id="widthMm" type="number" value="100" style="width:110px"></label>
-            <label class="small-muted">طول (مم): <input id="heightMm" type="number" value="100" style="width:110px"></label>
-            <label class="small-muted">أقصى عمق (مم): <input id="depthMm" type="number" value="2" style="width:110px"></label>
-          </div>
-
-          <div id="machineSettings" style="margin:10px 0;font-size:13px;color:#444">
-            🔧 <span>اختر ماكينة وخامة لعرض الإعدادات هنا</span>
-          </div>
-
-          <div style="margin-top:10px;display:flex;gap:8px">
-            <button id="genG" class="primary">⚙️ توليد G-code</button>
-            <button id="dlG" class="ghost">💾 تحميل</button>
-            <button id="pasteExample" class="ghost">📄 مثال</button>
-          </div>
-
-          <div style="margin-top:10px" class="gcode-area">
-            <textarea id="gcodeOutput" placeholder="سيظهر الكود هنا..." readonly></textarea>
-            <div class="small-muted">📏 معاينة 2D لمسار G-code</div>
-            <canvas id="gcodeCanvas" width="640" height="320" style="border:1px solid #eef2ff;border-radius:8px"></canvas>
-          </div>
-        </div>
-      </div>
-
-    </div>
+  <div class="controls">
+    <input type="file" id="upload" accept="image/*">
+    <button onclick="setView('original')">📷 الصورة الأصلية</button>
+    <button onclick="setView('2d')">🖼️ 2D</button>
+    <button onclick="setView('heatmap')">🌈 Heatmap</button>
+    <button onclick="setView('3d')">🌀 3D</button>
   </div>
 
-  <footer>نسخة محسنة — إعدادات ماكينة بالعربية + خفض استهلاك المتصفح</footer>
+  <canvas id="canvas" width="500" height="400"></canvas>
+  <div id="viewer3d"></div>
 
-  <!-- three.js -->
+  <div class="controls">
+    <label>🎨 نظام الألوان:</label>
+    <select id="colormap" onchange="updateHeatmap()">
+      <option value="jet">Jet</option>
+      <option value="hot">Hot</option>
+      <option value="cool">Cool</option>
+      <option value="gray">رمادي</option>
+    </select>
+  </div>
+
+  <div class="machine-settings">
+    <h3>⚙️ إعدادات الماكينة</h3>
+    <label for="material">الخامة:</label>
+    <select id="material">
+      <option value="wood">خشب</option>
+      <option value="aluminum">ألمنيوم</option>
+      <option value="steel">فولاذ</option>
+      <option value="plastic">بلاستيك</option>
+    </select>
+
+    <label for="workSize">حجم العمل (مم):</label>
+    <input type="number" id="workSize" value="200">
+
+    <label for="feedRate">سرعة التغذية (مم/دقيقة):</label>
+    <input type="number" id="feedRate" value="1000">
+
+    <label for="depth">عمق القطع (مم):</label>
+    <input type="number" id="depth" value="2">
+
+    <button onclick="saveSettings()">💾 حفظ الإعدادات</button>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
   <script>
-  const MAX_DIM = 200; // 🔧 تقليل الاستهلاك
+    let currentView = 'original';
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    let img = new Image();
 
-  let activeTab = "preview";
-  document.getElementById("tabPreviewBtn").addEventListener("click",()=>{
-    activeTab="preview"; 
-    document.getElementById("previewPanel").style.display=""; 
-    document.getElementById("gcodePanel").style.display="none"; 
-  });
-  document.getElementById("tabGcodeBtn").addEventListener("click",()=>{
-    activeTab="gcode"; 
-    document.getElementById("previewPanel").style.display="none"; 
-    document.getElementById("gcodePanel").style.display=""; 
-  });
+    document.getElementById("upload").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          img.onload = () => {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+          }
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    });
 
-  // تحديث الإعدادات عند اختيار الماكينة/الخامة
-  const machinePresets = {
-    router:{name:"ماكينة راوتر", spindle:12000, feed:1200, plunge:300, safeZ:5},
-    laser:{name:"قاطع ليزر", power:80, speed:800, passes:1, safeZ:5},
-    plasma:{name:"بلازما", amperage:40, feed:1500, plunge:200, safeZ:10},
-    printer:{name:"طابعة ثلاثية", temp:210, travel:150, retract:5, safeZ:5}
-  };
-  const materialPresets = {
-    mdf:{name:"خشب MDF"},
-    aluminum:{name:"ألمنيوم 6061"},
-    acrylic:{name:"أكريليك"},
-    pine:{name:"خشب صنوبر"}
-  };
-
-  function updateSettings(){
-    const m=document.getElementById("machineSelect").value;
-    const mat=document.getElementById("materialSelect").value;
-    const mc=machinePresets[m], mt=materialPresets[mat];
-    let html=`🔧 <b>${mc.name}</b> + <b>${mt.name}</b><br>`;
-    for(const [k,v] of Object.entries(mc)){
-      if(k==="name") continue;
-      html+=`${k}: ${v} &nbsp; `;
+    function setView(view) {
+      currentView = view;
+      if (view === 'original') {
+        ctx.drawImage(img, 0, 0);
+        document.getElementById("viewer3d").style.display = "none";
+        canvas.style.display = "block";
+      } else if (view === '2d') {
+        ctx.drawImage(img, 0, 0);
+        ctx.strokeStyle = "red";
+        ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+        document.getElementById("viewer3d").style.display = "none";
+        canvas.style.display = "block";
+      } else if (view === 'heatmap') {
+        generateHeatmap();
+        document.getElementById("viewer3d").style.display = "none";
+        canvas.style.display = "block";
+      } else if (view === '3d') {
+        generate3D();
+        canvas.style.display = "none";
+        document.getElementById("viewer3d").style.display = "block";
+      }
     }
-    document.getElementById("machineSettings").innerHTML=html;
-  }
-  document.getElementById("machineSelect").addEventListener("change",updateSettings);
-  document.getElementById("materialSelect").addEventListener("change",updateSettings);
-  updateSettings();
 
-  // ⚡ render loop مع استهلاك أقل
-  function animate(){
-    requestAnimationFrame(animate);
-    if(activeTab==="preview" && mesh) mesh.rotation.y += rotationSpeed;
-    if(activeTab==="preview" && renderer) renderer.render(scene,camera);
-  }
-  animate();
+    function generateHeatmap() {
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      for (let i = 0; i < data.length; i += 4) {
+        const avg = (data[i] + data[i+1] + data[i+2]) / 3;
+        const colormap = document.getElementById("colormap").value;
+        let r=avg, g=avg, b=avg;
+        if (colormap === "jet") { r = avg; g = 0; b = 255-avg; }
+        if (colormap === "hot") { r = avg; g = avg/2; b = 0; }
+        if (colormap === "cool") { r = 0; g = avg; b = 255-avg; }
+        if (colormap === "gray") { r = g = b = avg; }
+        data[i]=r; data[i+1]=g; data[i+2]=b;
+      }
+      ctx.putImageData(imageData, 0, 0);
+    }
+
+    function updateHeatmap() {
+      if (currentView === "heatmap") generateHeatmap();
+    }
+
+    function generate3D() {
+      const viewer = document.getElementById("viewer3d");
+      viewer.innerHTML = "";
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(45, viewer.clientWidth/viewer.clientHeight, 0.1, 1000);
+      const renderer = new THREE.WebGLRenderer({antialias:true});
+      renderer.setSize(viewer.clientWidth, viewer.clientHeight);
+      viewer.appendChild(renderer.domElement);
+
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+      const geometry = new THREE.PlaneGeometry(10, 10, 100, 100);
+      for (let i=0; i<geometry.attributes.position.count; i++) {
+        geometry.attributes.position.setZ(i, Math.random()*2); // تبسيط الارتفاع
+      }
+
+      const material = new THREE.MeshBasicMaterial({color:0x6699ff, wireframe:true});
+      const mesh = new THREE.Mesh(geometry, material);
+      scene.add(mesh);
+
+      camera.position.z = 15;
+
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+    }
+
+    function saveSettings() {
+      const settings = {
+        material: document.getElementById("material").value,
+        workSize: document.getElementById("workSize").value,
+        feedRate: document.getElementById("feedRate").value,
+        depth: document.getElementById("depth").value
+      };
+      alert("✅ تم حفظ الإعدادات:\n" + JSON.stringify(settings, null, 2));
+    }
   </script>
 </body>
 </html>
