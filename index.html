@@ -2,19 +2,95 @@
 <html lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>CncAi - Preview</title>
-  <link rel="stylesheet" href="style.css">
+  <title>CncAi - Preview & G-code</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      direction: rtl;
+    }
+    header {
+      background: #4a90e2;
+      color: white;
+      padding: 10px;
+      text-align: center;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 22px;
+    }
+    .buttons {
+      margin-top: 10px;
+    }
+    .buttons button {
+      padding: 8px 15px;
+      margin: 3px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      background: #ddd;
+      font-weight: bold;
+    }
+    .buttons button:hover {
+      background: #bbb;
+    }
+    main {
+      padding: 15px;
+    }
+    .tab {
+      display: none;
+      text-align: center;
+    }
+    canvas {
+      max-width: 100%;
+      border: 1px solid #ccc;
+      margin-top: 10px;
+    }
+    textarea {
+      width: 100%;
+      height: 200px;
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      resize: vertical;
+      font-family: monospace;
+    }
+    #gcodePreview {
+      height: 400px;
+      background: #111;
+      color: #0f0;
+      padding: 10px;
+      overflow: auto;
+      text-align: left;
+    }
+    #preview3d {
+      width: 100%;
+      height: 400px;
+    }
+    .colormap-buttons button {
+      padding: 5px 10px;
+      margin: 3px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      background: #4a90e2;
+      color: white;
+      font-weight: bold;
+    }
+  </style>
 </head>
 <body>
   <header>
-    <h1>CncAi</h1>
+    <h1>🔧 CncAi</h1>
     <div class="buttons">
-      <button onclick="showTab('original')">الصورة الأصلية</button>
-      <button onclick="showTab('preview2d')">معاينة 2D</button>
-      <button onclick="showTab('heatmap')">Heatmap</button>
-      <button onclick="showTab('preview3d')">معاينة 3D</button>
-      <button onclick="showTab('gcode')">G-code</button>
-      <button onclick="toggleTheme()">تبديل الثيم</button>
+      <button onclick="showTab('original')">📷 الأصلية</button>
+      <button onclick="showTab('preview2d')">🖼️ 2D</button>
+      <button onclick="showTab('heatmap')">🌡️ Heatmap</button>
+      <button onclick="showTab('preview3d')">📊 3D</button>
+      <button onclick="showTab('gcode')">⚙️ G-code</button>
     </div>
   </header>
 
@@ -27,13 +103,13 @@
     </div>
 
     <!-- 2D Preview -->
-    <div id="preview2dTab" class="tab" style="display:none;">
+    <div id="preview2dTab" class="tab">
       <h2>معاينة 2D</h2>
       <canvas id="preview2dCanvas"></canvas>
     </div>
 
     <!-- Heatmap -->
-    <div id="heatmapTab" class="tab" style="display:none;">
+    <div id="heatmapTab" class="tab">
       <h2>Heatmap</h2>
       <div class="colormap-buttons">
         <button onclick="setColormap('jet')">Jet</button>
@@ -45,25 +121,181 @@
     </div>
 
     <!-- 3D Preview -->
-    <div id="preview3dTab" class="tab" style="display:none;">
+    <div id="preview3dTab" class="tab">
       <h2>معاينة 3D</h2>
+      <input type="range" id="scaleZ" min="5" max="100" value="30" oninput="updateScaleZ(this.value)">
+      <label for="scaleZ">تحكم في ارتفاع Z</label>
       <div id="preview3d"></div>
     </div>
 
     <!-- G-code -->
-    <div id="gcodeTab" class="tab" style="display:none;">
-      <h2>G-code Editor</h2>
-      <textarea id="gcodeEditor" rows="12" style="width:100%;"></textarea>
-      <div class="gcode-controls">
-        <button onclick="runGcode()">تشغيل G-code</button>
-        <button onclick="downloadGcode()">تحميل G-code</button>
+    <div id="gcodeTab" class="tab">
+      <h2>⚙️ G-code</h2>
+      <textarea id="gcodeEditor" placeholder="اكتب أو الصق G-code هنا..."></textarea>
+      <div>
+        <button onclick="generateGcode()">توليد</button>
+        <button onclick="downloadGcode()">💾 تحميل</button>
       </div>
-      <div id="gcodePreview" style="height:400px; background:#111; color:#0f0; padding:10px; overflow:auto;"></div>
+      <h3>📊 معاينة 2D للمسار</h3>
+      <canvas id="gcodeCanvas" width="500" height="500"></canvas>
     </div>
   </main>
 
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.0/examples/js/controls/OrbitControls.js"></script>
-  <script src="script.js"></script>
+  <!-- مكتبة Three.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/examples/js/controls/OrbitControls.js"></script>
+
+  <script>
+    // تبويبات
+    function showTab(tab) {
+      document.querySelectorAll(".tab").forEach(el => el.style.display = "none");
+      document.getElementById(tab + "Tab").style.display = "block";
+    }
+    showTab('original');
+
+    // ================== رفع الصورة ==================
+    const imageUpload = document.getElementById("imageUpload");
+    const originalCanvas = document.getElementById("originalCanvas");
+    const ctxOriginal = originalCanvas.getContext("2d");
+
+    imageUpload.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const img = new Image();
+      img.onload = () => {
+        originalCanvas.width = img.width;
+        originalCanvas.height = img.height;
+        ctxOriginal.drawImage(img, 0, 0);
+        draw2DPreview(img);
+        drawHeatmap(img);
+      };
+      img.src = URL.createObjectURL(file);
+    });
+
+    // ================== معاينة 2D ==================
+    function draw2DPreview(img) {
+      const canvas = document.getElementById("preview2dCanvas");
+      const ctx = canvas.getContext("2d");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+    }
+
+    // ================== Heatmap ==================
+    let currentColormap = "jet";
+    function setColormap(type) {
+      currentColormap = type;
+      if (originalCanvas.width > 0) {
+        const img = new Image();
+        img.src = originalCanvas.toDataURL();
+        img.onload = () => drawHeatmap(img);
+      }
+    }
+    function drawHeatmap(img) {
+      const canvas = document.getElementById("heatmapCanvas");
+      const ctx = canvas.getContext("2d");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+      let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      let data = imageData.data;
+      for (let i = 0; i < data.length; i += 4) {
+        let gray = (data[i] + data[i+1] + data[i+2]) / 3;
+        let color = getColorMap(gray, currentColormap);
+        data[i] = color[0];
+        data[i+1] = color[1];
+        data[i+2] = color[2];
+      }
+      ctx.putImageData(imageData, 0, 0);
+    }
+    function getColorMap(v, map) {
+      if (map === "gray") return [v, v, v];
+      if (map === "hot") return [v, v/2, 0];
+      if (map === "cool") return [0, v/2, v];
+      return [v, 0, 255-v]; // jet
+    }
+
+    // ================== معاينة 3D ==================
+    let scene, camera, renderer, controls, mesh;
+    let scaleZ = 30;
+    function init3D() {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(45, document.getElementById("preview3d").clientWidth / 400, 0.1, 1000);
+      camera.position.set(0, -150, 150);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(document.getElementById("preview3d").clientWidth, 400);
+      document.getElementById("preview3d").appendChild(renderer.domElement);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+      const light = new THREE.DirectionalLight(0xffffff, 1);
+      light.position.set(0, -1, 1).normalize();
+      scene.add(light);
+
+      create3DPlane();
+      animate();
+    }
+    function create3DPlane(width=50, height=50) {
+      if (mesh) scene.remove(mesh);
+      const geometry = new THREE.PlaneGeometry(width, height, 50, 50);
+      const material = new THREE.MeshPhongMaterial({ color: 0x4a90e2, flatShading: true });
+      mesh = new THREE.Mesh(geometry, material);
+      geometry.attributes.position.array.forEach((val, i) => {
+        if ((i+1)%3===0) geometry.attributes.position.array[i] = (Math.random()-0.5)*scaleZ;
+      });
+      geometry.computeVertexNormals();
+      scene.add(mesh);
+    }
+    function updateScaleZ(v) {
+      scaleZ = v;
+      create3DPlane();
+    }
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+    init3D();
+
+    // ================== G-code ==================
+    let gcodeText = "";
+    function generateGcode() {
+      const width = 100, height = 100, depth = 2;
+      gcodeText = `; G-code by CncAi\nG21\nG90\nG1 Z5 F500\nG0 X0 Y0\n`;
+      let path = [];
+      for (let y=0; y<=height; y+=10) {
+        for (let x=0; x<=width; x+=10) {
+          gcodeText += `G1 X${x} Y${y} Z-${depth} F300\n`;
+          path.push({x,y});
+        }
+      }
+      gcodeText += "M30\n";
+      document.getElementById("gcodeEditor").value = gcodeText;
+      drawGcodePath(path, width, height);
+    }
+    function drawGcodePath(path, width, height) {
+      const canvas = document.getElementById("gcodeCanvas");
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      const scaleX = canvas.width/width, scaleY = canvas.height/height;
+      ctx.beginPath();
+      ctx.moveTo(path[0].x*scaleX, path[0].y*scaleY);
+      for (let i=1;i<path.length;i++) {
+        ctx.lineTo(path[i].x*scaleX, path[i].y*scaleY);
+      }
+      ctx.strokeStyle = "blue";
+      ctx.stroke();
+    }
+    function downloadGcode() {
+      if (!gcodeText) { alert("مولدش الكود بعد!"); return; }
+      const blob = new Blob([gcodeText], {type:"text/plain"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "cnc_output.gcode";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
 </body>
 </html>
