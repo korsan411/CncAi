@@ -104,9 +104,22 @@
       color: #fff;
       cursor: pointer;
       border-radius: 5px;
+      margin-top: 5px;
     }
     #sidebar button:hover {
       background: #666;
+    }
+
+    /* Light Theme */
+    body.light {
+      background: #f4f4f4;
+      color: #000;
+    }
+    body.light header {
+      background: #ddd;
+    }
+    body.light canvas {
+      border-color: #999;
     }
   </style>
 </head>
@@ -152,6 +165,7 @@
     <input type="text" id="fileName" value="output.gcode">
 
     <button id="saveSettings">Save</button>
+    <button id="closeSidebar">Close</button>
   </aside>
 
   <script>
@@ -194,26 +208,42 @@
       const data = imageData.data;
       for (let i = 0; i < data.length; i += 4) {
         const avg = (data[i] + data[i+1] + data[i+2]) / 3;
-        data[i] = avg; 
+        data[i] = avg;
         data[i+1] = 0;
         data[i+2] = 255 - avg;
       }
       ctx.putImageData(imageData, 0, 0);
     }
 
+    // 🔹 3D Preview باستخدام canvas (محاكاة grid)
     function draw3D() {
-      ctx.fillStyle = "black";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "lime";
-      ctx.font = "20px Arial";
-      ctx.fillText("3D Preview (placeholder)", 20, 50);
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, w, h);
+
+      const step = 10;
+      for (let y = 0; y < h; y += step) {
+        for (let x = 0; x < w; x += step) {
+          const pixel = ctx.getImageData(x, y, 1, 1).data;
+          const brightness = (pixel[0] + pixel[1] + pixel[2]) / 3;
+          const z = brightness / 255 * 50;
+          ctx.fillStyle = `rgb(${brightness},${brightness},${255 - brightness})`;
+          ctx.fillRect(x, y - z, step, step);
+        }
+      }
     }
 
     // Sidebar toggle
     const sidebar = document.getElementById("sidebar");
     const toggleBtn = document.getElementById("sidebarToggle");
+    const closeBtn = document.getElementById("closeSidebar");
+
     toggleBtn.addEventListener("click", () => {
       sidebar.classList.toggle("open");
+    });
+    closeBtn.addEventListener("click", () => {
+      sidebar.classList.remove("open");
     });
 
     // Save settings
