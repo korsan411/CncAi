@@ -1,324 +1,644 @@
 <!DOCTYPE html>
 <html lang="ar">
 <head>
-  <meta charset="UTF-8">
-  <title>CncAi - Preview</title>
+  <meta charset="utf-8" />
+  <title>CNC AI — معاينات و G-code (Index)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    :root {
-      --bg-color: #fdfdfd;
-      --text-color: #333;
-      --header-bg: linear-gradient(90deg, #4a90e2, #67b0f5);
-      --header-text: #fff;
-      --card-bg: #fff;
-      --border-color: #ccc;
-      --button-bg: #f0f0f0;
-      --button-hover: #e0e0e0;
+    :root{
+      --bg:#fbfdff; --card:#fff; --muted:#6b7280; --accent:#2563eb;
+      --accent-2:#4a90e2;
     }
-    body.dark {
-      --bg-color: #1e1e1e;
-      --text-color: #eee;
-      --header-bg: linear-gradient(90deg, #222, #555);
-      --header-text: #f5f5f5;
-      --card-bg: #2a2a2a;
-      --border-color: #555;
-      --button-bg: #444;
-      --button-hover: #666;
-    }
-    body {
-      margin: 0;
-      font-family: "Segoe UI", Arial, sans-serif;
-      background: var(--bg-color);
-      color: var(--text-color);
-      transition: 0.3s;
-    }
-    header {
-      background: var(--header-bg);
-      color: var(--header-text);
-      padding: 10px;
-      text-align: center;
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 10px;
-    }
-    header h1 {
-      flex: 1 1 100%;
-      margin: 0;
-    }
-    header button {
-      padding: 6px 12px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      background: var(--button-bg);
-      color: var(--text-color);
-    }
-    header button:hover {
-      background: var(--button-hover);
-    }
-    main {
-      padding: 15px;
-      max-width: 900px;
-      margin: auto;
-    }
-    .tab { display: none; }
-    .tab.active { display: block; }
-    canvas {
-      max-width: 100%;
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      background: var(--card-bg);
-    }
-    .colormap-buttons, .gcode-controls, .controls3d {
-      margin: 10px 0;
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-    textarea {
-      width: 100%;
-      background: var(--card-bg);
-      color: var(--text-color);
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      padding: 8px;
-    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter, "Segoe UI", Arial; background:var(--bg); color:#111; direction:rtl}
+    header{background:linear-gradient(90deg,var(--accent),var(--accent-2)); color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between}
+    header h1{margin:0;font-size:18px}
+    header .controls{display:flex;gap:10px;align-items:center}
+    .container{max-width:1200px;margin:18px auto;padding:12px;display:grid;grid-template-columns:1fr;gap:14px}
+    .card{background:var(--card);border-radius:10px;padding:12px;box-shadow:0 8px 20px rgba(2,6,23,0.06)}
+    .file-row{display:flex;justify-content:center;padding:8px}
+    input[type=file]{padding:8px;border-radius:8px;border:1px solid #e6edf8;background:#fff}
+    .layout{display:grid;grid-template-columns:1fr 420px;gap:14px}
+    @media(max-width:980px){ .layout{grid-template-columns:1fr} }
+    .preview-block{display:flex;flex-direction:column;gap:10px;align-items:center}
+    canvas{max-width:100%;border-radius:8px;border:1px solid #e6eef8;background:#fff;display:block}
+    #preview3d canvas{width:420px;height:420px;display:block}
+    .controls-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center}
+    label.small{font-size:13px;color:var(--muted)}
+    .colormap-controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+    .colormap-controls button{padding:8px 12px;border-radius:8px;border:0;background:#f3f6fb;cursor:pointer;font-weight:600}
+    .gcode-area{display:flex;flex-direction:column;gap:8px}
+    textarea{width:100%;height:220px;padding:10px;border-radius:8px;border:1px solid #e6eef8;font-family:monospace;background:#fbfcff;resize:vertical}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    select,input[type=number]{padding:8px;border-radius:8px;border:1px solid #e6eef8}
+    button.primary{background:var(--accent);color:#fff;border:0;padding:9px 12px;border-radius:8px;cursor:pointer;font-weight:600}
+    button.ghost{background:#f3f6fb;border:0;padding:8px 10px;border-radius:8px;cursor:pointer}
+    .tabs{display:flex;gap:8px;justify-content:center;margin-bottom:8px}
+    .tabs button{padding:8px 12px;border-radius:8px;border:0;background:#eff6ff;cursor:pointer}
+    .tabs button.active{background:var(--accent);color:#fff}
+    .small-muted{font-size:13px;color:var(--muted)}
+    footer{max-width:1200px;margin:12px auto;text-align:center;color:var(--muted);font-size:13px}
+    /* dark */
+    body.dark{background:#0b1220;color:#e6eef8}
+    body.dark .card{background:#0f1724}
+    body.dark input, body.dark select, body.dark textarea{background:#071026;color:#e6eef8;border-color:#112233}
+    body.dark .colormap-controls button{background:#0b1b33;color:#fff}
   </style>
 </head>
 <body>
   <header>
-    <h1>CncAi</h1>
-    <button onclick="showTab('original')">الصورة الأصلية</button>
-    <button onclick="showTab('preview2d')">معاينة 2D</button>
-    <button onclick="showTab('heatmap')">Heatmap</button>
-    <button onclick="showTab('preview3d')">معاينة 3D</button>
-    <button onclick="showTab('gcode')">G-code</button>
-    <button onclick="toggleTheme()">تبديل الثيم</button>
+    <h1>🛠️ CNC AI — معاينات و G-code</h1>
+    <div class="controls">
+      <button id="themeToggle" class="ghost" title="تبديل الثيم">🌙</button>
+      <a id="gcodeLink" class="ghost" href="#gcode">⚙️ اذهب إلى G-code</a>
+    </div>
   </header>
 
-  <main>
-    <!-- Original -->
-    <div id="originalTab" class="tab active">
-      <h2>📷 الصورة الأصلية</h2>
-      <input type="file" id="imageUpload" accept="image/*">
-      <canvas id="originalCanvas"></canvas>
-    </div>
-
-    <!-- 2D -->
-    <div id="preview2dTab" class="tab">
-      <h2>معاينة 2D</h2>
-      <canvas id="preview2dCanvas"></canvas>
-    </div>
-
-    <!-- Heatmap -->
-    <div id="heatmapTab" class="tab">
-      <h2>🌈 Heatmap</h2>
-      <div class="colormap-buttons">
-        <button onclick="setColormap('jet')">Jet</button>
-        <button onclick="setColormap('hot')">Hot</button>
-        <button onclick="setColormap('cool')">Cool</button>
-        <button onclick="setColormap('gray')">Gray</button>
+  <div class="container">
+    <div class="card">
+      <div class="tabs" role="tablist">
+        <button id="tabPreviewBtn" class="active">📷 المعاينة</button>
+        <button id="tabGcodeBtn">⚙️ إعدادات G-code</button>
       </div>
-      <canvas id="heatmapCanvas"></canvas>
-    </div>
 
-    <!-- 3D -->
-    <div id="preview3dTab" class="tab">
-      <h2>🌀 المعاينة 3D</h2>
-      <div id="preview3d"></div>
-      <div class="controls3d">
-        <label>🔄 دوران: <input type="range" id="rotationSpeed" min="0" max="0.05" step="0.001" value="0.01"></label>
-        <label>🔍 زوم: <input type="range" id="zoomControl" min="50" max="500" step="10" value="200"></label>
-        <label>⬆️ ارتفاع Z: <input type="range" id="zScale" min="0.1" max="5" step="0.1" value="1"></label>
+      <!-- PREVIEW PANEL -->
+      <div id="previewPanel">
+        <div class="file-row">
+          <input id="fileInput" type="file" accept="image/*">
+        </div>
+
+        <div class="layout">
+          <div>
+            <div class="preview-block card">
+              <div class="small-muted">📷 الصورة الأصلية</div>
+              <canvas id="preview2d"></canvas>
+            </div>
+
+            <div class="preview-block card" style="margin-top:12px">
+              <div class="small-muted">🌈 خريطة الارتفاعات (Heatmap)</div>
+              <canvas id="heatmap"></canvas>
+              <div class="colormap-controls" aria-label="colormap controls">
+                <button data-map="jet">Jet</button>
+                <button data-map="hot">Hot</button>
+                <button data-map="cool">Cool</button>
+                <button data-map="gray">Gray</button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="preview-block card">
+              <div class="small-muted">🌀 المعاينة ثلاثية الأبعاد</div>
+              <div id="preview3d"></div>
+              <div class="controls-row">
+                <label class="small">🔄 سرعة:
+                  <input id="rotationSpeed" type="range" min="0" max="0.05" step="0.001" value="0.01">
+                </label>
+                <label class="small">🔍 زوم:
+                  <input id="zoomControl" type="range" min="50" max="600" step="10" value="200">
+                </label>
+                <button id="toggleWire" class="ghost">Toggle Wire</button>
+              </div>
+              <div class="small-muted" style="margin-top:6px">تنبيه: بناة الـ3D تعمل على نسخة مصغّرة لتقليل استهلاك المتصفح.</div>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
 
-    <!-- G-code -->
-    <div id="gcodeTab" class="tab">
-      <h2>🛠️ G-code Generator</h2>
-      <label>اختر نوع الماكينة:</label>
-      <select id="machineType">
-        <option value="laser">Laser Cutter</option>
-        <option value="router">CNC Router</option>
-        <option value="printer">3D Printer</option>
-      </select>
-      <br><br>
-      <label>اختر الخامة:</label>
-      <select id="material">
-        <option value="wood">خشب</option>
-        <option value="acrylic">أكريليك</option>
-        <option value="aluminum">ألومنيوم</option>
-        <option value="pla">PLA (طباعة ثلاثية)</option>
-      </select>
-      <div class="gcode-controls">
-        <button onclick="generateGcode()">توليد G-code</button>
-        <button onclick="downloadGcode()">تحميل G-code</button>
+      <!-- G-CODE PANEL -->
+      <div id="gcodePanel" style="display:none;margin-top:12px">
+        <div class="card">
+          <h3 style="margin:6px 0">توليد G-code</h3>
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <label class="small-muted">نوع الماكينة:
+              <select id="machineSelect">
+                <option value="router">CNC Router</option>
+                <option value="laser">Laser Cutter</option>
+                <option value="plasma">CNC Plasma</option>
+                <option value="printer">3D Printer</option>
+              </select>
+            </label>
+
+            <label class="small-muted">الخامة:
+              <select id="materialSelect">
+                <option value="mdf">MDF 12mm</option>
+                <option value="aluminum">Aluminum 6061</option>
+                <option value="acrylic">Acrylic</option>
+                <option value="pine">Pine Wood</option>
+              </select>
+            </label>
+
+            <label class="small-muted">عرض (مم): <input id="widthMm" type="number" value="100" style="width:110px"></label>
+            <label class="small-muted">طول (مم): <input id="heightMm" type="number" value="100" style="width:110px"></label>
+            <label class="small-muted">أقصى عمق (مم): <input id="depthMm" type="number" value="2" style="width:110px"></label>
+          </div>
+
+          <div style="margin-top:10px;display:flex;gap:8px">
+            <button id="genG" class="primary">⚙️ توليد G-code</button>
+            <button id="dlG" class="ghost">💾 تحميل</button>
+            <button id="pasteExample" class="ghost">عرض مثال افتراضي</button>
+          </div>
+
+          <div style="margin-top:10px" class="gcode-area">
+            <textarea id="gcodeOutput" placeholder="سيظهر الكود هنا..." readonly></textarea>
+            <div class="small-muted">معاينة 2D لمسار G-code</div>
+            <canvas id="gcodeCanvas" width="640" height="320" style="border:1px solid #eef2ff;border-radius:8px"></canvas>
+          </div>
+        </div>
       </div>
-      <textarea id="gcodeEditor" rows="12"></textarea>
-    </div>
-  </main>
 
-  <!-- مكتبات 3D -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.0/examples/js/controls/OrbitControls.js"></script>
+    </div>
+  </div>
+
+  <footer>نسخة مدمجة — تحكم في المعاينات والإعدادات ثم حمل G-code. (Max mesh dim: 240 لتحاشي تجميد المتصفح)</footer>
+
+  <!-- three.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
 
   <script>
-    // Tabs
-    function showTab(tab) {
-      document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
-      document.getElementById(tab+'Tab').classList.add('active');
-    }
+  /*****************************************************************
+   * CNC AI - Index (single file)
+   * - Preview: image, heatmap, 3D (safe/responsive)
+   * - G-code tab with machine & material presets, generator + preview
+   *****************************************************************/
 
-    // Theme
-    function toggleTheme() {
-      document.body.classList.toggle("dark");
-    }
+  // ---------- state ----------
+  const fileInput = document.getElementById('fileInput');
+  const preview2d = document.getElementById('preview2d');
+  const ctx2d = preview2d.getContext('2d');
+  const heatmap = document.getElementById('heatmap');
+  const ctxHeat = heatmap.getContext('2d');
+  const preview3d = document.getElementById('preview3d');
 
-    // Image upload
-    const upload = document.getElementById('imageUpload');
-    const originalCanvas = document.getElementById('originalCanvas');
-    const ctxOriginal = originalCanvas.getContext('2d');
-    const preview2dCanvas = document.getElementById('preview2dCanvas');
-    const ctx2d = preview2dCanvas.getContext('2d');
-    const heatmapCanvas = document.getElementById('heatmapCanvas');
-    const ctxHeat = heatmapCanvas.getContext('2d');
+  const rotationSpeedInput = document.getElementById('rotationSpeed');
+  const zoomControl = document.getElementById('zoomControl');
 
-    let currentImage = null;
-    let currentColormap = "jet";
+  const MAX_DIM = 240; // downsample limit for mesh & heatmap
 
-    upload.addEventListener('change', e => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const img = new Image();
-      img.onload = () => {
-        currentImage = img;
-        originalCanvas.width = img.width;
-        originalCanvas.height = img.height;
-        ctxOriginal.drawImage(img, 0, 0);
-        preview2dCanvas.width = img.width;
-        preview2dCanvas.height = img.height;
-        ctx2d.drawImage(img, 0, 0);
-        drawHeatmap();
-        createHeightMap();
-      };
-      img.src = URL.createObjectURL(file);
+  let heightData = null; // 2D array [row][col] normalized 0..1
+  let heightW = 0, heightH = 0;
+  let currentColormap = 'jet';
+
+  // 3D objects
+  let scene, camera, renderer, mesh;
+  let rotationSpeed = parseFloat(rotationSpeedInput.value);
+  let wireframe = false;
+
+  // G-code variables
+  let latestGcode = '';
+
+  // Machine presets
+  const machinePresets = {
+    router: { name: 'CNC Router', spindle: 12000, feed: 1200, plunge: 300, safeZ: 5 },
+    laser:  { name: 'Laser Cutter', power: 80, speed: 800, passes: 1, safeZ: 5 },
+    plasma: { name: 'CNC Plasma', amperage: 40, feed: 1500, plunge: 200, safeZ: 10 },
+    printer:{ name: '3D Printer', temp: 210, travel: 150, retract: 5, safeZ: 5 }
+  };
+
+  const materialPresets = {
+    mdf: { name:'MDF 12mm', spindleMul:1.0, laserPower:70 },
+    aluminum: { name:'Aluminum 6061', spindleMul:0.25, plungeMul:0.4 },
+    acrylic: { name:'Acrylic', spindleMul:0.6, laserPower:60 },
+    pine: { name:'Pine Wood', spindleMul:1.1, laserPower:50 }
+  };
+
+  // ---------- UI: tabs & theme ----------
+  document.getElementById('tabPreviewBtn').addEventListener('click', () => {
+    document.getElementById('previewPanel').style.display = '';
+    document.getElementById('gcodePanel').style.display = 'none';
+    document.getElementById('tabPreviewBtn').classList.add('active');
+    document.getElementById('tabGcodeBtn').classList.remove('active');
+  });
+  document.getElementById('tabGcodeBtn').addEventListener('click', () => {
+    document.getElementById('previewPanel').style.display = 'none';
+    document.getElementById('gcodePanel').style.display = '';
+    document.getElementById('tabPreviewBtn').classList.remove('active');
+    document.getElementById('tabGcodeBtn').classList.add('active');
+  });
+
+  const themeToggle = document.getElementById('themeToggle');
+  themeToggle.addEventListener('click', () => {
+    document.body.classList.toggle('dark');
+    themeToggle.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
+  });
+
+  // ---------- colormap buttons ----------
+  document.querySelectorAll('.colormap-controls button').forEach(btn=>{
+    btn.addEventListener('click', () => {
+      currentColormap = btn.dataset.map;
+      if (heightData) drawHeatmap(heightData, heightW, heightH);
+      if (mesh) applyVertexColors();
     });
+  });
 
-    // Colormap
-    function setColormap(map) {
-      currentColormap = map;
-      if (currentImage) {
-        drawHeatmap();
-        createHeightMap();
+  // ---------- file load ----------
+  fileInput.addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      // Draw original 2D preview (full resolution canvas)
+      preview2d.width = img.width;
+      preview2d.height = img.height;
+      ctx2d.clearRect(0,0,preview2d.width, preview2d.height);
+      ctx2d.drawImage(img, 0, 0);
+
+      // prepare downsampled image for height extraction
+      const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
+      heightW = Math.max(2, Math.floor(img.width * scale));
+      heightH = Math.max(2, Math.floor(img.height * scale));
+      const tmp = document.createElement('canvas'); tmp.width = heightW; tmp.height = heightH;
+      const tctx = tmp.getContext('2d');
+      tctx.drawImage(img, 0, 0, heightW, heightH);
+      const rgba = tctx.getImageData(0,0,heightW,heightH).data;
+
+      // build normalized luminance map
+      heightData = new Array(heightH);
+      for (let y=0;y<heightH;y++){
+        const row = new Float32Array(heightW);
+        for (let x=0;x<heightW;x++){
+          const i = (y*heightW + x)*4;
+          const r = rgba[i], g = rgba[i+1], b = rgba[i+2];
+          const lum = (0.299*r + 0.587*g + 0.114*b) / 255;
+          row[x] = lum;
+        }
+        heightData[y] = row;
+      }
+
+      drawHeatmap(heightData, heightW, heightH);
+      create3DMesh(heightData, heightW, heightH);
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  });
+
+  // ---------- heatmap ----------
+  function getHeatColor(v, map){
+    v = Math.max(0, Math.min(1, v));
+    let r=0,g=0,b=0;
+    if (map==='jet'){
+      r = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*v-3),1),0));
+      g = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*v-2),1),0));
+      b = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*v-1),1),0));
+    } else if (map==='hot'){
+      r = Math.floor(255 * Math.min(1, 3*v));
+      g = Math.floor(255 * Math.min(1, 3*v-1)); g = Math.max(g,0);
+      b = Math.floor(255 * Math.min(1, 3*v-2)); b = Math.max(b,0);
+    } else if (map==='cool'){
+      r = Math.floor(255 * v);
+      g = Math.floor(255 * (1-v));
+      b = 255;
+    } else {
+      r=g=b = Math.floor(255 * v);
+    }
+    return {r,g,b};
+  }
+
+  function drawHeatmap(hData, w, h){
+    // compute min/max for contrast
+    let min=1, max=0;
+    for (let y=0;y<h;y++){
+      for (let x=0;x<w;x++){
+        const v = hData[y][x];
+        if (v < min) min = v;
+        if (v > max) max = v;
       }
     }
-
-    function getHeatColor(value, map) {
-      let r=0,g=0,b=0;
-      if(map==='jet'){ 
-        r = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-3),1),0));
-        g = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-2),1),0));
-        b = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-1),1),0));
-      } else if(map==='hot'){ 
-        r = Math.min(255, value*3*255);
-        g = Math.min(255, Math.max(0,(value*3-1)*255));
-        b = Math.min(255, Math.max(0,(value*3-2)*255));
-      } else if(map==='cool'){ r=255*value; g=255*(1-value); b=255; }
-      else if(map==='gray'){ r=g=b=255*value; }
-      return {r,g,b};
+    const span = (max-min) || 1;
+    const img = ctxHeat.createImageData(w, h);
+    for (let y=0;y<h;y++){
+      for (let x=0;x<w;x++){
+        const i = (y*w + x)*4;
+        const norm = (hData[y][x] - min)/span;
+        const c = getHeatColor(norm, currentColormap);
+        img.data[i]=c.r; img.data[i+1]=c.g; img.data[i+2]=c.b; img.data[i+3]=255;
+      }
     }
+    // draw to temp and scale to displayed canvas to keep "pixel mapping"
+    const tmp = document.createElement('canvas'); tmp.width = w; tmp.height = h;
+    tmp.getContext('2d').putImageData(img, 0, 0);
 
-    function drawHeatmap() {
-      const w = currentImage.width, h = currentImage.height;
-      heatmapCanvas.width = w; heatmapCanvas.height = h;
-      const tempCtx = document.createElement("canvas").getContext("2d");
-      tempCtx.canvas.width = w; tempCtx.canvas.height = h;
-      tempCtx.drawImage(currentImage, 0, 0);
-      const imgData = tempCtx.getImageData(0,0,w,h);
-      for (let i=0;i<w*h;i++) {
-        const v = imgData.data[i*4]/255;
+    // compute display size
+    const maxDisplayW = Math.min(420, window.innerWidth - 80);
+    const dispW = Math.round(maxDisplayW);
+    const dispH = Math.round((h / w) * dispW);
+    heatmap.width = dispW; heatmap.height = dispH;
+    ctxHeat.imageSmoothingEnabled = false;
+    ctxHeat.clearRect(0,0,dispW,dispH);
+    ctxHeat.drawImage(tmp, 0, 0, dispW, dispH);
+  }
+
+  // ---------- 3D (safe) ----------
+  function ensure3D(){
+    if (renderer) return;
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
+    renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
+    const size = Math.min(420, Math.floor(window.innerWidth * 0.45));
+    renderer.setSize(size, size);
+    preview3d.innerHTML = '';
+    preview3d.appendChild(renderer.domElement);
+
+    const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+    dir.position.set(0,1,1).normalize();
+    scene.add(dir);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+
+    camera.position.set(0, -140, 120);
+    camera.lookAt(0,0,0);
+
+    // pointer rotation simple
+    let dragging=false, lastX=0, lastY=0;
+    preview3d.addEventListener('pointerdown', e=>{ dragging=true; lastX=e.clientX; lastY=e.clientY;});
+    window.addEventListener('pointerup', ()=>dragging=false);
+    window.addEventListener('pointermove', e=>{
+      if(!dragging || !mesh) return;
+      const dx = e.clientX - lastX; const dy = e.clientY - lastY;
+      lastX = e.clientX; lastY = e.clientY;
+      mesh.rotation.y += dx * 0.01;
+      mesh.rotation.x += dy * 0.01;
+    });
+  }
+
+  function create3DMesh(hData, w, h){
+    ensure3D();
+    // downsample for geometry to avoid too many vertices
+    const step = Math.ceil(Math.max(1, Math.max(w,h) / MAX_DIM));
+    const cols = Math.ceil(w / step);
+    const rows = Math.ceil(h / step);
+    const size = 160;
+    const geometry = new THREE.PlaneGeometry(size, size, cols-1, rows-1);
+
+    // set z from data
+    for (let j=0;j<rows;j++){
+      for (let i=0;i<cols;i++){
+        const idx = j*cols + i;
+        const xSrc = Math.min(w-1, i*step);
+        const ySrc = Math.min(h-1, j*step);
+        const val = hData[ySrc][xSrc];
+        const z = (val - 0.5) * 60; // scale and center
+        geometry.attributes.position.setZ(idx, z);
+      }
+    }
+    geometry.computeVertexNormals();
+
+    // colors
+    const colors = [];
+    for (let j=0;j<rows;j++){
+      for (let i=0;i<cols;i++){
+        const xSrc = Math.min(w-1, i*step);
+        const ySrc = Math.min(h-1, j*step);
+        const v = hData[ySrc][xSrc];
         const c = getHeatColor(v, currentColormap);
-        imgData.data[i*4]=c.r; imgData.data[i*4+1]=c.g; imgData.data[i*4+2]=c.b; imgData.data[i*4+3]=255;
+        colors.push(c.r/255, c.g/255, c.b/255);
       }
-      ctxHeat.putImageData(imgData,0,0);
+    }
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+    const mat = new THREE.MeshLambertMaterial({vertexColors:true, side:THREE.DoubleSide, wireframe:wireframe});
+    if (mesh){ scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose(); mesh=null; }
+    mesh = new THREE.Mesh(geometry, mat);
+    mesh.rotation.x = -Math.PI/2;
+    scene.add(mesh);
+  }
+
+  function applyVertexColors(){
+    if(!mesh || !heightData) return;
+    const geom = mesh.geometry;
+    const pos = geom.attributes.position;
+    const count = pos.count;
+    const colors = [];
+    const segX = geom.parameters.widthSegments + 1;
+    const segY = geom.parameters.heightSegments + 1;
+    for (let i=0;i<count;i++){
+      const ix = i % segX;
+      const iy = Math.floor(i / segX);
+      const xSrc = Math.min(heightW-1, Math.floor(ix * (heightW / segX)));
+      const ySrc = Math.min(heightH-1, Math.floor(iy * (heightH / segY)));
+      const v = heightData[ySrc][xSrc];
+      const c = getHeatColor(v, currentColormap);
+      colors.push(c.r/255, c.g/255, c.b/255);
+    }
+    geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geom.attributes.color.needsUpdate = true;
+  }
+
+  // render loop
+  function animate3D(){
+    requestAnimationFrame(animate3D);
+    if (mesh) mesh.rotation.y += rotationSpeed;
+    if (renderer && camera) renderer.render(scene, camera);
+  }
+  animate3D();
+
+  // controls
+  rotationSpeedInput.addEventListener('input', e => { rotationSpeed = parseFloat(e.target.value); });
+  zoomControl.addEventListener('input', e => {
+    const z = parseFloat(e.target.value);
+    if (camera) camera.position.set(0, -z*0.7, z*0.9);
+  });
+  document.getElementById('toggleWire').addEventListener('click', () => {
+    wireframe = !wireframe;
+    if (mesh) mesh.material.wireframe = wireframe;
+  });
+
+  // ---------- G-code generation ----------
+  function buildExampleFor(machine, material){
+    const m = machinePresets[machine];
+    const mat = materialPresets[material];
+    let text = `; Example for ${m.name} on ${mat.name}\n`;
+    if (machine==='router'){
+      const spindle = Math.round(m.spindle * (mat.spindleMul || 1));
+      text += `M3 S${spindle} ; spindle on\nG21\nG90\nG0 Z${m.safeZ}\n`;
+      text += `; feed ${m.feed} mm/min plunge ${m.plunge} mm/min\n`;
+      text += `; (مثال مسار بسيط)\nG0 X0 Y0\nG1 X50 Y0 Z-1.0 F${m.feed}\nG1 X50 Y50 Z-1.0\nG1 X0 Y50 Z-1.0\nG0 Z${m.safeZ}\nM5\n`;
+    } else if (machine==='laser'){
+      text += `; Laser example\nM4 ; laser on (modulate)\nG21\nG90\nG0 X0 Y0\nG1 X50 Y0 F${m.speed} S${m.power || mat.laserPower}\nM5\n`;
+    } else if (machine==='plasma'){
+      text += `; Plasma example\nM3 S${m.amperage}\nG21\nG90\nG0 Z${m.safeZ}\nG0 X0 Y0\nG1 X50 Y0 F${m.feed}\nG0 Z${m.safeZ}\nM5\n`;
+    } else if (machine==='printer'){
+      text += `; 3D Printer example\n; Set temp ${m.temp}\nG21\nG90\nG28 ; home\nG1 Z0.2 F${m.travel}\nG1 X50 Y0 F${m.travel}\n`;
+    }
+    return text;
+  }
+
+  document.getElementById('pasteExample').addEventListener('click', ()=>{
+    const machine = document.getElementById('machineSelect').value;
+    const material = document.getElementById('materialSelect').value;
+    document.getElementById('gcodeOutput').value = buildExampleFor(machine, material);
+  });
+
+  document.getElementById('genG').addEventListener('click', ()=>{
+    generateGcode();
+  });
+
+  document.getElementById('dlG').addEventListener('click', ()=>{
+    if (!latestGcode){ alert('من فضلك قم بتوليد الكود أولاً'); return; }
+    const blob = new Blob([latestGcode], {type:'text/plain'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'cnc_output.gcode';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  function generateGcode(){
+    const machine = document.getElementById('machineSelect').value;
+    const material = document.getElementById('materialSelect').value;
+    const width = parseFloat(document.getElementById('widthMm').value) || 100;
+    const height = parseFloat(document.getElementById('heightMm').value) || 100;
+    const maxDepth = parseFloat(document.getElementById('depthMm').value) || 2;
+
+    // if no image, produce simple grid demo
+    if (!heightData){
+      latestGcode = buildExampleFor(machine, material);
+      document.getElementById('gcodeOutput').value = latestGcode;
+      drawGcodePreviewSimpleGrid(width, height);
+      return;
     }
 
-    // 3D
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({antialias:true});
-    renderer.setSize(500, 500);
-    document.getElementById("preview3d").appendChild(renderer.domElement);
-    const controls = new THREE.OrbitControls(camera, renderer.domElement);
-    camera.position.z = 200;
-    const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(0,1,1).normalize();
-    scene.add(light);
-    let mesh;
+    // Map heightData to mm grid
+    const px = width / heightW;
+    const py = height / heightH;
 
-    function createHeightMap() {
-      if (!currentImage) return;
-      const w = currentImage.width, h = currentImage.height;
-      const tempCtx = document.createElement("canvas").getContext("2d");
-      tempCtx.canvas.width=w; tempCtx.canvas.height=h;
-      tempCtx.drawImage(currentImage,0,0);
-      const imgData = tempCtx.getImageData(0,0,w,h).data;
+    const lines = [];
+    const m = machinePresets[machine];
+    lines.push(`(Generated by CNC AI - ${m.name} | Material: ${materialPresets[material].name})`);
+    lines.push('G21');
+    lines.push('G90');
 
-      const geometry = new THREE.PlaneGeometry(100,100,w-1,h-1);
-      const colors = [];
-      for (let i=0;i<geometry.attributes.position.count;i++) {
-        const x=i%w, y=Math.floor(i/w);
-        const idx=(y*w+x)*4;
-        const brightness=imgData[idx]/255;
-        geometry.attributes.position.array[i*3+2]=brightness*10;
-        const c=getHeatColor(brightness,currentColormap);
-        colors.push(c.r/255,c.g/255,c.b/255);
+    if (machine === 'router' || machine === 'plasma') {
+      lines.push(`M3 S${m.spindle || m.amperage || 1000}`);
+      lines.push(`G0 Z${m.safeZ}`);
+    } else if (machine === 'laser') {
+      lines.push(`M4 S${materialPresets[material].laserPower || 60}`);
+    } else if (machine === 'printer') {
+      lines.push('G28');
+    }
+
+    const pathPoints = [];
+    // serpentine raster
+    for (let y=0;y<heightH;y++){
+      const y_mm = y * py;
+      if (y % 2 === 0){
+        for (let x=0;x<heightW;x++){
+          const val = heightData[y][x];
+          const depth = (1 - val) * maxDepth;
+          const x_mm = x * px;
+          // move then plunge
+          lines.push(`G0 X${x_mm.toFixed(3)} Y${y_mm.toFixed(3)}`);
+          if (machine !== 'laser' && machine !== 'printer') {
+            lines.push(`G1 Z-${depth.toFixed(3)} F${m.plunge || 300}`);
+            lines.push(`G1 Z${m.safeZ}`);
+          } else if (machine === 'laser'){
+            lines.push(`; Laser pass at power ${materialPresets[material].laserPower || 60}`);
+          } else if (machine === 'printer'){
+            lines.push(`; 3D print move (not G-code height cut)`);
+          }
+          pathPoints.push({x:x_mm, y:y_mm});
+        }
+      } else {
+        for (let x=heightW-1;x>=0;x--){
+          const val = heightData[y][x];
+          const depth = (1 - val) * maxDepth;
+          const x_mm = x * px;
+          lines.push(`G0 X${x_mm.toFixed(3)} Y${y_mm.toFixed(3)}`);
+          if (machine !== 'laser' && machine !== 'printer') {
+            lines.push(`G1 Z-${depth.toFixed(3)} F${m.plunge || 300}`);
+            lines.push(`G1 Z${m.safeZ}`);
+          } else if (machine === 'laser'){
+            lines.push(`; Laser pass`);
+          } else if (machine === 'printer'){
+            lines.push(`; print move`);
+          }
+          pathPoints.push({x:x_mm, y:y_mm});
+        }
       }
-      geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors,3));
-      geometry.computeVertexNormals();
-      const material=new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide});
-      if(mesh) scene.remove(mesh);
-      mesh=new THREE.Mesh(geometry,material);
-      scene.add(mesh);
+      // safe lift at end of row
+      if (machine !== 'laser' && machine !== 'printer') lines.push(`G0 Z${m.safeZ}`);
     }
 
-    let rotationSpeed=0.01, zScale=1;
-    document.getElementById("rotationSpeed").addEventListener("input",e=>rotationSpeed=parseFloat(e.target.value));
-    document.getElementById("zoomControl").addEventListener("input",e=>camera.position.z=parseFloat(e.target.value));
-    document.getElementById("zScale").addEventListener("input",e=>{
-      zScale=parseFloat(e.target.value);
-      if(mesh){
-        mesh.scale.z=zScale;
+    lines.push('M5'); lines.push('M30');
+
+    latestGcode = lines.join('\n');
+    document.getElementById('gcodeOutput').value = latestGcode;
+    drawGcodePathPreview(pathPoints, width, height);
+  }
+
+  // ---------- path preview ----------
+  const gcodeCanvas = document.getElementById('gcodeCanvas');
+  const gctx = gcodeCanvas.getContext('2d');
+
+  function drawGcodePathPreview(points, widthMM, heightMM){
+    const c = gcodeCanvas;
+    const ctx = gctx;
+    ctx.clearRect(0,0,c.width,c.height);
+    if (!points || points.length===0) return;
+    const padding = 16;
+    const scaleX = (c.width - padding*2) / widthMM;
+    const scaleY = (c.height - padding*2) / heightMM;
+    ctx.beginPath();
+    ctx.strokeStyle = '#0b61ff';
+    ctx.lineWidth = 0.9;
+    ctx.moveTo(padding + points[0].x*scaleX, padding + points[0].y*scaleY);
+    for (let i=1;i<points.length;i++){
+      const p = points[i];
+      ctx.lineTo(padding + p.x*scaleX, padding + p.y*scaleY);
+    }
+    ctx.stroke();
+  }
+
+  function drawGcodePreviewSimpleGrid(width, height){
+    const pts = [];
+    const step = Math.max(5, Math.min(20, Math.round(Math.min(width,height)/10)));
+    for (let y=0;y<=height;y+=step){
+      for (let x=0;x<=width;x+=step){
+        pts.push({x,y});
       }
-    });
+    }
+    drawGcodePathPreview(pts, width, height);
+  }
 
-    function animate(){
-      requestAnimationFrame(animate);
-      if(mesh) mesh.rotation.y+=rotationSpeed;
-      renderer.render(scene,camera);
+  // ---------- safety & resize ----------
+  window.addEventListener('resize', () => {
+    if (heightData) drawHeatmap(heightData, heightW, heightH);
+    if (renderer){
+      const size = Math.min(420, Math.floor(window.innerWidth*0.45));
+      renderer.setSize(size, size);
+      if (camera){ camera.aspect = 1; camera.updateProjectionMatrix(); }
     }
-    animate();
+  });
 
-    // G-code
-    function generateGcode(){
-      const machine=document.getElementById("machineType").value;
-      const material=document.getElementById("material").value;
-      let gcode="; G-code Generated\n";
-      gcode+=`; Machine: ${machine}\n; Material: ${material}\n`;
-      if(machine==="laser") gcode+="M3 S1000 ; Laser ON\n";
-      if(machine==="router") gcode+="M3 ; Spindle ON\nF500 ; Feedrate\n";
-      if(machine==="printer") gcode+="M104 S200 ; Set extruder temp\nM109 S200\n";
-      gcode+="G0 X0 Y0 Z0\n";
-      gcode+="; Path example\nG1 X10 Y10 Z-1 F300\nG1 X20 Y10 Z-1\nG1 X20 Y20 Z-1\n";
-      document.getElementById("gcodeEditor").value=gcode;
-    }
-    function downloadGcode(){
-      const blob=new Blob([document.getElementById("gcodeEditor").value],{type:"text/plain"});
-      const a=document.createElement("a");
-      a.href=URL.createObjectURL(blob);
-      a.download="cnc_output.gcode";
-      a.click();
-    }
+  // ---------- initial setup ----------
+  // set colormap data attributes
+  document.querySelectorAll('.colormap-controls button').forEach((b, i)=>{
+    const maps = ['jet','hot','cool','gray'];
+    b.dataset.map = maps[i];
+  });
+
+  // pre-select default machine/material
+  document.getElementById('machineSelect').value = 'router';
+  document.getElementById('materialSelect').value = 'mdf';
+
+  // link anchor to G-code panel
+  document.getElementById('gcodeLink').addEventListener('click', (e)=>{
+    e.preventDefault();
+    document.getElementById('tabGcodeBtn').click();
+    window.scrollTo({top:0, behavior:'smooth'});
+  });
+
+  // Start 3D renderer lazily once user loads image or clicks preview tab
+  document.getElementById('tabPreviewBtn').addEventListener('click', () => {
+    // ensure renderer exists if user interacted
+    if (!renderer) ensure3D();
+  });
+
+  // ensure 3D on first load (keeps stable)
+  ensure3D();
+
   </script>
 </body>
 </html>
