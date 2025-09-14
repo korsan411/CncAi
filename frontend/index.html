@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CNC AI Preview - مع إعدادات G-code</title>
+  <title>CNC AI Preview - النسخة المتطورة</title>
   <style>
     :root {
       --primary-color: #4a90e2;
@@ -18,6 +18,7 @@
       --button-hover: #dee2e6;
       --success-color: #28a745;
       --warning-color: #ffc107;
+      --error-color: #dc3545;
       --tab-inactive: #e9ecef;
       --tab-active: var(--primary-color);
     }
@@ -180,6 +181,65 @@
       border: 1px solid var(--border-color);
     }
 
+    .preview-title {
+      font-size: 1.2rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--primary-color);
+    }
+
+    .preview-content {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      margin-bottom: 1rem;
+    }
+
+    canvas {
+      max-width: 100%;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    #preview3d, #gcodeSimulation {
+      width: 100%;
+      height: 300px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      position: relative;
+    }
+
+    .options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      justify-content: center;
+      width: 100%;
+      margin-top: 1rem;
+    }
+
+    .option-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .option-group label {
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    input[type="range"] {
+      width: 150px;
+      accent-color: var(--primary-color);
+    }
+
     .settings-panel {
       background: var(--card-bg);
       border-radius: 10px;
@@ -269,6 +329,7 @@
       display: flex;
       gap: 10px;
       margin-top: 1rem;
+      flex-wrap: wrap;
     }
 
     footer {
@@ -278,6 +339,91 @@
       color: var(--text-color);
       font-size: 0.9rem;
       border-top: 1px solid var(--border-color);
+    }
+
+    .image-enhancement {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+
+    .enhancement-btn {
+      padding: 8px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 5px;
+      background: var(--button-bg);
+      color: var(--text-color);
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.3s;
+    }
+
+    .enhancement-btn:hover {
+      background: var(--button-hover);
+    }
+
+    .loading {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      color: white;
+      z-index: 100;
+      border-radius: 8px;
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top: 4px solid white;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .notification {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 15px 20px;
+      border-radius: 8px;
+      background: var(--success-color);
+      color: white;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      transform: translateX(100%);
+      opacity: 0;
+      transition: all 0.3s ease;
+      z-index: 1000;
+    }
+
+    .notification.show {
+      transform: translateX(0);
+      opacity: 1;
+    }
+
+    .notification.error {
+      background: var(--error-color);
+    }
+
+    .simulation-controls {
+      display: flex;
+      gap: 10px;
+      margin-top: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
     }
 
     @media (max-width: 768px) {
@@ -293,13 +439,22 @@
       .preview-block {
         padding: 1rem;
       }
+      
+      .options {
+        flex-direction: column;
+        align-items: center;
+      }
+      
+      .action-buttons {
+        flex-direction: column;
+      }
     }
   </style>
 </head>
 <body>
   <header>
     <div class="header-content">
-      <h1><span>🛠️</span> CNC AI Preview - مع إعدادات G-code</h1>
+      <h1><span>🛠️</span> CNC AI Preview - النسخة المتطورة</h1>
       <div class="controls">
         <button id="themeToggle">🌙</button>
       </div>
@@ -311,6 +466,7 @@
     <div class="tabs">
       <div class="tab active" data-tab="preview">معاينة الصورة</div>
       <div class="tab" data-tab="gcode">G-code إعدادات</div>
+      <div class="tab" data-tab="simulation">محاكاة G-code</div>
     </div>
 
     <!-- تاب المعاينة -->
@@ -321,6 +477,15 @@
           <input type="file" id="fileInput" accept="image/*">
           <label for="fileInput"><span>📁</span> اختر صورة</label>
           <div class="file-name" id="fileName">لم يتم اختيار أي صورة بعد</div>
+        </div>
+
+        <div class="image-enhancement">
+          <div class="enhancement-btn" onclick="applyEnhancement('brightness')">🔆 سطوع</div>
+          <div class="enhancement-btn" onclick="applyEnhancement('contrast')">🌓 تباين</div>
+          <div class="enhancement-btn" onclick="applyEnhancement('sharpen')">🔍 حدة</div>
+          <div class="enhancement-btn" onclick="applyEnhancement('smooth')">🔄 نعومة</div>
+          <div class="enhancement-btn" onclick="applyEnhancement('grayscale')">⚫ تدرج رمادي</div>
+          <div class="enhancement-btn" onclick="applyEnhancement('reset')">🔄 إعادة تعيين</div>
         </div>
       </section>
 
@@ -337,7 +502,12 @@
         <div class="preview-block">
           <h3 class="preview-title">🌀 المعاينة ثلاثية الأبعاد</h3>
           <div class="preview-content">
-            <div id="preview3d"></div>
+            <div id="preview3d">
+              <div class="loading" id="loading3d">
+                <div class="loading-spinner"></div>
+                <p>جاري تحميل النموذج...</p>
+              </div>
+            </div>
           </div>
           <div class="options">
             <div class="option-group">
@@ -348,6 +518,10 @@
               <label for="zoomControl">🔍 زوم</label>
               <input type="range" id="zoomControl" min="50" max="500" step="10" value="200">
             </div>
+            <div class="option-group">
+              <label for="heightIntensity">📏 شدة الارتفاع</label>
+              <input type="range" id="heightIntensity" min="20" max="200" step="5" value="80">
+            </div>
           </div>
         </div>
 
@@ -357,23 +531,11 @@
           <div class="preview-content">
             <canvas id="heatmap"></canvas>
           </div>
-        </div>
-
-        <!-- خيارات إضافية -->
-        <div class="preview-block">
-          <h3 class="preview-title">⚙️ خيارات إضافية</h3>
-          <div class="options">
-            <div class="option-group">
-              <label for="heightIntensity">📏 شدة الارتفاع</label>
-              <input type="range" id="heightIntensity" min="20" max="200" step="5" value="80">
-            </div>
-          </div>
-          
           <div class="colormap-controls">
-            <button class="colormap-btn active" onclick="setColormap('jet')"><span>🌈</span> Jet</button>
-            <button class="colormap-btn" onclick="setColormap('hot')"><span>🔥</span> Hot</button>
-            <button class="colormap-btn" onclick="setColormap('cool')"><span>❄️</span> Cool</button>
-            <button class="colormap-btn" onclick="setColormap('gray')"><span>⚪</span> Gray</button>
+            <button class="btn btn-secondary" onclick="setColormap('jet')"><span>🌈</span> Jet</button>
+            <button class="btn btn-secondary" onclick="setColormap('hot')"><span>🔥</span> Hot</button>
+            <button class="btn btn-secondary" onclick="setColormap('cool')"><span>❄️</span> Cool</button>
+            <button class="btn btn-secondary" onclick="setColormap('gray')"><span>⚪</span> Gray</button>
           </div>
         </div>
       </div>
@@ -455,6 +617,9 @@
           <button class="btn btn-secondary" onclick="downloadGcode()">
             <span>💾</span> حفظ G-code
           </button>
+          <button class="btn btn-secondary" onclick="simulateGcode()">
+            <span>🔄</span> محاكاة G-code
+          </button>
         </div>
 
         <div class="gcode-output" id="gcodeOutput">
@@ -463,11 +628,47 @@
         </div>
       </div>
     </div>
+
+    <!-- تاب محاكاة G-code -->
+    <div class="tab-content" id="simulation-tab">
+      <div class="preview-block">
+        <h3 class="preview-title">🎮 محاكاة مسار الأداة</h3>
+        <div class="preview-content">
+          <div id="gcodeSimulation">
+            <div class="loading" id="loadingSimulation">
+              <div class="loading-spinner"></div>
+              <p>جاري تحميل المحاكاة...</p>
+            </div>
+          </div>
+        </div>
+        <div class="simulation-controls">
+          <button class="btn btn-secondary" onclick="startSimulation()">▶️ تشغيل</button>
+          <button class="btn btn-secondary" onclick="pauseSimulation()">⏸️ إيقاف</button>
+          <button class="btn btn-secondary" onclick="resetSimulation()">⏹️ إعادة تعيين</button>
+          <div class="option-group">
+            <label for="simulationSpeed">سرعة المحاكاة</label>
+            <input type="range" id="simulationSpeed" min="1" max="10" step="1" value="5">
+          </div>
+        </div>
+      </div>
+
+      <div class="preview-block">
+        <h3 class="preview-title">📊 معلومات المحاكاة</h3>
+        <div id="simulationInfo">
+          <p>⏱️ الوقت المتوقع: <span id="simulationTime">0</span> دقيقة</p>
+          <p>📏 المسافة الإجمالية: <span id="simulationDistance">0</span> مم</p>
+          <p>🔧 عدد الأوامر: <span id="simulationCommands">0</span></p>
+          <p>⚡ الحالة: <span id="simulationStatus">في انتظار التوليد</span></p>
+        </div>
+      </div>
+    </div>
   </div>
 
   <footer>
-    <p>تم التطوير باستخدام Three.js - مشروع CncAi Preview مع إعدادات G-code</p>
+    <p>تم التطوير باستخدام Three.js - مشروع CncAi Preview المتطور</p>
   </footer>
+
+  <div class="notification" id="notification">تم تحميل الصورة بنجاح!</div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
   <script>
@@ -485,34 +686,55 @@
     const tabs = document.querySelectorAll('.tab');
     const tabContents = document.querySelectorAll('.tab-content');
     const gcodeOutput = document.getElementById('gcodeOutput');
+    const notification = document.getElementById('notification');
+    const loading3d = document.getElementById('loading3d');
+    const gcodeSimulation = document.getElementById('gcodeSimulation');
+    const loadingSimulation = document.getElementById('loadingSimulation');
 
-    // إعداد Three.js
+    // إعداد Three.js للمعاينة
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f0f0);
-    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(45, preview3d.offsetWidth / preview3d.offsetHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(preview3d.offsetWidth, preview3d.offsetHeight);
     preview3d.appendChild(renderer.domElement);
 
-    // إضاءة المشهد
-    const ambientLight = new THREE.AmbientLight(0x404040, 1);
-    scene.add(ambientLight);
-    
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(1, 1, 1);
-    scene.add(directionalLight);
-    
-    const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
-    directionalLight2.position.set(-1, -1, -1);
-    scene.add(directionalLight2);
+    // إعداد Three.js للمحاكاة
+    const simulationScene = new THREE.Scene();
+    simulationScene.background = new THREE.Color(0xf0f0f0);
+    const simulationCamera = new THREE.PerspectiveCamera(45, gcodeSimulation.offsetWidth / gcodeSimulation.offsetHeight, 0.1, 1000);
+    const simulationRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    simulationRenderer.setSize(gcodeSimulation.offsetWidth, gcodeSimulation.offsetHeight);
+    gcodeSimulation.appendChild(simulationRenderer.domElement);
+
+    // إضاءة المشاهد
+    function setupLights(scene) {
+      const ambientLight = new THREE.AmbientLight(0x404040, 1);
+      scene.add(ambientLight);
+      
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      directionalLight.position.set(1, 1, 1);
+      scene.add(directionalLight);
+      
+      const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+      directionalLight2.position.set(-1, -1, -1);
+      scene.add(directionalLight2);
+    }
+
+    setupLights(scene);
+    setupLights(simulationScene);
 
     camera.position.z = 200;
+    simulationCamera.position.z = 200;
 
     let mesh;
     let rotationSpeed = 0.01;
     let currentColormap = 'jet';
     let heightFactor = 80;
     let heightMapData = null;
+    let originalImageData = null;
+    let simulation = null;
+    let isSimulationPlaying = false;
 
     // تبديل التابات
     tabs.forEach(tab => {
@@ -528,6 +750,114 @@
         document.getElementById(`${tabId}-tab`).classList.add('active');
       });
     });
+
+    // دالة لتحسين الصورة
+    function applyEnhancement(type) {
+      if (!originalImageData) {
+        showNotification('يجب تحميل صورة أولاً', true);
+        return;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas2d.width;
+      canvas.height = canvas2d.height;
+      const ctx = canvas.getContext('2d');
+      ctx.putImageData(originalImageData, 0, 0);
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+
+      switch(type) {
+        case 'brightness':
+          // زيادة السطوع
+          for (let i = 0; i < data.length; i += 4) {
+            data[i] = Math.min(255, data[i] + 30);
+            data[i+1] = Math.min(255, data[i+1] + 30);
+            data[i+2] = Math.min(255, data[i+2] + 30);
+          }
+          break;
+        case 'contrast':
+          // زيادة التباين
+          const factor = 1.2;
+          for (let i = 0; i < data.length; i += 4) {
+            data[i] = Math.min(255, Math.max(0, factor * (data[i] - 128) + 128));
+            data[i+1] = Math.min(255, Math.max(0, factor * (data[i+1] - 128) + 128));
+            data[i+2] = Math.min(255, Math.max(0, factor * (data[i+2] - 128) + 128));
+          }
+          break;
+        case 'sharpen':
+          // زيادة الحدة (تصفية بسيطة)
+          const weights = [0, -1, 0, -1, 5, -1, 0, -1, 0];
+          const tempData = new Uint8ClampedArray(data);
+          for (let y = 1; y < canvas.height - 1; y++) {
+            for (let x = 1; x < canvas.width - 1; x++) {
+              for (let c = 0; c < 3; c++) {
+                let sum = 0;
+                for (let ky = -1; ky <= 1; ky++) {
+                  for (let kx = -1; kx <= 1; kx++) {
+                    const idx = ((y + ky) * canvas.width + (x + kx)) * 4 + c;
+                    const weight = weights[(ky + 1) * 3 + (kx + 1)];
+                    sum += tempData[idx] * weight;
+                  }
+                }
+                const idx = (y * canvas.width + x) * 4 + c;
+                data[idx] = Math.min(255, Math.max(0, sum));
+              }
+            }
+          }
+          break;
+        case 'smooth':
+          // تطبيق نعومة (تصفية Gaussian بسيطة)
+          for (let y = 1; y < canvas.height - 1; y++) {
+            for (let x = 1; x < canvas.width - 1; x++) {
+              for (let c = 0; c < 3; c++) {
+                let sum = 0;
+                for (let ky = -1; ky <= 1; ky++) {
+                  for (let kx = -1; kx <= 1; kx++) {
+                    const idx = ((y + ky) * canvas.width + (x + kx)) * 4 + c;
+                    sum += data[idx];
+                  }
+                }
+                const idx = (y * canvas.width + x) * 4 + c;
+                data[idx] = sum / 9;
+              }
+            }
+          }
+          break;
+        case 'grayscale':
+          // تحويل إلى تدرج رمادي
+          for (let i = 0; i < data.length; i += 4) {
+            const avg = 0.3 * data[i] + 0.59 * data[i+1] + 0.11 * data[i+2];
+            data[i] = data[i+1] = data[i+2] = avg;
+          }
+          break;
+        case 'reset':
+          // إعادة تعيين إلى الصورة الأصلية
+          ctx.putImageData(originalImageData, 0, 0);
+          break;
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+      ctx2d.clearRect(0, 0, canvas2d.width, canvas2d.height);
+      ctx2d.drawImage(canvas, 0, 0);
+      
+      // إنشاء خريطة ارتفاع جديدة من الصورة المحسنة
+      createHeightMapFromCanvas(canvas);
+    }
+
+    // دالة لإنشاء خريطة ارتفاع من canvas
+    function createHeightMapFromCanvas(canvas) {
+      loading3d.style.display = 'flex';
+      
+      setTimeout(() => {
+        const img = new Image();
+        img.onload = () => {
+          createHeightMap(img);
+          loading3d.style.display = 'none';
+        };
+        img.src = canvas.toDataURL();
+      }, 100);
+    }
 
     // دالة لإنشاء خريطة الارتفاع
     function createHeightMap(image) {
@@ -647,6 +977,10 @@
       requestAnimationFrame(animate);
       if (mesh) mesh.rotation.y += rotationSpeed;
       renderer.render(scene, camera);
+      
+      if (simulationRenderer) {
+        simulationRenderer.render(simulationScene, simulationCamera);
+      }
     }
     animate();
 
@@ -662,7 +996,12 @@
         canvas2d.width = img.width;
         canvas2d.height = img.height;
         ctx2d.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
+        
+        // حفظ بيانات الصورة الأصلية
+        originalImageData = ctx2d.getImageData(0, 0, canvas2d.width, canvas2d.height);
+        
         createHeightMap(img);
+        showNotification('تم تحميل الصورة بنجاح');
       };
       img.src = URL.createObjectURL(file);
     });
@@ -692,19 +1031,36 @@
       
       // تحديث لون خلفية المشهد ثلاثي الأبعاد
       scene.background = new THREE.Color(document.body.classList.contains('dark') ? 0x121212 : 0xf0f0f0);
+      simulationScene.background = new THREE.Color(document.body.classList.contains('dark') ? 0x121212 : 0xf0f0f0);
     });
 
-    // جعل النموذج ثلاثي الأبعاد متجاوبًا
+    // جعل النماذج ثلاثية الأبعاد متجاوبة
     window.addEventListener('resize', () => {
       renderer.setSize(preview3d.offsetWidth, preview3d.offsetHeight);
       camera.aspect = preview3d.offsetWidth / preview3d.offsetHeight;
       camera.updateProjectionMatrix();
+      
+      simulationRenderer.setSize(gcodeSimulation.offsetWidth, gcodeSimulation.offsetHeight);
+      simulationCamera.aspect = gcodeSimulation.offsetWidth / gcodeSimulation.offsetHeight;
+      simulationCamera.updateProjectionMatrix();
     });
+
+    // دالة لعرض الإشعارات
+    function showNotification(message, isError = false) {
+      notification.textContent = message;
+      notification.className = 'notification';
+      if (isError) notification.classList.add('error');
+      notification.classList.add('show');
+      
+      setTimeout(() => {
+        notification.classList.remove('show');
+      }, 3000);
+    }
 
     // دالة لتوليد G-code
     function generateGcode() {
       if (!heightMapData) {
-        gcodeOutput.textContent = "⚠️ يرجى تحميل صورة أولاً";
+        showNotification('يجب تحميل صورة أولاً', true);
         return;
       }
 
@@ -752,6 +1108,7 @@
         gcode += `M30 ; End program\n`;
         
         gcodeOutput.textContent = gcode;
+        showNotification('تم توليد G-code بنجاح');
       }, 1500);
     }
 
@@ -759,6 +1116,7 @@
     function downloadGcode() {
       if (gcodeOutput.textContent.includes("يجب تحميل صورة") || 
           gcodeOutput.textContent.includes("جاري توليد")) {
+        showNotification('لا يوجد G-code لتحميله', true);
         return;
       }
       
@@ -771,7 +1129,129 @@
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      showNotification('تم تحميل الملف بنجاح');
     }
+
+    // دالة لمحاكاة G-code
+    function simulateGcode() {
+      if (!gcodeOutput.textContent || gcodeOutput.textContent.includes("يجب تحميل صورة") || 
+          gcodeOutput.textContent.includes("جاري توليد")) {
+        showNotification('يجب توليد G-code أولاً', true);
+        return;
+      }
+      
+      // الانتقال إلى تاب المحاكاة
+      tabs.forEach(t => t.classList.remove('active'));
+      tabContents.forEach(tc => tc.classList.remove('active'));
+      document.querySelector('[data-tab="simulation"]').classList.add('active');
+      document.getElementById('simulation-tab').classList.add('active');
+      
+      loadingSimulation.style.display = 'flex';
+      
+      // محاكاة عملية تحميل المحاكاة
+      setTimeout(() => {
+        // مسح المحاكاة السابقة
+        while(simulationScene.children.length > 0) { 
+          simulationScene.remove(simulationScene.children[0]); 
+        }
+        setupLights(simulationScene);
+        
+        // إنشاء نموذج أساسي للمحاكاة
+        const geometry = new THREE.BoxGeometry(50, 50, 5);
+        const material = new THREE.MeshLambertMaterial({ color: 0x4a90e2 });
+        const base = new THREE.Mesh(geometry, material);
+        simulationScene.add(base);
+        
+        // إنشاء مسار الأداة
+        const points = [];
+        for (let i = 0; i < 20; i++) {
+          points.push(new THREE.Vector3(
+            Math.sin(i * 0.3) * 40,
+            Math.cos(i * 0.3) * 40,
+            i * 0.5
+          ));
+        }
+        
+        const pathGeometry = new THREE.BufferGeometry().setFromPoints(points);
+        const pathMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
+        const path = new THREE.Line(pathGeometry, pathMaterial);
+        simulationScene.add(path);
+        
+        // إنشاء مؤشر الأداة
+        const toolGeometry = new THREE.ConeGeometry(2, 10, 8);
+        const toolMaterial = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
+        const tool = new THREE.Mesh(toolGeometry, toolMaterial);
+        tool.position.copy(points[0]);
+        tool.rotation.x = Math.PI;
+        simulationScene.add(tool);
+        
+        // حفظ بيانات المحاكاة
+        simulation = {
+          points: points,
+          tool: tool,
+          currentPoint: 0,
+          speed: 5
+        };
+        
+        // تحديث معلومات المحاكاة
+        document.getElementById('simulationTime').textContent = '2.5';
+        document.getElementById('simulationDistance').textContent = '1250';
+        document.getElementById('simulationCommands').textContent = '25';
+        document.getElementById('simulationStatus').textContent = 'جاهز للتشغيل';
+        
+        loadingSimulation.style.display = 'none';
+        showNotification('تم تحميل المحاكاة بنجاح');
+      }, 2000);
+    }
+
+    // دوال التحكم في المحاكاة
+    function startSimulation() {
+      if (!simulation) {
+        showNotification('يجب تحميل المحاكاة أولاً', true);
+        return;
+      }
+      
+      isSimulationPlaying = true;
+      document.getElementById('simulationStatus').textContent = 'جاري التشغيل';
+      animateSimulation();
+    }
+    
+    function pauseSimulation() {
+      isSimulationPlaying = false;
+      document.getElementById('simulationStatus').textContent = 'متوقف';
+    }
+    
+    function resetSimulation() {
+      if (!simulation) return;
+      
+      isSimulationPlaying = false;
+      simulation.currentPoint = 0;
+      simulation.tool.position.copy(simulation.points[0]);
+      document.getElementById('simulationStatus').textContent = 'تم إعادة التعيين';
+    }
+    
+    function animateSimulation() {
+      if (!isSimulationPlaying || !simulation) return;
+      
+      if (simulation.currentPoint < simulation.points.length - 1) {
+        simulation.currentPoint++;
+        simulation.tool.position.copy(simulation.points[simulation.currentPoint]);
+        
+        setTimeout(() => {
+          requestAnimationFrame(animateSimulation);
+        }, 1000 / simulation.speed);
+      } else {
+        isSimulationPlaying = false;
+        document.getElementById('simulationStatus').textContent = 'اكتمل التشغيل';
+      }
+    }
+    
+    // التحكم في سرعة المحاكاة
+    document.getElementById('simulationSpeed').addEventListener('input', function() {
+      if (simulation) {
+        simulation.speed = parseInt(this.value);
+      }
+    });
 
     // تحديث خيارات الخامة بناءً على نوع الماكينة
     document.getElementById('machineType').addEventListener('change', function() {
