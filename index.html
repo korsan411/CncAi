@@ -71,24 +71,6 @@
       transform: translateY(-50%) scale(1.2);
     }
 
-    #gcodeLink {
-      position: absolute;
-      left: 15px;
-      top: 50%;
-      transform: translateY(-50%);
-      text-decoration: none;
-      color: var(--header-text);
-      background: rgba(255,255,255,0.1);
-      padding: 6px 12px;
-      border-radius: 6px;
-      transition: 0.3s;
-      font-size: 14px;
-    }
-
-    #gcodeLink:hover {
-      background: rgba(255,255,255,0.25);
-    }
-
     .file-upload {
       margin: 20px 0;
       text-align: center;
@@ -177,10 +159,6 @@
         flex-direction: column;
         align-items: center;
       }
-      #gcodeLink {
-        font-size: 12px;
-        padding: 5px 10px;
-      }
     }
   </style>
 </head>
@@ -188,7 +166,6 @@
   <header>
     🛠️ CNC AI Preview
     <button id="themeToggle">🌙</button>
-    <a href="gcode.html" id="gcodeLink">⚙️ توليد G-code</a>
   </header>
 
   <!-- زر اختيار الصورة -->
