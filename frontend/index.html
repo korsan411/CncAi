@@ -1,171 +1,185 @@
 <!DOCTYPE html>
 <html lang="ar">
 <head>
-<meta charset="utf-8" />
-<title>CNC AI — معاينات و G-code</title>
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<style>
-:root{
-  --bg:#fbfdff; --card:#fff; --muted:#6b7280; --accent:#2563eb; --accent-2:#4a90e2;
-}
-*{box-sizing:border-box}
-body{margin:0;font-family:Inter,"Segoe UI",Arial;background:var(--bg);color:#111;direction:rtl}
-header{background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between}
-header h1{margin:0;font-size:18px}
-header .controls{display:flex;gap:10px;align-items:center}
-.container{max-width:1200px;margin:18px auto;padding:12px;display:grid;grid-template-columns:1fr;gap:14px}
-.card{background:var(--card);border-radius:10px;padding:12px;box-shadow:0 8px 20px rgba(2,6,23,0.06)}
-.file-row{display:flex;justify-content:center;padding:8px}
-input[type=file]{padding:8px;border-radius:8px;border:1px solid #e6edf8;background:#fff}
-.layout{display:grid;grid-template-columns:1fr 420px;gap:14px}
-@media(max-width:980px){.layout{grid-template-columns:1fr}}
-.preview-block{display:flex;flex-direction:column;gap:10px;align-items:center}
-canvas{max-width:100%;border-radius:8px;border:1px solid #e6eef8;background:#fff;display:block}
-#preview3d canvas{width:420px;height:420px;display:block}
-.controls-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center}
-label.small{font-size:13px;color:var(--muted)}
-.colormap-controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
-.colormap-controls button{padding:8px 12px;border-radius:8px;border:0;background:#f3f6fb;cursor:pointer;font-weight:600}
-.gcode-area{display:flex;flex-direction:column;gap:8px}
-textarea{width:100%;height:220px;padding:10px;border-radius:8px;border:1px solid #e6eef8;font-family:monospace;background:#fbfcff;resize:vertical}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-select,input[type=number]{padding:8px;border-radius:8px;border:1px solid #e6eef8}
-button.primary{background:var(--accent);color:#fff;border:0;padding:9px 12px;border-radius:8px;cursor:pointer;font-weight:600}
-button.ghost{background:#f3f6fb;border:0;padding:8px 10px;border-radius:8px;cursor:pointer}
-.tabs{display:flex;gap:8px;justify-content:center;margin-bottom:8px}
-.tabs button{padding:8px 12px;border-radius:8px;border:0;background:#eff6ff;cursor:pointer}
-.tabs button.active{background:var(--accent);color:#fff}
-.small-muted{font-size:13px;color:var(--muted)}
-footer{max-width:1200px;margin:12px auto;text-align:center;color:var(--muted);font-size:13px}
-/* dark */
-body.dark{background:#0b1220;color:#e6eef8}
-body.dark .card{background:#0f1724}
-body.dark input, body.dark select, body.dark textarea{background:#071026;color:#e6eef8;border-color:#112233}
-body.dark .colormap-controls button{background:#0b1b33;color:#fff}
-</style>
+  <meta charset="UTF-8">
+  <title>CncAi - معاينات و G-code</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f8f9fa;
+      color: #222;
+    }
+    header {
+      background: #343a40;
+      color: white;
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 { font-size: 20px; }
+    .container {
+      padding: 20px;
+      text-align: center;
+    }
+    canvas {
+      border: 1px solid #ccc;
+      margin: 10px 0;
+      max-width: 100%;
+    }
+    .buttons {
+      margin: 15px 0;
+    }
+    button {
+      padding: 8px 15px;
+      margin: 5px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      background: #007bff;
+      color: white;
+      font-size: 14px;
+    }
+    button:hover { background: #0056b3; }
+    #downloadLink {
+      display: none;
+      margin-top: 15px;
+    }
+  </style>
 </head>
 <body>
-<header>
-  <h1>🛠️ CNC AI — معاينات و G-code</h1>
-  <div class="controls">
-    <button id="themeToggle" class="ghost" title="تبديل الثيم">🌙</button>
-    <a id="gcodeLink" class="ghost" href="#gcode">⚙️ اذهب إلى G-code</a>
+  <header>
+    <h1>CncAi</h1>
+    <input type="file" id="upload" accept="image/*">
+  </header>
+
+  <div class="container">
+    <div class="buttons">
+      <button onclick="showOriginal()">الصورة الأصلية</button>
+      <button onclick="show2D()">معاينة 2D</button>
+      <button onclick="showHeatmap()">Heatmap</button>
+      <button onclick="show3D()">معاينة 3D</button>
+      <button onclick="generateGcode()">توليد G-code</button>
+    </div>
+    <canvas id="canvas"></canvas>
+    <a id="downloadLink" download="output.gcode">تحميل G-code</a>
   </div>
-</header>
 
-<div class="container">
-  <div class="card">
-    <div class="tabs" role="tablist">
-      <button id="tabPreviewBtn" class="active">📷 المعاينة</button>
-      <button id="tabGcodeBtn">⚙️ إعدادات G-code</button>
-    </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+    let canvas = document.getElementById("canvas");
+    let ctx = canvas.getContext("2d");
+    let img = new Image();
+    let currentMode = "original";
+    let imageData;
 
-    <!-- PREVIEW PANEL -->
-    <div id="previewPanel">
-      <div class="file-row">
-        <input id="fileInput" type="file" accept="image/*">
-      </div>
+    // تحميل الصورة
+    document.getElementById("upload").addEventListener("change", e => {
+      let file = e.target.files[0];
+      if (!file) return;
+      let reader = new FileReader();
+      reader.onload = ev => {
+        img.onload = () => {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
 
-      <div class="layout">
-        <div>
-          <div class="preview-block card">
-            <div class="small-muted">📷 الصورة الأصلية</div>
-            <canvas id="preview2d"></canvas>
-          </div>
+    // معاينة الصورة الأصلية
+    function showOriginal() {
+      currentMode = "original";
+      ctx.drawImage(img, 0, 0);
+    }
 
-          <div class="preview-block card" style="margin-top:12px">
-            <div class="small-muted">🌈 خريطة الارتفاعات (Heatmap)</div>
-            <canvas id="heatmap"></canvas>
-            <div class="colormap-controls" aria-label="colormap controls">
-              <button data-map="jet">Jet</button>
-              <button data-map="hot">Hot</button>
-              <button data-map="cool">Cool</button>
-              <button data-map="gray">Gray</button>
-            </div>
-          </div>
-        </div>
+    // معاينة 2D (رمادي)
+    function show2D() {
+      currentMode = "2d";
+      let gray = ctx.createImageData(imageData);
+      for (let i = 0; i < imageData.data.length; i += 4) {
+        let avg = (imageData.data[i] + imageData.data[i+1] + imageData.data[i+2]) / 3;
+        gray.data[i] = gray.data[i+1] = gray.data[i+2] = avg;
+        gray.data[i+3] = 255;
+      }
+      ctx.putImageData(gray, 0, 0);
+    }
 
-        <div>
-          <div class="preview-block card">
-            <div class="small-muted">🌀 المعاينة ثلاثية الأبعاد</div>
-            <div id="preview3d"></div>
-            <div class="controls-row">
-              <label class="small">🔄 سرعة:
-                <input id="rotationSpeed" type="range" min="0" max="0.05" step="0.001" value="0.01">
-              </label>
-              <label class="small">🔍 زوم:
-                <input id="zoomControl" type="range" min="50" max="600" step="10" value="200">
-              </label>
-              <button id="toggleWire" class="ghost">شبكة</button>
-            </div>
-            <div class="small-muted" style="margin-top:6px">⚡ نسخة مصغّرة لتقليل استهلاك المتصفح.</div>
-          </div>
-        </div>
-      </div>
-    </div>
+    // معاينة Heatmap
+    function showHeatmap() {
+      currentMode = "heatmap";
+      let heat = ctx.createImageData(imageData);
+      for (let i = 0; i < imageData.data.length; i += 4) {
+        let avg = (imageData.data[i] + imageData.data[i+1] + imageData.data[i+2]) / 3;
+        let r = avg, g = 0, b = 255 - avg;
+        heat.data[i] = r;
+        heat.data[i+1] = g;
+        heat.data[i+2] = b;
+        heat.data[i+3] = 255;
+      }
+      ctx.putImageData(heat, 0, 0);
+    }
 
-    <!-- G-CODE PANEL -->
-    <div id="gcodePanel" style="display:none;margin-top:12px">
-      <div class="card">
-        <h3 style="margin:6px 0">⚙️ توليد G-code</h3>
+    // معاينة 3D
+    function show3D() {
+      currentMode = "3d";
+      let width = canvas.width, height = canvas.height;
 
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-          <label class="small-muted">نوع الماكينة:
-            <select id="machineSelect">
-              <option value="router">ماكينة راوتر</option>
-              <option value="laser">قاطع ليزر</option>
-              <option value="plasma">بلازما</option>
-              <option value="printer">طابعة ثلاثية</option>
-            </select>
-          </label>
+      let scene = new THREE.Scene();
+      let camera = new THREE.PerspectiveCamera(45, canvas.clientWidth/canvas.clientHeight, 0.1, 1000);
+      let renderer = new THREE.WebGLRenderer({canvas: canvas});
+      renderer.setSize(canvas.clientWidth, canvas.clientHeight);
 
-          <label class="small-muted">الخامة:
-            <select id="materialSelect">
-              <option value="mdf">خشب MDF</option>
-              <option value="aluminum">ألمنيوم 6061</option>
-              <option value="acrylic">أكريليك</option>
-              <option value="pine">خشب صنوبر</option>
-            </select>
-          </label>
+      let geometry = new THREE.PlaneGeometry(width/100, height/100, width/10, height/10);
+      let material = new THREE.MeshNormalMaterial({wireframe: false, side: THREE.DoubleSide});
+      let plane = new THREE.Mesh(geometry, material);
 
-          <label class="small-muted">عرض (مم): <input id="widthMm" type="number" value="100" style="width:110px"></label>
-          <label class="small-muted">طول (مم): <input id="heightMm" type="number" value="100" style="width:110px"></label>
-          <label class="small-muted">أقصى عمق (مم): <input id="depthMm" type="number" value="2" style="width:110px"></label>
-        </div>
+      // تعديل الارتفاعات حسب التدرج
+      let pos = geometry.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        let x = Math.floor((i % (width/10)) * 10);
+        let y = Math.floor((i / (width/10)) * 10);
+        let idx = (y * width + x) * 4;
+        let avg = (imageData.data[idx] + imageData.data[idx+1] + imageData.data[idx+2]) / 3;
+        pos.setZ(i, avg / 50);
+      }
+      pos.needsUpdate = true;
 
-        <div id="machineSettings" style="margin:10px 0;font-size:13px;color:#444">
-          🔧 <span>اختر ماكينة وخامة لعرض الإعدادات هنا</span>
-        </div>
+      scene.add(plane);
+      camera.position.z = 5;
 
-        <div style="margin-top:10px;display:flex;gap:8px">
-          <button id="genG" class="primary">⚙️ توليد G-code</button>
-          <button id="dlG" class="ghost">💾 تحميل</button>
-        </div>
+      let animate = function() {
+        requestAnimationFrame(animate);
+        plane.rotation.y += 0.01;
+        renderer.render(scene, camera);
+      };
+      animate();
+    }
 
-        <div style="margin-top:10px" class="gcode-area">
-          <textarea id="gcodeOutput" placeholder="سيظهر الكود هنا..." readonly></textarea>
-          <div class="small-muted">📏 معاينة 2D لمسار G-code</div>
-          <canvas id="gcodeCanvas" width="640" height="320" style="border:1px solid #eef2ff;border-radius:8px"></canvas>
-        </div>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-<footer>نسخة نهائية — معاينة Heatmap و3D + توليد G-code تفاعلي</footer>
-
-<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-<script>
-// جميع السكريبتات من النسخة النهائية السابقة مع دمج:
-// - Heatmap تفاعلي
-// - توليد G-code تلقائي من Heatmap
-// - رسم المسار على Canvas 2D
-// - تحديث Mesh 3D حسب Heatmap
-// - التحكم في الدوران والزوم والشبكة
-// - Theme toggle
-// - إعدادات الماكينة والخامة
-// الكود جاهز للعمل مباشرة
-</script>
+    // توليد G-code
+    function generateGcode() {
+      if (!imageData) { alert("حمّل صورة أولاً"); return; }
+      let gcode = ["G21 ; Set units to mm", "G90 ; Absolute positioning"];
+      let step = 10;
+      for (let y = 0; y < canvas.height; y += step) {
+        for (let x = 0; x < canvas.width; x += step) {
+          let idx = (y * canvas.width + x) * 4;
+          let avg = (imageData.data[idx] + imageData.data[idx+1] + imageData.data[idx+2]) / 3;
+          let z = (avg / 255) * -5;
+          gcode.push(`G1 X${(x/10).toFixed(2)} Y${(y/10).toFixed(2)} Z${z.toFixed(2)} F1000`);
+        }
+      }
+      let blob = new Blob([gcode.join("\n")], {type: "text/plain"});
+      let url = URL.createObjectURL(blob);
+      let link = document.getElementById("downloadLink");
+      link.href = url;
+      link.style.display = "block";
+    }
+  </script>
 </body>
 </html>
