@@ -1,141 +1,74 @@
 <!DOCTYPE html>
 <html lang="ar">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>CNC AI Preview</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    :root {
-      --bg-color: #fdfdfd;
-      --text-color: #333;
-      --header-bg: linear-gradient(90deg, #4a90e2, #67b0f5);
-      --header-text: #fff;
-      --card-bg: #fff;
-      --border-color: #ccc;
-      --button-bg: #f0f0f0;
-      --button-hover: #e0e0e0;
+    :root{
+      --bg:#fdfdfd; --text:#333;
+      --header-bg:linear-gradient(90deg,#4a90e2,#67b0f5);
+      --card:#fff; --border:#ccc; --btn:#f0f0f0; --btn-hover:#e0e0e0;
     }
-    body.dark {
-      --bg-color: #1e1e1e;
-      --text-color: #eee;
-      --header-bg: linear-gradient(90deg, #222, #555);
-      --header-text: #f5f5f5;
-      --card-bg: #2a2a2a;
-      --border-color: #555;
-      --button-bg: #444;
-      --button-hover: #666;
+    body.dark{ --bg:#1e1e1e; --text:#eee; --header-bg:linear-gradient(90deg,#222,#555); --card:#2a2a2a; --border:#555; --btn:#444; --btn-hover:#666; }
+    body{
+      margin:0; font-family:"Segoe UI",Arial,Helvetica,sans-serif;
+      background:var(--bg); color:var(--text); display:flex; flex-direction:column; align-items:center;
     }
-    body {
-      font-family: "Segoe UI", Arial, sans-serif;
-      background: var(--bg-color);
-      margin: 0;
-      padding: 0;
-      color: var(--text-color);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      transition: background 0.3s, color 0.3s;
+    header{
+      width:100%; background:var(--header-bg); color:#fff; padding:14px 16px; font-weight:700; letter-spacing:1px;
+      display:flex; justify-content:center; align-items:center; position:relative; box-shadow:0 2px 6px rgba(0,0,0,0.12);
     }
-    header {
-      width: 100%;
-      background: var(--header-bg);
-      color: var(--header-text);
-      padding: 15px;
-      text-align: center;
-      font-size: 22px;
-      font-weight: bold;
-      letter-spacing: 1px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      position: relative;
+    #themeToggle, #sidebarToggle{
+      position:absolute; right:12px; top:50%; transform:translateY(-50%); background:transparent; border:none; color:#fff; cursor:pointer; font-size:18px;
     }
-    #themeToggle, #sidebarToggle {
-      position: absolute;
-      right: 15px;
-      top: 50%;
-      transform: translateY(-50%);
-      background: transparent;
-      border: none;
-      font-size: 18px;
-      cursor: pointer;
-      color: var(--header-text);
-      margin-left: 5px;
+    #sidebarToggle{ right:54px; }
+    .file-upload{ margin:18px 0; text-align:center; width:100%; }
+    .file-upload input[type=file]{ padding:8px; border-radius:6px; border:1px solid var(--border); background:var(--card); cursor:pointer; }
+    .preview-block{ width:100%; max-width:900px; background:var(--card); margin-bottom:20px; border-radius:10px; padding:14px; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+    .preview-title{ font-weight:700; margin:8px 0 6px; }
+    canvas, #preview3d canvas{ width:100%; height:auto; display:block; border:1px solid var(--border); border-radius:8px; background:#fff; }
+    .controls { display:flex; gap:12px; flex-wrap:wrap; justify-content:center; align-items:center; margin-top:8px; }
+    .colormap-controls{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:12px; }
+    .colormap-controls button{ padding:8px 14px; border-radius:8px; border:none; cursor:pointer; background:var(--btn); color:var(--text); }
+    .colormap-controls button:hover{ background:var(--btn-hover); }
+    /* sidebar */
+    #sidebar{ position:fixed; top:0; right:-340px; width:320px; height:100%; background:var(--card); color:var(--text); box-shadow:-4px 0 12px rgba(0,0,0,0.12); transition:right .25s ease; padding:18px; z-index:999; overflow:auto;}
+    #sidebar.open{ right:0; }
+    #sidebar h2{ margin-top:0; }
+    #sidebar label{ display:block; margin:10px 0 6px; font-weight:600; }
+    #sidebar input[type=number], #sidebar input[type=text]{ width:100%; padding:8px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--text); }
+    #sidebar button{ padding:10px; border-radius:8px; border:none; width:100%; margin-top:8px; cursor:pointer; background:#4a90e2; color:white; font-weight:700; }
+    @media (max-width:700px){
+      #sidebar{ width:100%; right:-100%; }
     }
-    #sidebarToggle { right: 50px; }
-    .file-upload { margin: 20px 0; text-align: center; }
-    .preview-block {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin-bottom: 25px;
-      width: 100%;
-      max-width: 700px;
-      padding: 0 10px;
-    }
-    .preview-block canvas, .preview-block #preview3d canvas {
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      background: var(--card-bg);
-      max-width: 100%;
-      height: auto;
-    }
-    .preview-title { margin-top: 8px; font-size: 15px; font-weight: bold; }
-    .options { margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
-    .colormap-controls { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin: 20px 0; }
-    .colormap-controls button {
-      padding: 7px 15px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      background: var(--button-bg);
-      color: var(--text-color);
-    }
-    .colormap-controls button:hover { background: var(--button-hover); }
-    /* Sidebar */
-    #sidebar {
-      position: fixed;
-      top: 0; right: -320px;
-      width: 300px; height: 100%;
-      background: var(--card-bg);
-      color: var(--text-color);
-      padding: 20px;
-      transition: right 0.3s ease;
-      box-shadow: -2px 0 6px rgba(0,0,0,0.2);
-      z-index: 999;
-    }
-    #sidebar.open { right: 0; }
-    #sidebar h2 { margin-top: 0; }
-    #sidebar label { display: block; margin: 10px 0 5px; }
-    #sidebar input { width: 100%; padding: 5px; margin-bottom: 10px; }
-    #sidebar button { width: 100%; margin-top: 5px; padding: 8px; border: none; border-radius: 5px; cursor: pointer; }
   </style>
 </head>
 <body>
-  <header>
-    🛠️ CNC AI Preview
-    <button id="sidebarToggle">⚙️</button>
-    <button id="themeToggle">🌙</button>
+  <header>🛠️ CNC AI Preview
+    <button id="sidebarToggle" title="إعدادات">⚙️</button>
+    <button id="themeToggle" title="تبديل الثيم">🌙</button>
   </header>
 
   <div class="file-upload">
-    <input type="file" id="fileInput" accept="image/*">
+    <input type="file" id="fileInput" accept="image/*" />
   </div>
 
   <div class="preview-block">
-    <canvas id="preview2d"></canvas>
     <div class="preview-title">📷 الصورة الأصلية</div>
+    <canvas id="preview2d"></canvas>
   </div>
 
   <div class="preview-block">
-    <div id="preview3d"></div>
     <div class="preview-title">🌀 المعاينة ثلاثية الأبعاد</div>
-    <div class="options">
+    <div id="preview3d" style="width:420px; max-width:100%; margin:0 auto;"></div>
+
+    <div class="controls">
       <label>🔄 سرعة الدوران:
-        <input type="range" id="rotationSpeed" min="0" max="0.05" step="0.001" value="0.01">
+        <input type="range" id="rotationSpeed" min="0" max="0.05" step="0.001" value="0.01" />
       </label>
       <label>🔍 زوم:
-        <input type="range" id="zoomControl" min="50" max="500" step="10" value="200">
+        <input type="range" id="zoomControl" min="60" max="800" step="10" value="200" />
       </label>
     </div>
   </div>
@@ -148,31 +81,322 @@
   </div>
 
   <div class="preview-block">
-    <canvas id="heatmap"></canvas>
     <div class="preview-title">🌈 خريطة الارتفاعات (Heatmap)</div>
+    <canvas id="heatmap"></canvas>
   </div>
 
   <!-- Sidebar -->
-  <aside id="sidebar">
+  <aside id="sidebar" aria-hidden="true">
     <h2>⚙️ إعدادات G-code</h2>
-    <label>Feed Rate (mm/min)</label><input type="number" value="800">
-    <label>Spindle Speed (RPM)</label><input type="number" value="12000">
-    <label>Cut Depth (mm)</label><input type="number" step="0.1" value="1">
-    <label>Safe Z (mm)</label><input type="number" step="0.1" value="5">
-    <label>Scale</label><input type="number" step="0.1" value="1">
-    <label>File Name</label><input type="text" value="output.gcode">
-    <button id="saveSettings">💾 حفظ</button>
-    <button id="closeSidebar">❌ إغلاق</button>
+    <label>Feed Rate (mm/min)</label><input id="cfgFeed" type="number" value="800" />
+    <label>Spindle Speed (RPM)</label><input id="cfgSpindle" type="number" value="12000" />
+    <label>Cut Depth (mm)</label><input id="cfgDepth" type="number" step="0.1" value="1.0" />
+    <label>Safe Z (mm)</label><input id="cfgSafe" type="number" step="0.1" value="5.0" />
+    <label>Scale (mesh)</label><input id="cfgScale" type="number" step="0.1" value="1.0" />
+    <label>File name</label><input id="cfgName" type="text" value="output.gcode" />
+    <button id="saveSettings">💾 حفظ الإعدادات</button>
+    <button id="closeSidebar" style="background:#ccc;color:#111;margin-top:6px;">❌ إغلاق</button>
   </aside>
 
+  <!-- Three.js + OrbitControls (non-module) -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
+
   <script>
-    // نفس كود النسخة المستقرة (معاينة 2D / Heatmap / 3D + Colormap + Rotation + Zoom + Theme)
-    // + Sidebar toggle
-    const sidebar=document.getElementById("sidebar");
-    document.getElementById("sidebarToggle").onclick=()=>sidebar.classList.add("open");
-    document.getElementById("closeSidebar").onclick=()=>sidebar.classList.remove("open");
-    document.getElementById("saveSettings").onclick=()=>alert("✅ تم حفظ الإعدادات!");
+    // عناصر DOM
+    const fileInput = document.getElementById('fileInput');
+    const canvas2d = document.getElementById('preview2d');
+    const ctx2d = canvas2d.getContext('2d');
+    const heatmap = document.getElementById('heatmap');
+    const ctxHeat = heatmap.getContext('2d');
+    const preview3d = document.getElementById('preview3d');
+    const rotationSpeedInput = document.getElementById('rotationSpeed');
+    const zoomControl = document.getElementById('zoomControl');
+
+    const sidebar = document.getElementById('sidebar');
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    const closeSidebar = document.getElementById('closeSidebar');
+    const themeToggle = document.getElementById('themeToggle');
+    const saveSettings = document.getElementById('saveSettings');
+
+    // 3D init
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
+    const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
+    preview3d.appendChild(renderer.domElement);
+
+    // OrbitControls
+    let controls;
+    try {
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+    } catch(e){
+      console.warn('OrbitControls failed to initialize:', e);
+    }
+
+    // lighting
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    dirLight.position.set(0, 1, 1).normalize();
+    scene.add(dirLight);
+    const amb = new THREE.AmbientLight(0xffffff, 0.4);
+    scene.add(amb);
+
+    camera.position.set(0, 0, 200);
+
+    // state
+    let mesh = null;
+    let rotationSpeed = parseFloat(rotationSpeedInput.value) || 0.01;
+    let currentColormap = 'jet';
+
+    // store heatmap raw
+    let heatRaw = null; // {data:Uint8ClampedArray, w, h, min, max}
+
+    // helper: resize renderer to preview3d size (square)
+    function resizeRenderer() {
+      const size = Math.max(200, Math.min(600, preview3d.clientWidth || 420));
+      renderer.setSize(size, size, false);
+      camera.aspect = size/size;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', resizeRenderer);
+    resizeRenderer();
+
+    // colormap function
+    function getHeatColor(value, map){
+      // value: 0..1
+      let r=0,g=0,b=0;
+      if (!isFinite(value)) value = 0;
+      value = Math.max(0, Math.min(1, value));
+      if(map==='jet'){
+        r = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-3),1),0));
+        g = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-2),1),0));
+        b = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-1),1),0));
+      } else if(map==='hot'){
+        r = Math.floor(255 * Math.min(1, 3*value));
+        g = Math.floor(255 * Math.min(1, 3*value-1)); g = Math.max(g,0);
+        b = Math.floor(255 * Math.min(1, 3*value-2)); b = Math.max(b,0);
+      } else if(map==='cool'){
+        r = Math.floor(255 * value);
+        g = Math.floor(255 * (1-value));
+        b = 255;
+      } else if(map==='gray'){
+        r = g = b = Math.floor(255 * value);
+      }
+      return {r,g,b};
+    }
+
+    // set colormap and redraw heatmap / recolor mesh
+    function setColormap(map){
+      currentColormap = map;
+      if (heatRaw) drawHeatmapFromRaw(heatRaw);
+      // recolor mesh if exists
+      if(mesh && mesh.geometry && mesh.geometry.attributes && mesh.geometry.attributes.color){
+        const colors = mesh.geometry.attributes.color.array;
+        const pos = mesh.geometry.attributes.position.array;
+        const count = mesh.geometry.attributes.position.count;
+        for(let i=0;i<count;i++){
+          const z = pos[i*3 + 2]; // z height (we wrote scaled)
+          // convert z back to 0..1 approximate by dividing by scaleZ (we used scaleZ)
+          // store scaleZ on mesh.userData
+          const scaleZ = mesh.userData && mesh.userData.scaleZ ? mesh.userData.scaleZ : 80;
+          let v = (z / scaleZ);
+          v = Math.max(0, Math.min(1, v));
+          const c = getHeatColor(v, currentColormap);
+          colors[i*3+0] = c.r / 255;
+          colors[i*3+1] = c.g / 255;
+          colors[i*3+2] = c.b / 255;
+        }
+        mesh.geometry.attributes.color.needsUpdate = true;
+      }
+    }
+
+    // draw heatmap from saved raw
+    function drawHeatmapFromRaw(raw){
+      const w = raw.w, h = raw.h;
+      const min = raw.min, max = raw.max;
+      // create ImageData
+      const out = ctxHeat.createImageData(w, h);
+      for(let y=0;y<h;y++){
+        for(let x=0;x<w;x++){
+          const idx = (y*w + x)*4;
+          const brightness = raw.data[idx]; // R channel (assuming original)
+          let norm = (brightness - min) / (max - min || 1);
+          norm = Math.max(0, Math.min(1, norm));
+          const c = getHeatColor(norm, currentColormap);
+          const di = idx;
+          out.data[di]   = c.r;
+          out.data[di+1] = c.g;
+          out.data[di+2] = c.b;
+          out.data[di+3] = 255;
+        }
+      }
+      // putImageData then scale to canvas display size (keep proportions)
+      // set canvas logical size to scaled target
+      const scale = 1.2; // enlarge a bit; you can adjust
+      heatmap.width = Math.round(w * scale);
+      heatmap.height = Math.round(h * scale);
+      // draw using temp canvas to allow scaling without smoothing issues
+      const tmp = document.createElement('canvas');
+      tmp.width = w; tmp.height = h;
+      tmp.getContext('2d').putImageData(out, 0, 0);
+      // clear heatmap then draw scaled
+      ctxHeat.clearRect(0,0,heatmap.width, heatmap.height);
+      ctxHeat.imageSmoothingEnabled = true;
+      ctxHeat.drawImage(tmp, 0, 0, heatmap.width, heatmap.height);
+    }
+
+    // main: create height map and 3D mesh (sampled)
+    function createHeightMap(image){
+      // full-res for heatmap
+      const w = image.width, h = image.height;
+      const tcanvas = document.createElement('canvas');
+      tcanvas.width = w; tcanvas.height = h;
+      const tctx = tcanvas.getContext('2d');
+      tctx.drawImage(image, 0, 0, w, h);
+      const imgData = tctx.getImageData(0,0,w,h).data;
+
+      // compute min/max on luminance (use R channel for simplicity)
+      let min=255, max=0;
+      for(let i=0;i<imgData.length;i+=4){
+        const v = imgData[i]; // R
+        if(v < min) min = v;
+        if(v > max) max = v;
+      }
+      if(min === 255 && max === 0){ min = 0; max = 255; }
+
+      heatRaw = { data: imgData.slice(), w, h, min, max }; // store copy
+
+      // draw heatmap
+      drawHeatmapFromRaw(heatRaw);
+
+      // --- prepare 3D mesh (sample down to reasonable resolution) ---
+      // sample factor so that max dimension ~ 120 for performance
+      const maxDim = 120;
+      const factor = Math.ceil(Math.max(w,h) / maxDim) || 1;
+      const sw = Math.max(2, Math.floor(w / factor));
+      const sh = Math.max(2, Math.floor(h / factor));
+      // sample canvas
+      const sc = document.createElement('canvas');
+      sc.width = sw; sc.height = sh;
+      const sctx = sc.getContext('2d');
+      // draw scaled-down version of original for sampling
+      sctx.drawImage(image, 0, 0, sw, sh);
+      const sData = sctx.getImageData(0,0,sw,sh).data;
+
+      // create geometry plane (100x100 units)
+      const geometry = new THREE.PlaneGeometry(100, 100, sw-1, sh-1);
+      const position = geometry.attributes.position.array;
+      const colors = new Float32Array(geometry.attributes.position.count * 3);
+      const scaleZ = 80 * parseFloat(document.getElementById('cfgScale').value || 1.0);
+
+      let idxPos = 0;
+      for(let y=0;y<sh;y++){
+        for(let x=0;x<sw;x++){
+          const i = (y*sw + x) * 4;
+          const bright = sData[i]; // R channel
+          const norm = bright / 255;
+          const z = norm * scaleZ;
+          // plane geometry positions are in order; set Z
+          position[idxPos*3 + 2] = z;
+          // color from colormap
+          const c = getHeatColor(norm, currentColormap);
+          colors[idxPos*3 + 0] = c.r/255;
+          colors[idxPos*3 + 1] = c.g/255;
+          colors[idxPos*3 + 2] = c.b/255;
+          idxPos++;
+        }
+      }
+
+      // attach color attribute
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      geometry.computeVertexNormals();
+
+      // material using vertex colors
+      const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+      if(mesh) {
+        scene.remove(mesh);
+        mesh.geometry.dispose();
+        mesh.material.dispose();
+        mesh = null;
+      }
+      mesh = new THREE.Mesh(geometry, material);
+      mesh.rotation.x = 0; // keep as is; camera looks at plane
+      mesh.userData.scaleZ = scaleZ;
+      scene.add(mesh);
+
+      // adjust camera & controls target
+      camera.position.set(0, 0, Math.max(120, scaleZ*1.5));
+      if(controls) controls.target.set(0,0,0);
+      if(controls) controls.update();
+    }
+
+    // animate loop
+    function animate(){
+      requestAnimationFrame(animate);
+      if(mesh) mesh.rotation.y += rotationSpeed;
+      if(controls) controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // handle file input
+    fileInput.addEventListener('change', (ev) => {
+      const file = ev.target.files && ev.target.files[0];
+      if(!file) return;
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        // draw 2D preview at natural size (but constrained by CSS)
+        canvas2d.width = img.width;
+        canvas2d.height = img.height;
+        ctx2d.clearRect(0,0,canvas2d.width, canvas2d.height);
+        ctx2d.drawImage(img,0,0);
+
+        // create heatmap + mesh
+        createHeightMap(img);
+
+        // resize renderer to fit container
+        resizeRenderer();
+
+        // free objectURL
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+    });
+
+    // controls events
+    rotationSpeedInput.addEventListener('input', (e)=>{
+      rotationSpeed = parseFloat(e.target.value) || 0;
+    });
+    zoomControl.addEventListener('input', (e)=>{
+      const z = parseFloat(e.target.value);
+      camera.position.z = isFinite(z) ? z : camera.position.z;
+    });
+
+    // colormap buttons call setColormap(map)
+    window.setColormap = setColormap; // expose to inline onclick
+
+    // theme toggle
+    themeToggle.addEventListener('click', ()=>{
+      document.body.classList.toggle('dark');
+      themeToggle.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
+    });
+
+    // sidebar toggles
+    sidebarToggle.addEventListener('click', ()=>{ sidebar.classList.add('open'); sidebar.setAttribute('aria-hidden','false'); });
+    closeSidebar.addEventListener('click', ()=>{ sidebar.classList.remove('open'); sidebar.setAttribute('aria-hidden','true'); });
+    saveSettings.addEventListener('click', ()=>{
+      alert('✅ تم حفظ إعدادات G-code (محليًا).');
+    });
+
+    // initial: set a small blank canvas size so UI looks ok before image
+    canvas2d.width = 640; canvas2d.height = 360;
+    ctx2d.fillStyle = '#fafafa'; ctx2d.fillRect(0,0,canvas2d.width,canvas2d.height);
+    ctx2d.fillStyle = '#999'; ctx2d.font = '16px Arial'; ctx2d.fillText('ارفع صورة لبدء المعاينة', 20, 30);
+
+    // expose some useful debug functions (optional)
+    window.__getHeatRaw = ()=>heatRaw;
   </script>
 </body>
 </html>
