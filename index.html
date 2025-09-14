@@ -1,205 +1,69 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>CncAi</title>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-  <style>
-    body { font-family: 'Tahoma', sans-serif; }
-    .hidden { display: none; }
-    #gcodeCanvas { border: 1px solid #ccc; margin-top: 10px; }
-    #threeContainer { width: 100%; height: 400px; border: 1px solid #ccc; margin-top: 10px; }
-  </style>
+  <meta charset="UTF-8">
+  <title>CncAi - Preview</title>
+  <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-gray-100 text-gray-900">
-  <!-- الهيدر -->
-  <header class="bg-blue-600 text-white p-4 flex justify-between items-center">
-    <h1 class="text-xl font-bold">CncAi</h1>
-    <nav>
-      <button class="tab-btn mx-2" data-tab="previewTab">المعاينة</button>
-      <button class="tab-btn mx-2" data-tab="gcodeTab">G-code</button>
-    </nav>
+<body>
+  <header>
+    <h1>CncAi</h1>
+    <div class="buttons">
+      <button onclick="showTab('original')">الصورة الأصلية</button>
+      <button onclick="showTab('preview2d')">معاينة 2D</button>
+      <button onclick="showTab('heatmap')">Heatmap</button>
+      <button onclick="showTab('preview3d')">معاينة 3D</button>
+      <button onclick="showTab('gcode')">G-code</button>
+      <button onclick="toggleTheme()">تبديل الثيم</button>
+    </div>
   </header>
 
-  <!-- المحتوى -->
-  <main class="p-6">
-    <!-- تبويب المعاينة -->
-    <div id="previewTab" class="tab-content">
-      <h2 class="text-lg font-bold mb-4">📷 معاينة الصور</h2>
-      <input type="file" id="uploadImage" class="mb-4" accept="image/*"/>
-      <canvas id="canvas2d" class="border w-full max-w-lg"></canvas>
+  <main>
+    <!-- Original -->
+    <div id="originalTab" class="tab">
+      <h2>الصورة الأصلية</h2>
+      <input type="file" id="imageUpload" accept="image/*">
+      <canvas id="originalCanvas"></canvas>
     </div>
 
-    <!-- تبويب G-code -->
-    <div id="gcodeTab" class="tab-content hidden">
-      <h2 class="text-xl font-bold mb-4">⚙️ توليد G-code</h2>
+    <!-- 2D Preview -->
+    <div id="preview2dTab" class="tab" style="display:none;">
+      <h2>معاينة 2D</h2>
+      <canvas id="preview2dCanvas"></canvas>
+    </div>
 
-      <label class="block mb-2">اختر نوع الماكينة:</label>
-      <select id="machineType" class="border p-2 mb-4 w-full">
-        <option value="cnc">CNC</option>
-        <option value="laser">Laser</option>
-        <option value="3dprinter">3D Printer</option>
-      </select>
+    <!-- Heatmap -->
+    <div id="heatmapTab" class="tab" style="display:none;">
+      <h2>Heatmap</h2>
+      <div class="colormap-buttons">
+        <button onclick="setColormap('jet')">Jet</button>
+        <button onclick="setColormap('hot')">Hot</button>
+        <button onclick="setColormap('cool')">Cool</button>
+        <button onclick="setColormap('gray')">Gray</button>
+      </div>
+      <canvas id="heatmapCanvas"></canvas>
+    </div>
 
-      <label class="block mb-2">اختر نوع الخامة:</label>
-      <select id="materialType" class="border p-2 mb-4 w-full">
-        <option value="wood">Wood</option>
-        <option value="plastic">Plastic</option>
-        <option value="metal">Metal</option>
-      </select>
+    <!-- 3D Preview -->
+    <div id="preview3dTab" class="tab" style="display:none;">
+      <h2>معاينة 3D</h2>
+      <div id="preview3d"></div>
+    </div>
 
-      <label class="block mb-2">Feedrate:</label>
-      <input id="feedrate" type="number" value="800" class="border p-2 mb-4 w-full"/>
-
-      <label class="block mb-2">Spindle RPM:</label>
-      <input id="rpm" type="number" value="12000" class="border p-2 mb-4 w-full"/>
-
-      <label class="block mb-2">عمق القطع (mm):</label>
-      <input id="depth" type="number" value="2" class="border p-2 mb-4 w-full"/>
-
-      <button id="generateGcode" class="bg-blue-500 text-white px-4 py-2 rounded mb-2">توليد G-code</button>
-      <button id="downloadGcode" class="bg-green-500 text-white px-4 py-2 rounded mb-4 hidden">تحميل G-code</button>
-
-      <pre id="gcodeOutput" class="bg-gray-100 p-4 border rounded h-48 overflow-auto"></pre>
-
-      <h3 class="text-lg font-bold mt-6">📊 معاينة 2D</h3>
-      <canvas id="gcodeCanvas" width="500" height="500"></canvas>
-
-      <h3 class="text-lg font-bold mt-6">🔲 معاينة 3D</h3>
-      <div id="threeContainer"></div>
+    <!-- G-code -->
+    <div id="gcodeTab" class="tab" style="display:none;">
+      <h2>G-code Editor</h2>
+      <textarea id="gcodeEditor" rows="12" style="width:100%;"></textarea>
+      <div class="gcode-controls">
+        <button onclick="runGcode()">تشغيل G-code</button>
+        <button onclick="downloadGcode()">تحميل G-code</button>
+      </div>
+      <div id="gcodePreview" style="height:400px; background:#111; color:#0f0; padding:10px; overflow:auto;"></div>
     </div>
   </main>
 
-  <!-- مكتبة Three.js -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/examples/js/controls/OrbitControls.js"></script>
-
-  <script>
-    // التنقل بين التبويبات
-    const tabButtons = document.querySelectorAll(".tab-btn");
-    const tabContents = document.querySelectorAll(".tab-content");
-    tabButtons.forEach(btn => {
-      btn.addEventListener("click", () => {
-        tabContents.forEach(tab => tab.classList.add("hidden"));
-        document.getElementById(btn.dataset.tab).classList.remove("hidden");
-      });
-    });
-
-    // عرض الصورة في 2D
-    const uploadImage = document.getElementById("uploadImage");
-    const canvas2d = document.getElementById("canvas2d");
-    const ctx2d = canvas2d.getContext("2d");
-
-    uploadImage.addEventListener("change", (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const img = new Image();
-      img.onload = () => {
-        canvas2d.width = img.width;
-        canvas2d.height = img.height;
-        ctx2d.drawImage(img, 0, 0);
-      };
-      img.src = URL.createObjectURL(file);
-    });
-
-    // متغيرات G-code
-    let currentGcode = "";
-    let pathPoints = [];
-
-    document.getElementById("generateGcode").addEventListener("click", () => {
-      const machine = document.getElementById("machineType").value;
-      const material = document.getElementById("materialType").value;
-      const feedrate = document.getElementById("feedrate").value;
-      const rpm = document.getElementById("rpm").value;
-      const depth = document.getElementById("depth").value;
-
-      currentGcode = `; G-code Generated
-; Machine: ${machine}
-; Material: ${material}
-G21 ; Set units to mm
-G90 ; Absolute positioning
-M3 S${rpm} ; Spindle on
-`;
-
-      pathPoints = [];
-      const step = 10;
-      for (let y = 0; y <= 100; y += step) {
-        for (let x = 0; x <= 100; x += step) {
-          currentGcode += `G1 X${x} Y${y} Z-${depth} F${feedrate}\n`;
-          pathPoints.push({x, y, z: -depth});
-        }
-      }
-
-      currentGcode += `G0 Z5\nM5 ; Spindle off\nM30 ; Program end`;
-
-      document.getElementById("gcodeOutput").textContent = currentGcode;
-      document.getElementById("downloadGcode").classList.remove("hidden");
-
-      draw2DPath();
-      draw3DPath();
-    });
-
-    // تحميل G-code
-    document.getElementById("downloadGcode").addEventListener("click", () => {
-      const blob = new Blob([currentGcode], { type: "text/plain" });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = "output.gcode";
-      link.click();
-    });
-
-    // رسم 2D
-    function draw2DPath() {
-      const canvas = document.getElementById("gcodeCanvas");
-      const ctx = canvas.getContext("2d");
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      ctx.beginPath();
-      pathPoints.forEach((p, i) => {
-        const scale = 5;
-        if (i === 0) ctx.moveTo(p.x * scale, p.y * scale);
-        else ctx.lineTo(p.x * scale, p.y * scale);
-      });
-      ctx.strokeStyle = "blue";
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-    }
-
-    // رسم 3D
-    let scene, camera, renderer, controls;
-    function draw3DPath() {
-      if (!scene) {
-        scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(45, document.getElementById("threeContainer").clientWidth / 400, 0.1, 1000);
-        camera.position.set(150, 150, 150);
-
-        renderer = new THREE.WebGLRenderer({antialias: true});
-        renderer.setSize(document.getElementById("threeContainer").clientWidth, 400);
-        document.getElementById("threeContainer").appendChild(renderer.domElement);
-
-        controls = new THREE.OrbitControls(camera, renderer.domElement);
-
-        const light = new THREE.DirectionalLight(0xffffff, 1);
-        light.position.set(1, 1, 1).normalize();
-        scene.add(light);
-      }
-
-      while(scene.children.length > 0){ scene.remove(scene.children[0]); }
-
-      const material = new THREE.LineBasicMaterial({ color: 0x0000ff });
-      const points = pathPoints.map(p => new THREE.Vector3(p.x, p.y, p.z));
-      const geometry = new THREE.BufferGeometry().setFromPoints(points);
-      const line = new THREE.Line(geometry, material);
-      scene.add(line);
-
-      animate();
-    }
-
-    function animate() {
-      requestAnimationFrame(animate);
-      renderer.render(scene, camera);
-    }
-  </script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
