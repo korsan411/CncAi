@@ -3,381 +3,212 @@
 <head>
   <meta charset="UTF-8">
   <title>CNC AI Preview</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
-    :root{
-      --bg:#fdfdfd; --text:#333; --header-bg:linear-gradient(90deg,#4a90e2,#67b0f5);
-      --card:#fff; --border:#ccc; --btn:#f0f0f0; --btn-hover:#e0e0e0;
+    :root {
+      --bg-color: #fdfdfd;
+      --text-color: #333;
+      --header-bg: linear-gradient(90deg, #4a90e2, #67b0f5);
+      --header-text: #fff;
+      --card-bg: #fff;
+      --border-color: #ccc;
+      --button-bg: #f0f0f0;
+      --button-hover: #e0e0e0;
     }
-    body.dark{ --bg:#1e1e1e; --text:#eee; --header-bg:linear-gradient(90deg,#222,#555); --card:#2a2a2a; --border:#555; --btn:#444; --btn-hover:#666; }
-    body{
+    body.dark {
+      --bg-color: #1e1e1e;
+      --text-color: #eee;
+      --header-bg: linear-gradient(90deg, #222, #555);
+      --header-text: #f5f5f5;
+      --card-bg: #2a2a2a;
+      --border-color: #555;
+      --button-bg: #444;
+      --button-hover: #666;
+    }
+    body {
       font-family: "Segoe UI", Arial, sans-serif;
-      background:var(--bg); color:var(--text); margin:0; padding:0;
-      display:flex; flex-direction:column; align-items:center; min-height:100vh;
+      background: var(--bg-color);
+      margin: 0;
+      padding: 0;
+      color: var(--text-color);
+      transition: background 0.3s, color 0.3s;
     }
-    header{
-      width:100%; background:var(--header-bg); color:#fff; padding:14px;
-      display:flex; align-items:center; justify-content:center; position:relative; box-shadow:0 2px 6px rgba(0,0,0,0.12);
-      font-weight:700;
+    header {
+      width: 100%;
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 15px;
+      text-align: center;
+      font-size: 22px;
+      font-weight: bold;
+      position: relative;
     }
-    #themeToggle{ position:absolute; right:12px; top:50%; transform:translateY(-50%); background:transparent; border:none; color:#fff; cursor:pointer; font-size:18px; }
-    #gcodeLink{ position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#fff; text-decoration:none; background:rgba(255,255,255,0.08); padding:6px 10px; border-radius:6px; }
-    .file-upload{ margin:18px 0; text-align:center; }
-    .file-upload input[type=file]{ padding:8px; border-radius:6px; border:1px solid var(--border); background:var(--card); color:var(--text); }
-    .container{ width:100%; max-width:950px; padding:12px; box-sizing:border-box; }
-    .preview-block{ background:var(--card); border-radius:10px; padding:14px; margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,0.06); text-align:center; }
-    .preview-title{ font-weight:700; margin-top:8px; color:var(--text); }
-    canvas, #preview3d canvas{ border:1px solid var(--border); border-radius:8px; max-width:100%; display:block; margin:8px auto; background:#fff; }
-    .options{ display:flex; gap:12px; flex-wrap:wrap; justify-content:center; align-items:center; margin-top:8px; }
-    .colormap-controls{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:8px; }
-    .colormap-controls button{ padding:8px 12px; border-radius:8px; border:none; cursor:pointer; background:var(--btn); color:var(--text); font-weight:600; }
-    .colormap-controls button:hover{ background:var(--btn-hover); transform:translateY(-2px); }
-    label{ font-size:14px; display:flex; align-items:center; gap:8px; }
-    input[type=range]{ vertical-align:middle; }
-    @media (max-width:720px){ header{ font-size:16px } .options{ flex-direction:column } }
+    #themeToggle {
+      position: absolute;
+      right: 15px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: transparent;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: var(--header-text);
+    }
+    /* Tabs */
+    .tabs {
+      display: flex;
+      justify-content: center;
+      margin: 15px 0;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .tabs button {
+      padding: 8px 15px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      background: var(--button-bg);
+      color: var(--text-color);
+      font-weight: 500;
+    }
+    .tabs button.active {
+      background: #4a90e2;
+      color: #fff;
+    }
+    .tab-content {
+      display: none;
+      padding: 10px;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    .preview-block {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .preview-block canvas {
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      max-width: 100%;
+      background: var(--card-bg);
+    }
+    .preview-title {
+      margin-top: 5px;
+      font-weight: bold;
+    }
+    textarea {
+      width: 100%;
+      height: 200px;
+      font-family: monospace;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--card-bg);
+      padding: 10px;
+    }
+    input, button {
+      margin: 5px 0;
+      padding: 6px 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 5px;
+    }
+    .form-group {
+      margin: 10px 0;
+    }
   </style>
 </head>
 <body>
-  <header>🛠️ CNC AI Preview
-    <button id="themeToggle" title="تبديل الثيم">🌙</button>
-    <a id="gcodeLink" href="gcode.html">⚙️ توليد G-code</a>
+  <header>
+    🛠️ CNC AI Preview
+    <button id="themeToggle">🌙</button>
   </header>
 
-  <div class="file-upload container">
-    <input type="file" id="fileInput" accept="image/*">
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="previewTab">📷 المعاينة</button>
+    <button class="tab-btn" data-tab="gcodeTab">⚙️ إعدادات G-code</button>
   </div>
 
-  <div class="container">
-    <div class="preview-block">
-      <h3 class="preview-title">📷 الصورة الأصلية</h3>
-      <canvas id="preview2d" aria-label="صورة 2D"></canvas>
+  <!-- معاينة -->
+  <div id="previewTab" class="tab-content active">
+    <div class="file-upload" style="text-align:center">
+      <input type="file" id="fileInput" accept="image/*">
     </div>
+    <div class="preview-block">
+      <canvas id="preview2d"></canvas>
+      <div class="preview-title">📷 الصورة الأصلية</div>
+    </div>
+    <div class="preview-block">
+      <div id="preview3d"></div>
+      <div class="preview-title">🌀 المعاينة ثلاثية الأبعاد</div>
+    </div>
+    <div class="colormap-controls" style="text-align:center; margin:15px 0;">
+      <button onclick="setColormap('jet')">🌈 Jet</button>
+      <button onclick="setColormap('hot')">🔥 Hot</button>
+      <button onclick="setColormap('cool')">❄️ Cool</button>
+      <button onclick="setColormap('gray')">⚪ Gray</button>
+    </div>
+    <div class="preview-block">
+      <canvas id="heatmap"></canvas>
+      <div class="preview-title">🌈 خريطة الارتفاعات</div>
+    </div>
+  </div>
 
-    <div class="preview-block">
-      <h3 class="preview-title">🌀 المعاينة ثلاثية الأبعاد</h3>
-      <div id="preview3d" style="width:420px;height:420px;margin:0 auto;"></div>
-      <div class="options">
-        <label>🔄 سرعة الدوران: <input id="rotationSpeed" type="range" min="0" max="0.05" step="0.001" value="0.01"></label>
-        <label>🔍 زوم: <input id="zoomControl" type="range" min="80" max="800" step="10" value="200"></label>
-      </div>
+  <!-- إعدادات G-code -->
+  <div id="gcodeTab" class="tab-content">
+    <div class="form-group">
+      <label>📏 العرض (مم):</label>
+      <input type="number" id="widthMm" value="100">
     </div>
-
-    <div class="preview-block">
-      <h3 class="preview-title">🌈 خريطة الارتفاعات (Heatmap)</h3>
-      <canvas id="heatmap" aria-label="Heatmap"></canvas>
-      <div class="colormap-controls" style="margin-top:10px;">
-        <button onclick="setColormap('jet')" title="Jet">🌈 Jet</button>
-        <button onclick="setColormap('hot')" title="Hot">🔥 Hot</button>
-        <button onclick="setColormap('cool')" title="Cool">❄️ Cool</button>
-        <button onclick="setColormap('gray')" title="Gray">⚪ Gray</button>
-      </div>
+    <div class="form-group">
+      <label>📐 الطول (مم):</label>
+      <input type="number" id="heightMm" value="100">
     </div>
+    <div class="form-group">
+      <label>⬇️ عمق القطع (مم):</label>
+      <input type="number" id="depthMm" value="2">
+    </div>
+    <button onclick="generateGcode()">⚙️ توليد</button>
+    <button onclick="downloadGcode()">💾 تحميل</button>
+    <textarea id="gcodeOutput" readonly placeholder="هنا سيظهر كود G-code..."></textarea>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-
   <script>
-    // عناصر DOM
-    const fileInput = document.getElementById('fileInput');
-    const canvas2d = document.getElementById('preview2d');
-    const ctx2d = canvas2d.getContext('2d');
-    const heatmap = document.getElementById('heatmap');
-    const ctxHeat = heatmap.getContext('2d');
-    const preview3d = document.getElementById('preview3d');
-
-    const rotationSpeedInput = document.getElementById('rotationSpeed');
-    const zoomControl = document.getElementById('zoomControl');
-    const themeToggle = document.getElementById('themeToggle');
-
-    // ثلاثي الأبعاد - Three.js
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
-    const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
-    let DPR = Math.min(window.devicePixelRatio || 1, 2);
-    renderer.setPixelRatio(DPR);
-    // حجم ثابت/معقول للمعاينة ثلاثية الأبعاد (ثابت كما طلبت)
-    const RENDER_SIZE = 420;
-    renderer.setSize(RENDER_SIZE, RENDER_SIZE, false);
-    preview3d.appendChild(renderer.domElement);
-
-    const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(0, 1, 1).normalize();
-    scene.add(light);
-
-    camera.position.z = 200;
-    camera.lookAt(0,0,0);
-
-    let mesh = null;
-    let rotationSpeed = parseFloat(rotationSpeedInput.value) || 0.01;
-    let currentColormap = 'jet';
-    let lastImage = null;        // نحتفظ بالصورة الأخيرة لتغيير الـ colormap بدون إعادة رفع
-    let heightRaw = null;        // raw rgba data from temp canvas (full image)
-    let heightW = 0, heightH = 0;
-
-    // مسح الميش الحالي وتحرير الذاكرة
-    function disposeMesh() {
-      if (!mesh) return;
-      try {
-        mesh.geometry.dispose();
-      } catch(e){}
-      try {
-        if(Array.isArray(mesh.material)){
-          mesh.material.forEach(m => m.dispose());
-        } else {
-          mesh.material.dispose();
-        }
-      } catch(e){}
-      scene.remove(mesh);
-      mesh = null;
-    }
-
-    // تحويل قيمة الى لون حسب الخريطة
-    function getHeatColor(value, map) {
-      value = Math.max(0, Math.min(1, value));
-      let r=0,g=0,b=0;
-      if (map === 'jet') {
-        r = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-3),1),0));
-        g = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-2),1),0));
-        b = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-1),1),0));
-      } else if (map === 'hot') {
-        r = Math.floor(255 * Math.min(1, 3*value));
-        g = Math.floor(255 * Math.min(1, 3*value-1)); g = Math.max(g,0);
-        b = Math.floor(255 * Math.min(1, 3*value-2)); b = Math.max(b,0);
-      } else if (map === 'cool') {
-        r = Math.floor(255 * value);
-        g = Math.floor(255 * (1-value));
-        b = 255;
-      } else if (map === 'gray') {
-        r = g = b = Math.floor(255 * value);
-      }
-      return {r,g,b};
-    }
-
-    // إنشاء height map و mesh ثلاثي الأبعاد
-    function createHeightMap(img) {
-      lastImage = img;
-      // نأخذ البيانات الكاملة من الصورة (full-size) في temp canvas
-      const w = img.width;
-      const h = img.height;
-      heightW = w; heightH = h;
-
-      const temp = document.createElement('canvas');
-      temp.width = w; temp.height = h;
-      const tctx = temp.getContext('2d');
-      tctx.drawImage(img, 0, 0, w, h);
-      const imgData = tctx.getImageData(0,0,w,h).data;
-      // حفظ raw بيانات (نسخة) لاستخدامها لاحقًا
-      heightRaw = new Uint8ClampedArray(imgData); // 4*w*h
-
-      // نعمل نسخة منخفضة الدقة للـ mesh حتى لا نسبب تحميلًا عاليًا (توازن أداء/تفاصيل)
-      // لو الصورة صغيرة نستخدم أبعادها، وإلا نخفض إلى أقصى 200 بكسل لكل بعد
-      const MAX_MESH_DIM = 200;
-      const meshW = Math.min(w, MAX_MESH_DIM);
-      const meshH = Math.min(h, MAX_MESH_DIM);
-
-      // عين canvas مصغّر للبناء (sampling)
-      const sample = document.createElement('canvas');
-      sample.width = meshW; sample.height = meshH;
-      const sctx = sample.getContext('2d');
-      // disable smoothing for sharper sampling if desired:
-      sctx.imageSmoothingEnabled = false;
-      sctx.drawImage(img, 0, 0, meshW, meshH);
-      const sdata = sctx.getImageData(0,0,meshW,meshH).data;
-
-      // حساب min/max للـ normalization
-      let min = 255, max = 0;
-      const heights = new Float32Array(meshW * meshH);
-      for (let y=0;y<meshH;y++){
-        for (let x=0;x<meshW;x++){
-          const idx = (y*meshW + x)*4;
-          const brightness = sdata[idx]; // R
-          heights[y*meshW + x] = brightness/255;
-          if (brightness < min) min = brightness;
-          if (brightness > max) max = brightness;
-        }
-      }
-      const denom = (max - min) || 1;
-
-      // تنظيف mesh القديم
-      disposeMesh();
-
-      // بناء geometry
-      const geom = new THREE.PlaneGeometry(100, 100, meshW-1, meshH-1);
-      const pos = geom.attributes.position.array;
-      const colors = new Float32Array((meshW*meshH)*3);
-
-      for (let i=0;i<geom.attributes.position.count;i++){
-        const stride = i*3;
-        // xIndex, yIndex حسب ترتيب Three.js: نفترض ترتيب صف-عمود
-        const xIdx = i % meshW;
-        const yIdx = Math.floor(i / meshW);
-        const value = heights[yIdx*meshW + xIdx];
-        // scale Z: ثابت بدقة آمنة
-        const zVal = value * 80; // يمكنك تعديل ثابت التكبير
-        pos[stride + 2] = zVal;
-        // لون من الخريطة الحالية
-        const c = getHeatColor(value, currentColormap);
-        colors[i*3+0] = c.r/255;
-        colors[i*3+1] = c.g/255;
-        colors[i*3+2] = c.b/255;
-      }
-
-      geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-      geom.computeVertexNormals();
-      // اجبار التحديثات
-      if (geom.attributes.position) geom.attributes.position.needsUpdate = true;
-      if (geom.attributes.normal) geom.attributes.normal.needsUpdate = true;
-      if (geom.attributes.color) geom.attributes.color.needsUpdate = true;
-
-      const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
-      mesh = new THREE.Mesh(geom, mat);
-      scene.add(mesh);
-
-      // رسم heatmap كامل الدقة
-      drawHeatmapFromRaw(heightRaw, w, h, min, max);
-      // ضبط المظهر
-      camera.lookAt(0,0,0);
-      renderer.render(scene, camera);
-    }
-
-    // رسم heatmap من البيانات المخزنة (full resolution)
-    function drawHeatmapFromRaw(rawData, w, h, min, max){
-      if(!rawData) return;
-      const denom = (max - min) || 1;
-      // نريد أن يكون canvas بحجم الصورة الأصلي (المستخدم طلب ذلك)
-      heatmap.width = w;
-      heatmap.height = h;
-      const out = ctxHeat.createImageData(w, h);
-      for (let y=0;y<h;y++){
-        for (let x=0;x<w;x++){
-          const idx = (y*w + x)*4;
-          const brightness = rawData[idx];
-          let norm = (brightness - min)/denom;
-          norm = Math.max(0, Math.min(1, norm));
-          const c = getHeatColor(norm, currentColormap);
-          out.data[idx] = c.r;
-          out.data[idx+1] = c.g;
-          out.data[idx+2] = c.b;
-          out.data[idx+3] = 255;
-        }
-      }
-      // ضع الصورة على الـ canvas (full-res)
-      ctxHeat.putImageData(out, 0, 0);
-      // إذا أردنا تكبير العرض بصريًا لملء المساحة نرسمها بنسخة مكبرة:
-      // هنا نتركها بحجم الصورة الطبيعي. إن أردت تكبيراً بصرياً، يمكنك فك التعليق:
-      // const tmp = document.createElement('canvas'); tmp.width=w; tmp.height=h; tmp.getContext('2d').putImageData(out,0,0);
-      // ctxHeat.drawImage(tmp, 0, 0, heatmap.clientWidth, heatmap.clientHeight);
-    }
-
-    // تغيير colormap دون إعادة رفع الصورة (يعيد رسم heatmap ويحدّث ألوان الـ mesh)
-    function setColormap(map){
-      currentColormap = map;
-      // نحدّث الـ mesh الألوان إذا موجود
-      if (mesh && mesh.geometry && mesh.geometry.attributes.color){
-        const colorAttr = mesh.geometry.attributes.color;
-        const count = colorAttr.count;
-        for (let i=0;i<count;i++){
-          const x = (i % (mesh.geometry.parameters.widthSegments + 1));
-          const y = Math.floor(i / (mesh.geometry.parameters.widthSegments + 1));
-          // قيمة تقريبيّة لنستخرجها من pos.z
-          const z = mesh.geometry.attributes.position.array[i*3 + 2];
-          // value in [0..1] approx:
-          const value = Math.max(0, Math.min(1, z / 80)); // يعتمد على scaleZ المستخدم أعلى
-          const c = getHeatColor(value, currentColormap);
-          colorAttr.array[i*3+0] = c.r/255;
-          colorAttr.array[i*3+1] = c.g/255;
-          colorAttr.array[i*3+2] = c.b/255;
-        }
-        colorAttr.needsUpdate = true;
-      }
-      // redraw full-res heatmap if raw data available
-      if (heightRaw && heightW && heightH){
-        // need min/max: recompute quickly from raw
-        let min=255,max=0;
-        for (let i=0;i<heightRaw.length;i+=4){
-          const b = heightRaw[i];
-          if (b < min) min = b;
-          if (b > max) max = b;
-        }
-        drawHeatmapFromRaw(heightRaw, heightW, heightH, min, max);
-      } else if (lastImage){
-        // fallback: re-create from image (slower)
-        createHeightMap(lastImage);
-      }
-    }
-
-    // نافذة الرسوم المتحركة
-    function animate(){
-      requestAnimationFrame(animate);
-      if (mesh){
-        mesh.rotation.y += rotationSpeed;
-      }
-      renderer.render(scene, camera);
-    }
-    animate();
-
-    // أحداث DOM
-    fileInput.addEventListener('change', (e) => {
-      const f = e.target.files[0];
-      if (!f) return;
-      const url = URL.createObjectURL(f);
-      const img = new Image();
-      img.onload = () => {
-        // حماية من صور ضخمة جداً في العرض
-        const MAX_PREVIEW = 1600;
-        let drawW = img.width, drawH = img.height;
-        if (drawW > MAX_PREVIEW){
-          const r = MAX_PREVIEW / drawW;
-          drawW = MAX_PREVIEW;
-          drawH = Math.round(drawH * r);
-        }
-        canvas2d.width = drawW;
-        canvas2d.height = drawH;
-        ctx2d.clearRect(0,0,drawW,drawH);
-        ctx2d.imageSmoothingEnabled = true;
-        ctx2d.drawImage(img, 0, 0, drawW, drawH);
-
-        // نريد إنشاء الـ heightmap من الصورة الأصلية (full resolution)
-        createHeightMap(img);
-
-        URL.revokeObjectURL(url);
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        alert('فشل تحميل الصورة. جرّب صورة مختلفة.');
-      };
-      img.src = url;
+    // --- Tabs ---
+    const tabBtns = document.querySelectorAll(".tab-btn");
+    const tabContents = document.querySelectorAll(".tab-content");
+    tabBtns.forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        tabBtns.forEach(b=>b.classList.remove("active"));
+        tabContents.forEach(c=>c.classList.remove("active"));
+        btn.classList.add("active");
+        document.getElementById(btn.dataset.tab).classList.add("active");
+      });
     });
 
-    // تحكّم سرعة الدوران والتكبير
-    rotationSpeedInput.addEventListener('input', () => {
-      rotationSpeed = parseFloat(rotationSpeedInput.value) || 0;
-    });
-    zoomControl.addEventListener('input', () => {
-      const z = parseFloat(zoomControl.value) || 200;
-      camera.position.z = z;
-      camera.updateProjectionMatrix();
-    });
-
-    // تبديل الثيم
-    themeToggle.addEventListener('click', () => {
-      document.body.classList.toggle('dark');
-      themeToggle.textContent = document.body.classList.contains('dark') ? "☀️" : "🌙";
-    });
-
-    // إعادة ضبط الدقة والحجم عند تغيير حجم النافذة (renderer ثابت الحجم لكن ندعم DPR)
-    window.addEventListener('resize', () => {
-      DPR = Math.min(window.devicePixelRatio || 1, 2);
-      renderer.setPixelRatio(DPR);
-      renderer.setSize(RENDER_SIZE, RENDER_SIZE, false);
-    });
-
-    // تهيئة أولية: اضبط حجم العنصر renderer بالمساحة المخصصة
-    (function initRendererSize(){
-      renderer.setPixelRatio(DPR);
-      renderer.setSize(RENDER_SIZE, RENDER_SIZE, false);
-    })();
-
+    // --- Gcode ---
+    let gcodeText = "";
+    function generateGcode(){
+      const width = parseFloat(document.getElementById("widthMm").value);
+      const height = parseFloat(document.getElementById("heightMm").value);
+      const depth = parseFloat(document.getElementById("depthMm").value);
+      gcodeText = `; G-code Generated by CNC AI\nG21\nG90\nG0 Z5\n`;
+      const stepX = width/10, stepY = height/10;
+      for(let y=0;y<=height;y+=stepY){
+        for(let x=0;x<=width;x+=stepX){
+          gcodeText+=`G1 X${x.toFixed(2)} Y${y.toFixed(2)} Z-${depth} F300\n`;
+        }
+      }
+      gcodeText += "M30";
+      document.getElementById("gcodeOutput").value = gcodeText;
+    }
+    function downloadGcode(){
+      if(!gcodeText){alert("توليد الأول");return;}
+      const blob=new Blob([gcodeText],{type:"text/plain"});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");
+      a.href=url;a.download="cnc_output.gcode";a.click();
+      URL.revokeObjectURL(url);
+    }
   </script>
 </body>
 </html>
