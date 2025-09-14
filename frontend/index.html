@@ -6,26 +6,29 @@
   <style>
     body {
       margin: 0;
-      font-family: Arial, sans-serif;
-      background: #f5f5f5;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: linear-gradient(135deg, #f5f7fa, #e0e0e0);
       display: flex;
       flex-direction: column;
       height: 100vh;
+      color: #333;
     }
 
     header {
-      background: #222;
+      background: linear-gradient(90deg, #222, #444);
       color: #fff;
-      padding: 10px 20px;
+      padding: 12px 20px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       flex-wrap: wrap;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
     }
 
     header h1 {
       margin: 0;
-      font-size: 20px;
+      font-size: 22px;
+      letter-spacing: 1px;
     }
 
     .controls {
@@ -37,18 +40,22 @@
       margin-top: 8px;
     }
 
-    .controls button, .controls input[type="file"] {
+    .controls button, 
+    .controls input[type="file"] {
       padding: 8px 14px;
       border: none;
-      border-radius: 6px;
+      border-radius: 8px;
       cursor: pointer;
       font-size: 14px;
       font-weight: bold;
-      transition: 0.3s;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
     }
 
-    .controls button:hover {
-      opacity: 0.8;
+    .controls button:hover, 
+    .controls input[type="file"]:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     }
 
     .btn-original { background: #2196f3; color: white; }
@@ -61,16 +68,18 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      background: #e0e0e0;
+      background: #fafafa;
       overflow: hidden;
+      padding: 10px;
     }
 
     canvas, img {
       max-width: 100%;
       max-height: 100%;
       display: none;
-      border-radius: 10px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      background: #fff;
     }
 
     #originalView { display: block; }
@@ -78,13 +87,13 @@
 </head>
 <body>
   <header>
-    <h1>CncAi Viewer</h1>
+    <h1>🛠️ CncAi Viewer</h1>
     <div class="controls">
       <input type="file" id="upload" accept="image/*">
-      <button class="btn-original" onclick="showView('original')">Original</button>
-      <button class="btn-2d" onclick="showView('2d')">2D</button>
-      <button class="btn-heatmap" onclick="showView('heatmap')">Heatmap</button>
-      <button class="btn-3d" onclick="showView('3d')">3D</button>
+      <button class="btn-original" onclick="showView('original')">📷 Original</button>
+      <button class="btn-2d" onclick="showView('2d')">🖼️ 2D</button>
+      <button class="btn-heatmap" onclick="showView('heatmap')">🌈 Heatmap</button>
+      <button class="btn-3d" onclick="showView('3d')">🌀 3D</button>
     </div>
   </header>
 
