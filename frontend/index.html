@@ -1,192 +1,239 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>CNC AI Preview</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CncAi</title>
   <style>
-    :root {
-      --bg-color: #fdfdfd;
-      --text-color: #333;
-      --header-bg: linear-gradient(90deg, #4a90e2, #67b0f5);
-      --header-text: #fff;
-      --card-bg: #fff;
-      --border-color: #ccc;
-      --button-bg: #f0f0f0;
-      --button-hover: #e0e0e0;
-    }
-
-    body.dark {
-      --bg-color: #1e1e1e;
-      --text-color: #eee;
-      --header-bg: linear-gradient(90deg, #222, #555);
-      --header-text: #f5f5f5;
-      --card-bg: #2a2a2a;
-      --border-color: #555;
-      --button-bg: #444;
-      --button-hover: #666;
-    }
-
     body {
-      font-family: "Segoe UI", Arial, sans-serif;
-      background: var(--bg-color);
       margin: 0;
-      padding: 0;
-      color: var(--text-color);
-      transition: background 0.3s, color 0.3s;
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: #fff;
+      overflow-x: hidden;
     }
-
     header {
-      width: 100%;
-      background: var(--header-bg);
-      color: var(--header-text);
-      padding: 15px;
-      font-size: 20px;
-      font-weight: bold;
-      text-align: center;
-      position: relative;
-    }
-
-    #themeToggle {
-      position: absolute;
-      right: 15px;
-      top: 50%;
-      transform: translateY(-50%);
-      background: transparent;
-      border: none;
-      font-size: 20px;
-      cursor: pointer;
-      color: var(--header-text);
-    }
-
-    nav {
       display: flex;
-      justify-content: center;
-      gap: 15px;
-      margin: 15px 0;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 20px;
+      background: #222;
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
-
-    nav button {
-      padding: 8px 16px;
+    header h1 {
+      margin: 0;
+      font-size: 20px;
+    }
+    header button {
+      margin-left: 10px;
+      padding: 6px 12px;
+      background: #444;
       border: none;
-      border-radius: 6px;
-      background: var(--button-bg);
+      color: #fff;
       cursor: pointer;
-      font-weight: bold;
+      border-radius: 5px;
+    }
+    header button:hover {
+      background: #666;
     }
 
-    nav button.active {
-      background: #4a90e2;
-      color: white;
+    main {
+      padding: 20px;
+      text-align: center;
     }
-
-    section {
-      display: none;
-      padding: 15px;
-      max-width: 800px;
-      margin: auto;
-    }
-
-    section.active {
+    canvas {
+      max-width: 100%;
+      border: 1px solid #444;
+      margin: 10px auto;
       display: block;
     }
-
-    .preview-block {
-      text-align: center;
-      margin-bottom: 20px;
+    .controls {
+      margin: 20px 0;
     }
-
-    textarea {
-      width: 100%;
-      height: 300px;
-      padding: 10px;
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      background: var(--card-bg);
-      color: var(--text-color);
-      font-family: monospace;
-      font-size: 14px;
-      resize: vertical;
-    }
-
-    .download-btn {
-      margin-top: 10px;
-      padding: 10px 20px;
+    .controls button {
+      margin: 5px;
+      padding: 8px 15px;
       border: none;
-      border-radius: 6px;
-      background: #4a90e2;
-      color: white;
-      font-weight: bold;
+      border-radius: 5px;
       cursor: pointer;
+      background: #444;
+      color: #fff;
+    }
+    .controls button:hover {
+      background: #666;
+    }
+
+    /* Sidebar */
+    #sidebar {
+      position: fixed;
+      top: 0;
+      right: -300px;
+      width: 300px;
+      height: 100%;
+      background: #222;
+      color: #fff;
+      padding: 20px;
+      transition: right 0.3s ease;
+      overflow-y: auto;
+      z-index: 1000;
+    }
+    #sidebar.open {
+      right: 0;
+    }
+    #sidebar h2 {
+      margin-top: 0;
+    }
+    #sidebar label {
+      display: block;
+      margin: 10px 0 5px;
+    }
+    #sidebar input {
+      width: 100%;
+      padding: 5px;
+      margin-bottom: 10px;
+      border: none;
+      border-radius: 4px;
+    }
+    #sidebar button {
+      width: 100%;
+      padding: 10px;
+      background: #444;
+      border: none;
+      color: #fff;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+    #sidebar button:hover {
+      background: #666;
     }
   </style>
 </head>
 <body>
   <header>
-    🛠️ CNC AI
-    <button id="themeToggle">🌙</button>
+    <h1>CncAi</h1>
+    <div>
+      <button id="themeToggle">Toggle Theme</button>
+      <button id="sidebarToggle">⚙️ Settings</button>
+    </div>
   </header>
 
-  <nav>
-    <button class="tab active" data-tab="preview">المعاينة</button>
-    <button class="tab" data-tab="gcode">G-code</button>
-  </nav>
+  <main>
+    <input type="file" id="uploadImage" accept="image/*">
+    <div class="controls">
+      <button onclick="showView('original')">Original</button>
+      <button onclick="showView('heatmap')">Heatmap</button>
+      <button onclick="showView('3d')">3D</button>
+    </div>
+    <canvas id="canvas"></canvas>
+  </main>
 
-  <!-- قسم المعاينة -->
-  <section id="preview" class="active">
-    <div class="preview-block">
-      <input type="file" id="fileInput" accept="image/*">
-    </div>
-    <div class="preview-block">
-      <canvas id="preview2d"></canvas>
-      <div>📷 الصورة الأصلية</div>
-    </div>
-    <div class="preview-block">
-      <div id="preview3d"></div>
-      <div>🌀 المعاينة ثلاثية الأبعاد</div>
-    </div>
-    <div class="preview-block">
-      <canvas id="heatmap"></canvas>
-      <div>🌈 خريطة الارتفاعات</div>
-    </div>
-  </section>
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <h2>G-code Settings</h2>
 
-  <!-- قسم G-code -->
-  <section id="gcode">
-    <h2>💾 توليد وتحميل G-code</h2>
-    <textarea id="gcodeOutput" placeholder="سيظهر كود G-code هنا..."></textarea>
-    <br>
-    <button class="download-btn" onclick="downloadGcode()">⬇️ تحميل G-code</button>
-  </section>
+    <label>Feed Rate (mm/min)</label>
+    <input type="number" id="feedRate" value="800">
 
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+    <label>Spindle Speed (RPM)</label>
+    <input type="number" id="spindleSpeed" value="12000">
+
+    <label>Cut Depth (mm)</label>
+    <input type="number" id="cutDepth" step="0.1" value="1">
+
+    <label>Safe Z (mm)</label>
+    <input type="number" id="safeZ" step="0.1" value="5">
+
+    <label>Scale</label>
+    <input type="number" id="scale" step="0.1" value="1">
+
+    <label>File Name</label>
+    <input type="text" id="fileName" value="output.gcode">
+
+    <button id="saveSettings">Save</button>
+  </aside>
+
   <script>
-    // التنقل بين التبويبات
-    document.querySelectorAll('.tab').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('section').forEach(sec => sec.classList.remove('active'));
-        btn.classList.add('active');
-        document.getElementById(btn.dataset.tab).classList.add('active');
-      });
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const uploadImage = document.getElementById("uploadImage");
+    let img = new Image();
+    let currentView = "original";
+
+    uploadImage.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
     });
 
-    // زر تحميل G-code
-    function downloadGcode() {
-      const gcode = document.getElementById("gcodeOutput").value;
-      if (!gcode.trim()) {
-        alert("⚠️ لا يوجد كود G-code للتنزيل!");
-        return;
-      }
-      const blob = new Blob([gcode], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "output.gcode";
-      a.click();
-      URL.revokeObjectURL(url);
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      drawOriginal();
+    };
+
+    function showView(view) {
+      currentView = view;
+      if (view === "original") drawOriginal();
+      else if (view === "heatmap") drawHeatmap();
+      else if (view === "3d") draw3D();
     }
 
-    // 🔹 باقي أكواد المعاينة (من النسخة المستقرة) هتتنسخ هنا لاحقًا
+    function drawOriginal() {
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    }
+
+    function drawHeatmap() {
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      for (let i = 0; i < data.length; i += 4) {
+        const avg = (data[i] + data[i+1] + data[i+2]) / 3;
+        data[i] = avg; 
+        data[i+1] = 0;
+        data[i+2] = 255 - avg;
+      }
+      ctx.putImageData(imageData, 0, 0);
+    }
+
+    function draw3D() {
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "lime";
+      ctx.font = "20px Arial";
+      ctx.fillText("3D Preview (placeholder)", 20, 50);
+    }
+
+    // Sidebar toggle
+    const sidebar = document.getElementById("sidebar");
+    const toggleBtn = document.getElementById("sidebarToggle");
+    toggleBtn.addEventListener("click", () => {
+      sidebar.classList.toggle("open");
+    });
+
+    // Save settings
+    document.getElementById("saveSettings").addEventListener("click", () => {
+      const settings = {
+        feedRate: document.getElementById("feedRate").value,
+        spindleSpeed: document.getElementById("spindleSpeed").value,
+        cutDepth: document.getElementById("cutDepth").value,
+        safeZ: document.getElementById("safeZ").value,
+        scale: document.getElementById("scale").value,
+        fileName: document.getElementById("fileName").value,
+      };
+      console.log("Saved Settings:", settings);
+      alert("Settings Saved!");
+    });
+
+    // Theme toggle
+    document.getElementById("themeToggle").addEventListener("click", () => {
+      document.body.classList.toggle("light");
+    });
   </script>
 </body>
 </html>
