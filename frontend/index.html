@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CNC AI - النسخة المتطورة مع الذكاء الاصطناعي</title>
+  <title>CNC AI - النسخة المتطورة مع Top View</title>
   <style>
     :root {
       --primary-color: #4a90e2;
@@ -20,6 +20,7 @@
       --warning-color: #ffc107;
       --error-color: #dc3545;
       --ai-color: #9c27b0;
+      --wood-color: #8b4513;
       --tab-inactive: #e9ecef;
       --tab-active: var(--primary-color);
     }
@@ -33,6 +34,7 @@
       --button-bg: #333;
       --button-hover: #555;
       --ai-color: #ba68c8;
+      --wood-color: #a0522d;
       --tab-inactive: #333;
       --tab-active: #4a90e2;
     }
@@ -206,7 +208,7 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.1);
     }
 
-    #preview3d, #gcodeSimulation {
+    #preview3d, #gcodeSimulation, #topView {
       width: 100%;
       height: 300px;
       border-radius: 8px;
@@ -336,6 +338,15 @@
       background: #7b1fa2;
     }
 
+    .btn-wood {
+      background: var(--wood-color);
+      color: white;
+    }
+
+    .btn-wood:hover {
+      background: #6b2c0c;
+    }
+
     .action-buttons {
       display: flex;
       gap: 10px;
@@ -433,6 +444,10 @@
       background: var(--ai-color);
     }
 
+    .notification.wood {
+      background: var(--wood-color);
+    }
+
     .simulation-controls {
       display: flex;
       gap: 10px;
@@ -441,31 +456,14 @@
       flex-wrap: wrap;
     }
 
-    .ai-analysis {
-      background: var(--card-bg);
-      border-radius: 10px;
-      padding: 1.5rem;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
-      margin-bottom: 2rem;
-      border: 1px solid var(--border-color);
-    }
-
-    .ai-results {
-      margin-top: 1rem;
-      padding: 1rem;
-      background: rgba(156, 39, 176, 0.1);
-      border-radius: 5px;
-      border-left: 4px solid var(--ai-color);
-    }
-
-    .model-selector {
+    .view-controls {
       display: flex;
       gap: 10px;
-      margin-bottom: 1rem;
-      flex-wrap: wrap;
+      margin: 1rem 0;
+      justify-content: center;
     }
 
-    .model-btn {
+    .view-btn {
       padding: 8px 15px;
       border: 1px solid var(--border-color);
       border-radius: 5px;
@@ -475,10 +473,46 @@
       transition: all 0.3s;
     }
 
-    .model-btn.active {
-      background: var(--ai-color);
+    .view-btn.active {
+      background: var(--primary-color);
       color: white;
-      border-color: var(--ai-color);
+      border-color: var(--primary-color);
+    }
+
+    .wood-carving {
+      background: var(--card-bg);
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+      margin-bottom: 2rem;
+      border: 1px solid var(--border-color);
+    }
+
+    .carving-patterns {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 10px;
+      margin: 1rem 0;
+    }
+
+    .pattern-btn {
+      padding: 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 5px;
+      background: var(--button-bg);
+      cursor: pointer;
+      transition: all 0.3s;
+      text-align: center;
+    }
+
+    .pattern-btn:hover {
+      background: var(--button-hover);
+    }
+
+    .pattern-btn.active {
+      background: var(--wood-color);
+      color: white;
+      border-color: var(--wood-color);
     }
 
     @media (max-width: 768px) {
@@ -509,7 +543,7 @@
 <body>
   <header>
     <div class="header-content">
-      <h1><span>🛠️</span> CNC AI - النسخة المتطورة مع الذكاء الاصطناعي</h1>
+      <h1><span>🛠️</span> CNC AI - مع Top View ونقش الخشب</h1>
       <div class="controls">
         <button id="themeToggle">🌙</button>
       </div>
@@ -522,7 +556,7 @@
       <div class="tab active" data-tab="preview">معاينة الصورة</div>
       <div class="tab" data-tab="gcode">G-code إعدادات</div>
       <div class="tab" data-tab="simulation">محاكاة G-code</div>
-      <div class="tab" data-tab="ai">الذكاء الاصطناعي</div>
+      <div class="tab" data-tab="wood">نقش الخشب</div>
     </div>
 
     <!-- تاب المعاينة -->
@@ -654,7 +688,6 @@
             <select id="gcodeType">
               <option value="heatmap">بناءً على Heatmap</option>
               <option value="3dmodel">بناءً على النموذج ثلاثي الأبعاد</option>
-              <option value="ai">بناءً على تحليل الذكاء الاصطناعي</option>
             </select>
           </div>
           <div class="form-group">
@@ -690,11 +723,21 @@
     <div class="tab-content" id="simulation-tab">
       <div class="preview-block">
         <h3 class="preview-title">🎮 محاكاة مسار الأداة</h3>
+        <div class="view-controls">
+          <div class="view-btn active" data-view="3d">عرض 3D</div>
+          <div class="view-btn" data-view="top">عرض علوي (Top View)</div>
+        </div>
         <div class="preview-content">
           <div id="gcodeSimulation">
             <div class="loading" id="loadingSimulation">
               <div class="loading-spinner"></div>
               <p>جاري تحميل المحاكاة...</p>
+            </div>
+          </div>
+          <div id="topView" style="display: none;">
+            <div class="loading" id="loadingTopView">
+              <div class="loading-spinner"></div>
+              <p>جاري تحميل العرض العلوي...</p>
             </div>
           </div>
         </div>
@@ -720,77 +763,71 @@
       </div>
     </div>
 
-    <!-- تاب الذكاء الاصطناعي -->
-    <div class="tab-content" id="ai-tab">
-      <div class="ai-analysis">
-        <h3 class="preview-title">🧠 تحليل الصورة بالذكاء الاصطناعي</h3>
+    <!-- تاب نقش الخشب -->
+    <div class="tab-content" id="wood-tab">
+      <div class="wood-carving">
+        <h3 class="preview-title">🌳 إعدادات نقش الخشب</h3>
         
-        <div class="model-selector">
-          <div class="model-btn active" data-model="object">كشف الأشياء</div>
-          <div class="model-btn" data-model="contour">كشف الحواف</div>
-          <div class="model-btn" data-model="material">تحليل الخامات</div>
+        <div class="settings-group">
+          <h3><span>🔧</span> إعدادات النقش</h3>
+          <div class="form-group">
+            <label for="carvingDepth">عمق النقش (mm)</label>
+            <input type="number" id="carvingDepth" value="1.5" step="0.1" min="0.5" max="5">
+          </div>
+          <div class="form-group">
+            <label for="carvingSpeed">سرعة النقش (mm/min)</label>
+            <input type="number" id="carvingSpeed" value="800">
+          </div>
+          <div class="form-group">
+            <label for="woodType">نوع الخشب</label>
+            <select id="woodType">
+              <option value="pine">خشب الصنوبر</option>
+              <option value="oak">خشب البلوط</option>
+              <option value="walnut">خشب الجوز</option>
+              <option value="mahogany">خشب الماهوجني</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <h3><span>🎨</span> أنماط النقش</h3>
+          <div class="carving-patterns">
+            <div class="pattern-btn active" data-pattern="lines">خطوط متوازية</div>
+            <div class="pattern-btn" data-pattern="cross">تقاطع</div>
+            <div class="pattern-btn" data-pattern="circle">دوائر</div>
+            <div class="pattern-btn" data-pattern="wave">أمواج</div>
+          </div>
         </div>
 
         <div class="action-buttons">
-          <button class="btn btn-ai" onclick="analyzeImage()">
-            <span>🤖</span> تحليل الصورة
+          <button class="btn btn-wood" onclick="generateWoodCarving()">
+            <span>🌳</span> توليد نقش الخشب
           </button>
-          <button class="btn btn-secondary" onclick="trainModel()">
-            <span>🔧</span> تدريب النموذج
+          <button class="btn btn-secondary" onclick="previewWoodCarving()">
+            <span>👁️</span> معاينة النقش
           </button>
-        </div>
-
-        <div class="ai-results" id="aiResults">
-          <p>سيظهر هنا نتائج التحليل بعد معالجة الصورة.</p>
         </div>
       </div>
 
-      <div class="settings-panel">
-        <div class="settings-group">
-          <h3><span>⚙️</span> إعدادات الذكاء الاصطناعي</h3>
-          <div class="form-group">
-            <label for="aiPrecision">دقة التحليل</label>
-            <select id="aiPrecision">
-              <option value="low">منخفضة (أسرع)</option>
-              <option value="medium" selected>متوسطة</option>
-              <option value="high">عالية (أبطأ)</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="aiThreshold">حد الثقة (%)</label>
-            <input type="range" id="aiThreshold" min="50" max="99" value="80">
-            <span id="aiThresholdValue">80%</span>
-          </div>
-          <div class="form-group">
-            <label for="aiModel">نموذج الذكاء الاصطناعي</label>
-            <select id="aiModel">
-              <option value="mobilenet">MobileNet (سريع)</option>
-              <option value="resnet">ResNet (دقيق)</option>
-              <option value="custom">نموذج مخصص</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="action-buttons">
-          <button class="btn btn-ai" onclick="generateAIGcode()">
-            <span>🧠</span> توليد G-code بالذكاء الاصطناعي
-          </button>
-          <button class="btn btn-secondary" onclick="optimizeGcode()">
-            <span>⚡</span> تحسين G-code الموجود
-          </button>
+      <div class="preview-block">
+        <h3 class="preview-title">📋 معلومات نقش الخشب</h3>
+        <div id="woodInfo">
+          <p>📏 أقصى عمق: <span id="maxDepth">1.5</span> مم</p>
+          <p>⚡ السرعة المثلى: <span id="optimalSpeed">800</span> mm/min</p>
+          <p>🔧 عدد المسارات: <span id="pathCount">0</span></p>
+          <p>⏱️ الوقت المتوقع: <span id="carvingTime">0</span> دقيقة</p>
         </div>
       </div>
     </div>
   </div>
 
   <footer>
-    <p>تم التطوير باستخدام Three.js و TensorFlow.js - مشروع CncAi المتطور</p>
+    <p>تم التطوير باستخدام Three.js - مشروع CncAI مع Top View ونقش الخشب</p>
   </footer>
 
   <div class="notification" id="notification">تم تحميل الصورة بنجاح!</div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
   <script>
     // عناصر DOM
     const fileInput = document.getElementById('fileInput');
@@ -810,10 +847,10 @@
     const loading3d = document.getElementById('loading3d');
     const gcodeSimulation = document.getElementById('gcodeSimulation');
     const loadingSimulation = document.getElementById('loadingSimulation');
-    const aiResults = document.getElementById('aiResults');
-    const aiThreshold = document.getElementById('aiThreshold');
-    const aiThresholdValue = document.getElementById('aiThresholdValue');
-    const modelButtons = document.querySelectorAll('.model-btn');
+    const topView = document.getElementById('topView');
+    const loadingTopView = document.getElementById('loadingTopView');
+    const viewButtons = document.querySelectorAll('.view-btn');
+    const patternButtons = document.querySelectorAll('.pattern-btn');
 
     // إعداد Three.js للمعاينة
     const scene = new THREE.Scene();
@@ -831,6 +868,14 @@
     simulationRenderer.setSize(gcodeSimulation.offsetWidth, gcodeSimulation.offsetHeight);
     gcodeSimulation.appendChild(simulationRenderer.domElement);
 
+    // إعداد Three.js للعرض العلوي
+    const topViewScene = new THREE.Scene();
+    topViewScene.background = new THREE.Color(0xf0f0f0);
+    const topViewCamera = new THREE.OrthographicCamera(-50, 50, 50, -50, 0.1, 1000);
+    const topViewRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    topViewRenderer.setSize(topView.offsetWidth, topView.offsetHeight);
+    topView.appendChild(topViewRenderer.domElement);
+
     // إضاءة المشاهد
     function setupLights(scene) {
       const ambientLight = new THREE.AmbientLight(0x404040, 1);
@@ -847,9 +892,12 @@
 
     setupLights(scene);
     setupLights(simulationScene);
+    setupLights(topViewScene);
 
     camera.position.z = 200;
     simulationCamera.position.z = 200;
+    topViewCamera.position.z = 100;
+    topViewCamera.lookAt(0, 0, 0);
 
     let mesh;
     let rotationSpeed = 0.01;
@@ -859,223 +907,9 @@
     let originalImageData = null;
     let simulation = null;
     let isSimulationPlaying = false;
-    let aiModel = null;
-    let currentAIModel = 'object';
+    let currentView = '3d';
+    let currentPattern = 'lines';
 
-    // تحميل نموذج الذكاء الاصطناعي
-    async function loadAIModel() {
-      try {
-        // في الواقع، سنقوم بتحميل نموذج TensorFlow.js هنا
-        // هذا مثال توضيحي فقط
-        aiResults.innerHTML = "<p>جاري تحميل نموذج الذكاء الاصطناعي...</p>";
-        
-        // محاكاة تحميل النموذج
-        setTimeout(() => {
-          aiModel = {
-            predict: function(img) {
-              // محاكاة تنبؤات النموذج
-              return [
-                { className: 'خشب', probability: 0.85 },
-                { className: 'معادن', probability: 0.12 },
-                { className: 'بلاستيك', probability: 0.03 }
-              ];
-            }
-          };
-          aiResults.innerHTML = "<p>✅ تم تحميل نموذج الذكاء الاصطناعي بنجاح</p>";
-          showNotification('تم تحميل نموذج الذكاء الاصطناعي', false, 'ai');
-        }, 2000);
-      } catch (error) {
-        console.error('فشل تحميل نموذج الذكاء الاصطناعي:', error);
-        aiResults.innerHTML = "<p>❌ فشل تحميل نموذج الذكاء الاصطناعي</p>";
-        showNotification('فشل تحميل نموذج الذكاء الاصطناعي', true);
-      }
-    }
-
-    // تحليل الصورة باستخدام الذكاء الاصطناعي
-    async function analyzeImage() {
-      if (!fileInput.files[0]) {
-        showNotification('يجب تحميل صورة أولاً', true);
-        return;
-      }
-
-      if (!aiModel) {
-        await loadAIModel();
-      }
-
-      aiResults.innerHTML = "<p>جاري تحليل الصورة...</p>";
-      
-      const img = new Image();
-      img.onload = async () => {
-        try {
-          // محاكاة تحليل الصورة
-          setTimeout(() => {
-            const predictions = aiModel.predict(img);
-            
-            let resultsHTML = `<h4>نتائج التحليل (${currentAIModel}):</h4>`;
-            predictions.forEach(pred => {
-              const percent = Math.round(pred.probability * 100);
-              if (percent >= parseInt(aiThreshold.value)) {
-                resultsHTML += `<p>${pred.className}: ${percent}%</p>`;
-              }
-            });
-            
-            // اقتراح إعدادات بناءً على التحليل
-            resultsHTML += `<h4>الإعدادات المقترحة:</h4>`;
-            
-            if (predictions[0].className.includes('خشب')) {
-              resultsHTML += `<p>• السرعة: 1000-1500 mm/min</p>`;
-              resultsHTML += `<p>• عمق القطع: 2-3 mm</p>`;
-              resultsHTML += `<p>• سرعة المغزل: 10000-12000 RPM</p>`;
-            } else if (predictions[0].className.includes('معادن')) {
-              resultsHTML += `<p>• السرعة: 500-800 mm/min</p>`;
-              resultsHTML += `<p>• عمق القطع: 0.5-1 mm</p>`;
-              resultsHTML += `<p>• سرعة المغزل: 8000-10000 RPM</p>`;
-            } else {
-              resultsHTML += `<p>• السرعة: 800-1200 mm/min</p>`;
-              resultsHTML += `<p>• عمق القطع: 1-2 mm</p>`;
-              resultsHTML += `<p>• سرعة المغزل: 10000-12000 RPM</p>`;
-            }
-            
-            aiResults.innerHTML = resultsHTML;
-            showNotification('تم تحليل الصورة بنجاح', false, 'ai');
-          }, 1500);
-        } catch (error) {
-          console.error('فشل تحليل الصورة:', error);
-          aiResults.innerHTML = "<p>❌ فشل تحليل الصورة</p>";
-          showNotification('فشل تحليل الصورة', true);
-        }
-      };
-      img.src = URL.createObjectURL(fileInput.files[0]);
-    }
-
-    // توليد G-code باستخدام الذكاء الاصطناعي
-    async function generateAIGcode() {
-      if (!heightMapData) {
-        showNotification('يجب تحميل صورة أولاً', true);
-        return;
-      }
-
-      if (!aiModel) {
-        await loadAIModel();
-      }
-
-      gcodeOutput.textContent = "🧠 جاري توليد G-code باستخدام الذكاء الاصطناعي...";
-      
-      // محاكاة عملية التوليد
-      setTimeout(() => {
-        const materialType = document.getElementById('materialType').value;
-        const feedRate = document.getElementById('feedRate').value;
-        const spindleSpeed = document.getElementById('spindleSpeed').value;
-        const cutDepth = document.getElementById('cutDepth').value;
-        
-        let gcode = `; G-code generated by CNC AI with AI Enhancement\n`;
-        gcode += `; AI Model: ${document.getElementById('aiModel').value}\n`;
-        gcode += `; Material: ${materialType}\n`;
-        gcode += `; Feed rate: ${feedRate} (AI optimized)\n`;
-        gcode += `; Spindle speed: ${spindleSpeed} (AI optimized)\n\n`;
-        
-        gcode += `G21 ; Set units to millimeters\n`;
-        gcode += `G90 ; Absolute positioning\n`;
-        gcode += `M3 S${spindleSpeed} ; Spindle on\n`;
-        gcode += `G0 Z5 ; Lift spindle\n`;
-        gcode += `G0 X0 Y0 ; Move to start position\n\n`;
-        
-        gcode += `; AI-optimized toolpath\n`;
-        gcode += `G1 Z-${cutDepth} F${feedRate/2} ; Lower to cutting depth\n`;
-        
-        // مسار أكثر كفاءة بناءً على تحليل الذكاء الاصطناعي
-        for (let y = 0; y < heightMapData.height; y += 4) {
-          for (let x = 0; x < heightMapData.width; x += 4) {
-            const idx = (y * heightMapData.width + x) * 4;
-            const brightness = 0.34 * heightMapData.data[idx] + 0.5 * heightMapData.data[idx+1] + 0.16 * heightMapData.data[idx+2];
-            const depth = (brightness / 255) * cutDepth;
-            
-            gcode += `G1 X${x*1.5} Y${y*1.5} Z-${depth.toFixed(2)} F${feedRate}\n`;
-          }
-        }
-        
-        gcode += `\nG0 Z5 ; Lift spindle\n`;
-        gcode += `M5 ; Spindle off\n`;
-        gcode += `G0 X0 Y0 ; Return to start\n`;
-        gcode += `M30 ; End program\n`;
-        
-        gcodeOutput.textContent = gcode;
-        showNotification('تم توليد G-code باستخدام الذكاء الاصطناعي', false, 'ai');
-      }, 2500);
-    }
-
-    // تحسين G-code الموجود باستخدام الذكاء الاصطناعي
-    async function optimizeGcode() {
-      const currentGcode = gcodeOutput.textContent;
-      if (!currentGcode || currentGcode.includes("يجب تحميل صورة") || 
-          currentGcode.includes("جاري توليد")) {
-        showNotification('لا يوجد G-code لتحسينه', true);
-        return;
-      }
-
-      gcodeOutput.textContent = "🧠 جاري تحسين G-code باستخدام الذكاء الاصطناعي...";
-      
-      // محاكاة عملية التحسين
-      setTimeout(() => {
-        let optimizedGcode = currentGcode
-          .replace(/F(\d+)/g, (match, p1) => {
-            // زيادة السرعة بنسبة 15% كتحسين
-            const newSpeed = Math.round(parseInt(p1) * 1.15);
-            return `F${newSpeed}`;
-          })
-          .replace(/Z-(\d+\.\d+)/g, (match, p1) => {
-            // تحسين عمق القطع
-            const newDepth = (parseFloat(p1) * 0.9).toFixed(2);
-            return `Z-${newDepth}`;
-          });
-        
-        // إضافة تعليق يشير إلى التحسين
-        optimizedGcode = optimizedGcode.replace(
-          '; G-code generated by',
-          '; G-code optimized by AI\n; Original G-code generated by'
-        );
-        
-        gcodeOutput.textContent = optimizedGcode;
-        showNotification('تم تحسين G-code باستخدام الذكاء الاصطناعي', false, 'ai');
-      }, 2000);
-    }
-
-    // تدريب النموذج على البيانات الجديدة
-    async function trainModel() {
-      aiResults.innerHTML = "<p>جاري تدريب النموذج على البيانات الجديدة...</p>";
-      
-      // محاكاة عملية التدريب
-      setTimeout(() => {
-        aiResults.innerHTML += "<p>✅ تم تدريب النموذج بنجاح</p>";
-        aiResults.innerHTML += "<p>• دقة النموذج: 92%</p>";
-        aiResults.innerHTML += "<p>• تحسن الأداء: 15%</p>";
-        showNotification('تم تدريب النموذج بنجاح', false, 'ai');
-      }, 3000);
-    }
-
-    // تحديث قيمة عتبة الثقة
-    aiThreshold.addEventListener('input', () => {
-      aiThresholdValue.textContent = `${aiThreshold.value}%`;
-    });
-
-    // تغيير نوع نموذج الذكاء الاصطناعي
-    modelButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        modelButtons.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentAIModel = btn.getAttribute('data-model');
-        aiResults.innerHTML = `<p>تم التغيير إلى وضع: ${currentAIModel}</p>`;
-      });
-    });
-
-    // تحميل نموذج الذكاء الاصطناعي عند بدء التطبيق
-    document.addEventListener('DOMContentLoaded', () => {
-      loadAIModel();
-    });
-
-    // الباقي من الكود الأصلي يبقى كما هو
-    // [يتبع الكود الأصلي مع تعديلات طفيفة للحفاظ على التناسق]
-    
     // تبديل التابات
     tabs.forEach(tab => {
       tab.addEventListener('click', () => {
@@ -1090,6 +924,91 @@
         document.getElementById(`${tabId}-tab`).classList.add('active');
       });
     });
+
+    // تبديل بين العرض 3D والعرض العلوي
+    viewButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        viewButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentView = btn.getAttribute('data-view');
+        
+        if (currentView === '3d') {
+          gcodeSimulation.style.display = 'block';
+          topView.style.display = 'none';
+        } else {
+          gcodeSimulation.style.display = 'none';
+          topView.style.display = 'block';
+          updateTopView();
+        }
+      });
+    });
+
+    // اختيار نمط النقش
+    patternButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        patternButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentPattern = btn.getAttribute('data-pattern');
+      });
+    });
+
+    // تحديث العرض العلوي
+    function updateTopView() {
+      if (!simulation) return;
+      
+      // مسح المشهد الحالي
+      while(topViewScene.children.length > 0) { 
+        topViewScene.remove(topViewScene.children[0]); 
+      }
+      setupLights(topViewScene);
+      
+      // إنشاء لوحة الخشب
+      const boardGeometry = new THREE.PlaneGeometry(100, 100);
+      const boardMaterial = new THREE.MeshLambertMaterial({ 
+        color: 0x8B4513,
+        side: THREE.DoubleSide
+      });
+      const board = new THREE.Mesh(boardGeometry, boardMaterial);
+      board.rotation.x = Math.PI / 2;
+      topViewScene.add(board);
+      
+      // إنشاء مسار الأداة (منظر علوي)
+      const points = [];
+      for (let i = 0; i < 50; i++) {
+        const angle = (i / 50) * Math.PI * 2;
+        const radius = 40 + Math.sin(angle * 3) * 5;
+        points.push(new THREE.Vector3(
+          Math.cos(angle) * radius,
+          Math.sin(angle) * radius,
+          0
+        ));
+      }
+      
+      const pathGeometry = new THREE.BufferGeometry().setFromPoints(points);
+      const pathMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
+      const path = new THREE.Line(pathGeometry, pathMaterial);
+      topViewScene.add(path);
+      
+      // إضافة مؤشر نقطة البداية
+      const startGeometry = new THREE.SphereGeometry(1, 16, 16);
+      const startMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+      const startMarker = new THREE.Mesh(startGeometry, startMaterial);
+      startMarker.position.copy(points[0]);
+      topViewScene.add(startMarker);
+      
+      // إضافة مؤشر نقطة النهاية
+      const endGeometry = new THREE.SphereGeometry(1, 16, 16);
+      const endMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+      const endMarker = new THREE.Mesh(endGeometry, endMaterial);
+      endMarker.position.copy(points[points.length - 1]);
+      topViewScene.add(endMarker);
+      
+      // إضافة شبكة للمساعدة في التوجيه
+      const gridHelper = new THREE.GridHelper(100, 10);
+      gridHelper.rotation.x = Math.PI / 2;
+      gridHelper.position.y = -0.1;
+      topViewScene.add(gridHelper);
+    }
 
     // دالة لتحسين الصورة
     function applyEnhancement(type) {
@@ -1321,6 +1240,10 @@
       if (simulationRenderer) {
         simulationRenderer.render(simulationScene, simulationCamera);
       }
+      
+      if (topViewRenderer) {
+        topViewRenderer.render(topViewScene, topViewCamera);
+      }
     }
     animate();
 
@@ -1372,6 +1295,7 @@
       // تحديث لون خلفية المشهد ثلاثي الأبعاد
       scene.background = new THREE.Color(document.body.classList.contains('dark') ? 0x121212 : 0xf0f0f0);
       simulationScene.background = new THREE.Color(document.body.classList.contains('dark') ? 0x121212 : 0xf0f0f0);
+      topViewScene.background = new THREE.Color(document.body.classList.contains('dark') ? 0x121212 : 0xf0f0f0);
     });
 
     // جعل النماذج ثلاثية الأبعاد متجاوبة
@@ -1383,6 +1307,9 @@
       simulationRenderer.setSize(gcodeSimulation.offsetWidth, gcodeSimulation.offsetHeight);
       simulationCamera.aspect = gcodeSimulation.offsetWidth / gcodeSimulation.offsetHeight;
       simulationCamera.updateProjectionMatrix();
+      
+      topViewRenderer.setSize(topView.offsetWidth, topView.offsetHeight);
+      topViewCamera.updateProjectionMatrix();
     });
 
     // دالة لعرض الإشعارات
@@ -1393,6 +1320,8 @@
         notification.classList.add('error');
       } else if (type === 'ai') {
         notification.classList.add('ai');
+      } else if (type === 'wood') {
+        notification.classList.add('wood');
       }
       notification.classList.add('show');
       
@@ -1491,6 +1420,7 @@
       document.getElementById('simulation-tab').classList.add('active');
       
       loadingSimulation.style.display = 'flex';
+      loadingTopView.style.display = 'flex';
       
       // محاكاة عملية تحميل المحاكاة
       setTimeout(() => {
@@ -1501,18 +1431,20 @@
         setupLights(simulationScene);
         
         // إنشاء نموذج أساسي للمحاكاة
-        const geometry = new THREE.BoxGeometry(50, 50, 5);
-        const material = new THREE.MeshLambertMaterial({ color: 0x4a90e2 });
+        const geometry = new THREE.BoxGeometry(80, 80, 5);
+        const material = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
         const base = new THREE.Mesh(geometry, material);
         simulationScene.add(base);
         
         // إنشاء مسار الأداة
         const points = [];
-        for (let i = 0; i < 20; i++) {
+        for (let i = 0; i < 50; i++) {
+          const angle = (i / 50) * Math.PI * 2;
+          const radius = 30 + Math.sin(angle * 3) * 5;
           points.push(new THREE.Vector3(
-            Math.sin(i * 0.3) * 40,
-            Math.cos(i * 0.3) * 40,
-            i * 0.5
+            Math.cos(angle) * radius,
+            Math.sin(angle) * radius,
+            Math.sin(angle * 2) * 2
           ));
         }
         
@@ -1534,7 +1466,7 @@
           points: points,
           tool: tool,
           currentPoint: 0,
-          speed: 5
+          speed: parseInt(document.getElementById('simulationSpeed').value)
         };
         
         // تحديث معلومات المحاكاة
@@ -1543,7 +1475,11 @@
         document.getElementById('simulationCommands').textContent = '25';
         document.getElementById('simulationStatus').textContent = 'جاهز للتشغيل';
         
+        // تحديث العرض العلوي
+        updateTopView();
+        
         loadingSimulation.style.display = 'none';
+        loadingTopView.style.display = 'none';
         showNotification('تم تحميل المحاكاة بنجاح');
       }, 2000);
     }
@@ -1596,6 +1532,39 @@
         simulation.speed = parseInt(this.value);
       }
     });
+
+    // توليد نقش الخشب
+    function generateWoodCarving() {
+      const carvingDepth = document.getElementById('carvingDepth').value;
+      const carvingSpeed = document.getElementById('carvingSpeed').value;
+      const woodType = document.getElementById('woodType').value;
+      
+      showNotification('جاري توليد نقش الخشب', false, 'wood');
+      
+      setTimeout(() => {
+        // محاكاة توليد نقش الخشب
+        document.getElementById('maxDepth').textContent = carvingDepth;
+        document.getElementById('optimalSpeed').textContent = carvingSpeed;
+        document.getElementById('pathCount').textContent = '120';
+        document.getElementById('carvingTime').textContent = '15';
+        
+        showNotification('تم توليد نقش الخشب بنجاح', false, 'wood');
+      }, 2000);
+    }
+
+    // معاينة نقش الخشب
+    function previewWoodCarving() {
+      showNotification('جاري تحضير معاينة نقش الخشب', false, 'wood');
+      
+      // الانتقال إلى تاب المحاكاة
+      tabs.forEach(t => t.classList.remove('active'));
+      tabContents.forEach(tc => tc.classList.remove('active'));
+      document.querySelector('[data-tab="simulation"]').classList.add('active');
+      document.getElementById('simulation-tab').classList.add('active');
+      
+      // محاكاة معاينة نقش الخشب
+      simulateGcode();
+    }
 
     // تحديث خيارات الخامة بناءً على نوع الماكينة
     document.getElementById('machineType').addEventListener('change', function() {
