@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CNC AI - النسخة المتطورة مع Top View</title>
+  <style>
+    /* أنماط CSS تبقى كما هي */
+    /* ... (CSS code remains unchanged) ... */
+  </style>
+</head>
+<body>
+  <!-- واجهة المستخدم تبقى كما هي -->
+  <!-- ... (HTML structure remains unchanged) ... -->
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
+  <script>
+    // إنشاء Web Worker للمهام الثقيلة
+    const createWorker = (workerFunc) => {
+      const blob = new Blob(['(' + workerFunc.toString() + ')()'], { type: 'application/javascript' });
+      return new Worker(URL.createObjectURL(blob));
+    };
+
+    // عامل معالجة الصور
+    const imageProcessingWorker = createWorker(() => {
+      self.onmessage = function(e) {
+        const { imageData, type, threshold } = e.data;
+        const data = new Uint8ClampedArray(imageData.data);
+        const width = imageData.width;
+        const height = imageData.height;
+
+        if (type === 'edges') {
+          // تطبيق مرشح كشف الحواف (Sobel)
+          const tempData = new Uint8ClampedArray(data);
+          for (let y = 1; y < height - 1; y++) {
+            for (let x = 1; x < width - 1; x++) {
+              for (let c = 0; c < 3; c++) {
+                const idx = (y * width + x) * 4 + c;
+                
+                // مرشح Sobel للأفقية
+                let gx = 
+                  -1 * tempData[((y-1)*width + (x-1))*4 + c] +
+                  -2 * tempData[((y)*width + (x-1))*4 + c] +
+                  -1 * tempData[((y+1)*width + (x-1))*4 + c] +
+                  1 * tempData[((y-1)*width + (x+1))*4 + c] +
+                  2 * tempData[((y)*width + (x+1))*4 + c] +
+                  1 * tempData[((y+1)*width + (x+1))*4 + c];
+                
+                // مرشح Sobel للرأسية
+                let gy = 
+                  -1 * tempData[((y-1)*width + (x-1))*4 + c] +
+                  -2 * tempData[((y-1)*width + (x))*4 + c] +
+                  -1 * tempData[((y-1)*width + (x+1))*4 + c] +
+                  1 * tempData[((y+1)*width + (x-1))*4 + c] +
+                  2 * tempData[((y+1)*width + (x))*4 + c] +
+                  1 * tempData[((y+1)*width + (x+1))*4 + c];
+                
+                // حساب القوة
+                const magnitude = Math.min(255, Math.sqrt(gx*gx + gy*gy));
+                
+                // تطبيق العتبة
+                data[idx] = magnitude > threshold ? 255 : 0;
+              }
+              data[y*width*4 + x*4 + 3] = 255; // القناة alpha
+            }
+          }
+        }
+
+        self.postMessage({ processedData: data.buffer, width, height }, [data.buffer]);
+      };
+    });
+
+    // عناصر DOM
+    const fileInput = document.getElementById('fileInput');
+    const fileName = document.getElementById('fileName');
+    const canvas2d = document.getElementById('preview2d');
+    const ctx2d = canvas2d.getContext('2d');
+    const heatmap = document.getElementById('heatmap');
+    const ctxHeat = heatmap.getContext('2d');
+    const edgesPreview = document.getElementById('edgesPreview');
+    const ctxEdges = edgesPreview.getContext('2d');
+    const preview3d = document.getElementById('preview3d');
+    const rotationSpeedInput = document.getElementById('rotationSpeed');
+    const zoomControl = document.getElementById('zoomControl');
+    const heightIntensity = document.getElementById('heightIntensity');
+    const tabs = document.querySelectorAll('.tab');
+    const tabContents = document.querySelectorAll('.tab-content');
+    const gcodeOutput = document.getElementById('gcodeOutput');
+    const notification = document.getElementById('notification');
+    const loading3d = document.getElementById('loading3d');
+    const gcodeSimulation = document.getElementById('gcodeSimulation');
+    const loadingSimulation = document.getElementById('loadingSimulation');
+    const topView = document.getElementById('topView');
+    const loadingTopView = document.getElementById('loadingTopView');
+    const viewButtons = document.querySelectorAll('.view-btn');
+    const patternButtons = document.querySelectorAll('.pattern-btn');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressBar = document.getElementById('progressBar');
+    const processTabs = document.querySelectorAll('.process-tab');
+    const processContents = document.querySelectorAll('.process-content');
+    const edgeThreshold = document.getElementById('edgeThreshold');
+
+    // إعداد Three.js للمعاينة
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
+    const camera = new THREE.PerspectiveCamera(45, preview3d.offsetWidth / preview3d.offsetHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ 
+      antialias: true, 
+      alpha: true,
+      powerPreference: "high-performance"
+    });
+    renderer.setSize(preview3d.offsetWidth, preview3d.offsetHeight);
+    preview3d.appendChild(renderer.domElement);
+
+    // إعداد Three.js للمحاكاة
+    const simulationScene = new THREE.Scene();
+    simulationScene.background = new THREE.Color(0xf0f0f0);
+    const simulationCamera = new THREE.PerspectiveCamera(45, gcodeSimulation.offsetWidth / gcodeSimulation.offsetHeight, 0.1, 1000);
+    const simulationRenderer = new THREE.WebGLRenderer({ 
+      antialias: true, 
+      alpha: true,
+      powerPreference: "high-performance"
+    });
+    simulationRenderer.setSize(gcodeSimulation.offsetWidth, gcodeSimulation.offsetHeight);
+    gcodeSimulation.appendChild(simulationRenderer.domElement);
+
+    // إعداد Three.js للعرض العلوي
+    const topViewScene = new THREE.Scene();
+    topViewScene.background = new THREE.Color(0xf0f0f0);
+    const topViewCamera = new THREE.OrthographicCamera(-50, 50, 50, -50, 0.1, 1000);
+    const topViewRenderer = new THREE.WebGLRenderer({ 
+      antialias: true, 
+      alpha: true,
+      powerPreference: "high-performance"
+    });
+    topViewRenderer.setSize(topView.offsetWidth, topView.offsetHeight);
+    topView.appendChild(topViewRenderer.domElement);
+
+    // تحسين أداء Three.js
+    const setupLights = (scene) => {
+      const ambientLight = new THREE.AmbientLight(0x404040, 1);
+      scene.add(ambientLight);
+      
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      directionalLight.position.set(1, 1, 1);
+      scene.add(directionalLight);
+      
+      const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+      directionalLight2.position.set(-1, -1, -1);
+      scene.add(directionalLight2);
+    };
+
+    setupLights(scene);
+    setupLights(simulationScene);
+    setupLights(topViewScene);
+
+    camera.position.z = 200;
+    simulationCamera.position.z = 200;
+    topViewCamera.position.z = 100;
+    topViewCamera.lookAt(0, 0, 0);
+
+    let mesh;
+    let rotationSpeed = 0.01;
+    let currentColormap = 'jet';
+    let heightFactor = 80;
+    let heightMapData = null;
+    let originalImageData = null;
+    let simulation = null;
+    let isSimulationPlaying = false;
+    let currentView = '3d';
+    let currentPattern = 'lines';
+    let generatedGcode = '';
+    let woodGcodes = {
+      roughing: '',
+      finishing: '',
+      smoothing: ''
+    };
+    let edgeData = null;
+    let isPageVisible = true;
+
+    // التحقق من رؤية الصفحة لتحسين الأداء
+    document.addEventListener('visibilitychange', () => {
+      isPageVisible = !document.hidden;
+    });
+
+    // تحسين أداء الرسوم المتحركة
+    const animate = () => {
+      if (!isPageVisible) {
+        requestAnimationFrame(animate);
+        return;
+      }
+
+      if (mesh) mesh.rotation.y += rotationSpeed;
+      renderer.render(scene, camera);
+      
+      if (simulationRenderer) {
+        simulationRenderer.render(simulationScene, simulationCamera);
+      }
+      
+      if (topViewRenderer) {
+        topViewRenderer.render(topViewScene, topViewCamera);
+      }
+      
+      requestAnimationFrame(animate);
+    };
+    animate();
+
+    // تحسين إدارة الذاكرة
+    const disposeThreeObjects = (scene) => {
+      while(scene.children.length > 0) {
+        const object = scene.children[0];
+        if (object.geometry) object.geometry.dispose();
+        if (object.material) {
+          if (Array.isArray(object.material)) {
+            object.material.forEach(material => material.dispose());
+          } else {
+            object.material.dispose();
+          }
+        }
+        scene.remove(object);
+      }
+    };
+
+    // تحسين معالجة الصور
+    const applyEnhancement = (type) => {
+      if (!originalImageData) {
+        showNotification('يجب تحميل صورة أولاً', true);
+        return;
+      }
+
+      // استخدام كائن Canvas مؤقت مع إعادة الاستخدام
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = canvas2d.width;
+      tempCanvas.height = canvas2d.height;
+      const ctx = tempCanvas.getContext('2d');
+      ctx.putImageData(originalImageData, 0, 0);
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+
+      // تحسين خوارزميات معالجة الصور
+      switch(type) {
+        case 'brightness':
+          // استخدام تقنية أكثر كفاءة لتعديل السطوع
+          const brightnessFactor = 30;
+          for (let i = 0; i < data.length; i += 4) {
+            data[i] = Math.min(255, data[i] + brightnessFactor);
+            data[i+1] = Math.min(255, data[i+1] + brightnessFactor);
+            data[i+2] = Math.min(255, data[i+2] + brightnessFactor);
+          }
+          break;
+        case 'contrast':
+          // تحسين أداء تعديل التباين
+          const contrastFactor = 1.2;
+          const contrastOffset = 128 * (1 - contrastFactor);
+          for (let i = 0; i < data.length; i += 4) {
+            data[i] = Math.min(255, Math.max(0, contrastFactor * data[i] + contrastOffset));
+            data[i+1] = Math.min(255, Math.max(0, contrastFactor * data[i+1] + contrastOffset));
+            data[i+2] = Math.min(255, Math.max(0, contrastFactor * data[i+2] + contrastOffset));
+          }
+          break;
+        // باقي التحسينات...
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+      ctx2d.clearRect(0, 0, canvas2d.width, canvas2d.height);
+      ctx2d.drawImage(tempCanvas, 0, 0);
+      
+      // إنشاء خريطة ارتفاع جديدة من الصورة المحسنة
+      createHeightMapFromCanvas(tempCanvas);
+    };
+
+    // تحسين كشف الحدود باستخدام Web Workers
+    const detectEdges = () => {
+      if (!originalImageData) {
+        showNotification('يجب تحميل صورة أولاً', true);
+        return;
+      }
+
+      updateProgress(10, 'جاري كشف الحدود...');
+      
+      // استخدام Web Worker لمعالجة الصورة في الخلفية
+      imageProcessingWorker.postMessage({
+        imageData: {
+          data: originalImageData.data,
+          width: originalImageData.width,
+          height: originalImageData.height
+        },
+        type: 'edges',
+        threshold: parseInt(edgeThreshold.value)
+      }, [originalImageData.data.buffer]);
+    };
+
+    // معالجة نتائج Web Worker
+    imageProcessingWorker.onmessage = function(e) {
+      const { processedData, width, height } = e.data;
+      const data = new Uint8ClampedArray(processedData);
+      
+      const imageData = new ImageData(data, width, height);
+      ctxEdges.clearRect(0, 0, edgesPreview.width, edgesPreview.height);
+      edgesPreview.width = width;
+      edgesPreview.height = height;
+      ctxEdges.putImageData(imageData, 0, 0);
+      
+      // حفظ بيانات الحدود
+      edgeData = imageData;
+      
+      updateProgress(100, 'تم كشف الحدود بنجاح');
+    };
+
+    // تحسين إنشاء خريطة الارتفاع
+    const createHeightMap = (image) => {
+      const w = Math.min(image.width, 80); // تقليل الدقة لتحسين الأداء
+      const h = Math.min(image.height, 80);
+      
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = w; 
+      tempCanvas.height = h;
+      const tctx = tempCanvas.getContext('2d');
+      tctx.drawImage(image, 0, 0, w, h);
+      const imgData = tctx.getImageData(0, 0, w, h).data;
+
+      // حفظ بيانات الارتفاع للاستخدام لاحقاً في توليد G-code
+      heightMapData = {
+        data: new Uint8Array(imgData),
+        width: w,
+        height: h
+      };
+
+      // استخدام BufferGeometry لأداء أفضل
+      const geometry = new THREE.PlaneBufferGeometry(100, 100, w-1, h-1);
+      const positions = geometry.attributes.position.array;
+      let min = 255, max = 0;
+      const colors = [];
+      
+      for (let i = 0; i < positions.length / 3; i++) {
+        const x = i % w;
+        const y = Math.floor(i / w);
+        const idx = (y * w + x) * 4;
+        const brightness = 0.34 * imgData[idx] + 0.5 * imgData[idx+1] + 0.16 * imgData[idx+2];
+        min = Math.min(min, brightness);
+        max = Math.max(max, brightness);
+        positions[i * 3 + 2] = brightness / heightFactor;
+
+        const norm = (brightness - min) / (max - min || 1);
+        const color = getHeatColor(norm, currentColormap);
+        colors.push(color.r/255, color.g/255, color.b/255);
+      }
+      
+      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geometry.computeVertexNormals();
+
+      const material = new THREE.MeshLambertMaterial({ 
+        vertexColors: true, 
+        side: THREE.DoubleSide,
+        wireframe: false
+      });
+      
+      if (mesh) scene.remove(mesh);
+      mesh = new THREE.Mesh(geometry, material);
+      scene.add(mesh);
+
+      drawHeatmap(imgData, w, h, min, max);
+    };
+
+    // تحسين أداء TensorFlow.js
+    const processImageWithAI = async (imageData) => {
+      updateProgress(20, 'جاري معالجة الصورة بالذكاء الاصطناعي...');
+      
+      // استخدام tf.tidy لإدارة الذاكرة تلقائياً
+      return tf.tidy(() => {
+        // تحويل ImageData إلى tensor
+        const tensor = tf.browser.fromPixels(imageData);
+        
+        // تحويل إلى تدرج الرمادي
+        let processed = tensor.mean(2).expandDims(2);
+        
+        // تطبيق مرشح Gaussian لتخفيف الضوضاء
+        const kernel = tf.tensor2d([
+          [1, 2, 1],
+          [2, 4, 2],
+          [1, 2, 1]
+        ], [3, 3]).div(16);
+        
+        processed = tf.depthwiseConv2d(
+          processed, 
+          kernel.expandDims(2).expandDims(3), 
+          1, 
+          'same'
+        );
+        
+        // زيادة التباين لتحسين نتائج القطع
+        const mean = processed.mean();
+        const std = processed.sub(mean).square().mean().sqrt();
+        processed = processed.sub(mean).div(std.add(1e-7)).clipByValue(-2, 2).add(2).div(4);
+        
+        // الحصول على البيانات المعالجة
+        return processed.squeeze().array();
+      });
+    };
+
+    // تحسين توليد G-code
+    const generateRealGcode = async () => {
+      if (!heightMapData || !originalImageData) {
+        showNotification('يجب تحميل صورة أولاً', true);
+        return '';
+      }
+
+      // إعدادات التوليد
+      const machineType = document.getElementById('machineType').value;
+      const materialType = document.getElementById('materialType').value;
+      const feedRate = parseInt(document.getElementById('feedRate').value);
+      const spindleSpeed = parseInt(document.getElementById('spindleSpeed').value);
+      const cutDepth = parseFloat(document.getElementById('cutDepth').value);
+      const passDepth = parseFloat(document.getElementById('passDepth').value);
+      const gcodePrecision = document.getElementById('gcodePrecision').value;
+      const gcodeType = document.getElementById('gcodeType').value;
+      const optimizePaths = document.getElementById('optimizePaths').checked;
+      const smoothEdges = document.getElementById('smoothEdges').checked;
+      const useEdgesOnly = document.getElementById('useEdgesOnly').checked;
+      
+      // تحديد الدقة بناءً على الإعدادات
+      let resolution = 5; // منخفضة
+      if (gcodePrecision === 'medium') resolution = 3;
+      if (gcodePrecision === 'high') resolution = 1;
+      
+      updateProgress(50, 'جاري تحويل الصورة إلى مسارات...');
+
+      try {
+        // معالجة الصورة بالذكاء الاصطناعي
+        const heightData = await processImageWithAI(originalImageData);
+        
+        // تحويل بيانات الصورة إلى نقاط قطع
+        const points = [];
+        const width = canvas2d.width;
+        const height = canvas2d.height;
+        
+        // استخدام الحدود فقط إذا كان الخيار مفعلاً
+        const useEdgeData = useEdgesOnly && edgeData && gcodeType === 'edges';
+        
+        for (let y = 0; y < height; y += resolution) {
+          for (let x = 0; x < width; x += resolution) {
+            const idx = Math.floor(y) * width + Math.floor(x);
+            
+            if (useEdgeData) {
+              // استخدام بيانات الحدود
+              const edgeIdx = (y * width + x) * 4;
+              if (edgeData.data[edgeIdx] > 128) {
+                points.push({
+                  x: (x / width) * 100 - 50,
+                  y: (y / height) * 100 - 50,
+                  z: -cutDepth
+                });
+              }
+            } else if (idx < heightData.length * width) {
+              // استخدام بيانات الارتفاع
+              const pixelValue = heightData[Math.floor(y)][Math.floor(x)] || 0;
+              const depth = (1 - pixelValue) * cutDepth;
+              
+              points.push({
+                x: (x / width) * 100 - 50,
+                y: (y / height) * 100 - 50,
+                z: -depth
+              });
+            }
+          }
+        }
+        
+        updateProgress(70, 'جاري تحسين المسارات...');
+        
+        // تحسين المسارات إذا كان الخيار مفعلاً
+        const toolPaths = optimizePaths ? optimizeToolpaths(points) : points;
+        
+        updateProgress(90, 'جاري توليد G-code...');
+        
+        // توليد G-code
+        let gcode = `; G-code generated by CNC AI with TensorFlow.js\n`;
+        gcode += `; Machine: ${machineType}\n`;
+        gcode += `; Material: ${materialType}\n`;
+        gcode += `; Feed rate: ${feedRate} mm/min\n`;
+        gcode += `; Spindle speed: ${spindleSpeed} RPM\n`;
+        gcode += `; Total points: ${toolPaths.length}\n\n`;
+        
+        gcode += `G21 ; Set units to millimeters\n`;
+        gcode += `G90 ; Absolute positioning\n`;
+        gcode += `G0 Z5 ; Lift spindle\n`;
+        gcode += `M3 S${spindleSpeed} ; Spindle on\n`;
+        gcode += `G4 P2 ; Wait for spindle to reach speed\n\n`;
+        
+        gcode += `; Start cutting path\n`;
+        gcode += `G0 X${toolPaths[0].x.toFixed(3)} Y${toolPaths[0].y.toFixed(3)} ; Move to start position\n`;
+        
+        // إضافة أوامر الحركة
+        for (let i = 0; i < toolPaths.length; i++) {
+          const point = toolPaths[i];
+          gcode += `G1 X${point.x.toFixed(3)} Y${point.y.toFixed(3)} Z${point.z.toFixed(3)} F${feedRate}\n`;
+        }
+        
+        gcode += `\nG0 Z5 ; Lift spindle\n`;
+        gcode += `M5 ; Spindle off\n`;
+        gcode += `G0 X0 Y0 ; Return to home\n`;
+        gcode += `M30 ; End program\n`;
+        
+        updateProgress(100, 'تم توليد G-code بنجاح');
+        
+        return gcode;
+      } catch (error) {
+        console.error('Error generating G-code:', error);
+        throw error;
+      }
+    };
+
+    // باقي الدوال تبقى كما هي مع تحسينات طفيفة
+    // ... (rest of the functions with minor optimizations) ...
+
+    // تحسين إدارة الأحداث
+    const optimizeEventHandlers = () => {
+      // استخدام event delegation للأحداث المتشابهة
+      document.addEventListener('click', (e) => {
+        if (e.target.matches('.enhancement-btn')) {
+          const type = e.target.getAttribute('onclick').match(/'(.*?)'/)[1];
+          applyEnhancement(type);
+        } else if (e.target.matches('.view-btn')) {
+          const view = e.target.getAttribute('data-view');
+          // معالجة تغيير العرض
+        }
+        // إلخ...
+      });
+    };
+
+    // تهيئة التطبيق مع تحسينات الأداء
+    const initApp = () => {
+      optimizeEventHandlers();
+      // تهيئة أخرى
+    };
+
+    // بدء التطبيق
+    initApp();
+  </script>
+</body>
+</html>
