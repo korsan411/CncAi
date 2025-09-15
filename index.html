@@ -5,1213 +5,890 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CNC AI - النسخة المتطورة مع Top View</title>
   <style>
-    :root {
-      --primary-color: #4a90e2;
-      --secondary-color: #67b0f5;
-      --bg-color: #f8f9fa;
-      --text-color: #212529;
-      --card-bg: #ffffff;
-      --border-color: #dee2e6;
-      --header-bg: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
-      --header-text: #ffffff;
-      --button-bg: #e9ecef;
-      --button-hover: #dee2e6;
-      --success-color: #28a745;
-      --warning-color: #ffc107;
-      --error-color: #dc3545;
-      --ai-color: #9c27b0;
-      --wood-color: #8b4513;
-      --tab-inactive: #e9ecef;
-      --tab-active: var(--primary-color);
-      --roughing-color: #ff9800;
-      --finishing-color: #4caf50;
-      --smoothing-color: #2196f3;
-    }
-
-    body.dark {
-      --bg-color: #121212;
-      --text-color: #e0e0e0;
-      --card-bg: #1e1e1e;
-      --border-color: #444;
-      --header-bg: linear-gradient(90deg, #2c2c2c, #444);
-      --button-bg: #333;
-      --button-hover: #555;
-      --ai-color: #ba68c8;
-      --wood-color: #a0522d;
-      --tab-inactive: #333;
-      --tab-active: #4a90e2;
-      --roughing-color: #ffb74d;
-      --finishing-color: #81c784;
-      --smoothing-color: #64b5f6;
-    }
-
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-    }
-
-    body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background-color: var(--bg-color);
-      color: var(--text-color);
-      line-height: 1.6;
-      transition: all 0.3s ease;
-      padding: 0;
-      margin: 0;
     }
-
-    .container {
-      width: 100%;
-      max-width: 1400px;
-      margin: 0 auto;
+    
+    body {
+      background-color: #f5f7fa;
+      color: #333;
+      line-height: 1.6;
       padding: 20px;
     }
-
-    header {
-      background: var(--header-bg);
-      color: var(--header-text);
-      padding: 1rem;
-      text-align: center;
-      border-radius: 0 0 10px 10px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-      margin-bottom: 2rem;
-      position: relative;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-
-    .header-content {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      width: 100%;
-      max-width: 1400px;
-    }
-
-    h1 {
-      font-size: 1.8rem;
-      margin: 0;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .controls {
-      display: flex;
-      gap: 15px;
-      align-items: center;
-    }
-
-    #themeToggle {
-      background: transparent;
-      border: none;
-      font-size: 1.5rem;
-      cursor: pointer;
-      color: var(--header-text);
-      transition: transform 0.3s;
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    #themeToggle:hover {
-      transform: scale(1.1);
-      background: rgba(255, 255, 255, 0.2);
-    }
-
-    /* تنسيق التابات */
-    .tabs {
-      display: flex;
-      margin-bottom: 20px;
-      background: var(--card-bg);
-      border-radius: 10px;
-      overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-
-    .tab {
-      padding: 12px 20px;
-      cursor: pointer;
-      background: var(--tab-inactive);
-      transition: all 0.3s;
-      text-align: center;
-      flex: 1;
-      font-weight: 500;
-    }
-
-    .tab.active {
-      background: var(--tab-active);
-      color: white;
-    }
-
-    .tab-content {
-      display: none;
-    }
-
-    .tab-content.active {
-      display: block;
-    }
-
-    /* محتوى التابات */
-    .upload-section {
-      background: var(--card-bg);
-      padding: 2rem;
-      border-radius: 10px;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
-      margin-bottom: 2rem;
-      text-align: center;
-      border: 1px solid var(--border-color);
-    }
-
-    .previews-container {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 2rem;
-    }
-
-    @media (min-width: 992px) {
-      .previews-container {
-        grid-template-columns: 1fr 1fr;
-      }
-    }
-
-    .preview-block {
-      background: var(--card-bg);
-      border-radius: 10px;
-      padding: 1.5rem;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      border: 1px solid var(--border-color);
-    }
-
-    .preview-title {
-      font-size: 1.2rem;
-      margin-bottom: 1rem;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--primary-color);
-    }
-
-    .preview-content {
-      width: 100%;
-      display: flex;
-      justify-content: center;
-      margin-bottom: 1rem;
-    }
-
-    canvas {
-      max-width: 100%;
-      border-radius: 8px;
-      border: 1px solid var(--border-color);
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
       background: white;
-    }
-
-    #preview3d, #gcodeSimulation, #topView {
-      width: 100%;
-      height: 300px;
-      border-radius: 8px;
+      border-radius: 10px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
       overflow: hidden;
-      border: 1px solid var(--border-color);
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-      position: relative;
-      background: #f0f0f0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      color: #666;
-      font-weight: bold;
     }
-
-    .options {
+    
+    header {
+      background: linear-gradient(135deg, #2c3e50 0%, #4a6491 100%);
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+    
+    header h1 {
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+    
+    header p {
+      opacity: 0.9;
+    }
+    
+    .main-content {
       display: flex;
       flex-wrap: wrap;
-      gap: 1rem;
-      justify-content: center;
-      width: 100%;
-      margin-top: 1rem;
+      padding: 20px;
+      gap: 20px;
     }
-
-    .option-group {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 5px;
+    
+    .panel {
+      flex: 1;
+      min-width: 300px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      padding: 20px;
     }
-
-    .option-group label {
-      font-size: 0.9rem;
-      font-weight: 500;
+    
+    .panel h2 {
+      color: #2c3e50;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #eaeaea;
     }
-
-    input[type="range"] {
-      width: 150px;
-      accent-color: var(--primary-color);
+    
+    .upload-area {
+      border: 2px dashed #4a6491;
+      border-radius: 8px;
+      padding: 30px;
+      text-align: center;
+      margin-bottom: 20px;
+      cursor: pointer;
+      transition: all 0.3s;
     }
-
-    .settings-panel {
-      background: var(--card-bg);
-      border-radius: 10px;
-      padding: 1.5rem;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
-      margin-bottom: 2rem;
-      border: 1px solid var(--border-color);
+    
+    .upload-area:hover {
+      background-color: #f0f4f8;
     }
-
-    .settings-group {
-      margin-bottom: 1.5rem;
+    
+    .upload-area p {
+      margin-top: 10px;
+      color: #666;
     }
-
-    .settings-group h3 {
-      margin-bottom: 1rem;
-      padding-bottom: 0.5rem;
-      border-bottom: 1px solid var(--border-color);
-      color: var(--primary-color);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .form-group {
-      margin-bottom: 1rem;
-    }
-
-    .form-group label {
-      display: block;
-      margin-bottom: 0.5rem;
-      font-weight: 500;
-    }
-
-    .form-group select, 
-    .form-group input {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid var(--border-color);
-      border-radius: 5px;
-      background: var(--bg-color);
-      color: var(--text-color);
-    }
-
-    .gcode-output {
-      background: var(--bg-color);
-      border: 1px solid var(--border-color);
-      border-radius: 5px;
-      padding: 15px;
-      height: 200px;
-      overflow-y: auto;
-      font-family: monospace;
-      white-space: pre-wrap;
-      margin-top: 1rem;
-    }
-
+    
     .btn {
+      display: inline-block;
+      background: #4a6491;
+      color: white;
       padding: 10px 20px;
       border: none;
       border-radius: 5px;
       cursor: pointer;
-      font-weight: 500;
-      transition: all 0.3s;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
+      font-size: 16px;
+      transition: background 0.3s;
+      margin: 5px;
     }
-
-    .btn-primary {
-      background: var(--primary-color);
-      color: white;
+    
+    .btn:hover {
+      background: #2c3e50;
     }
-
-    .btn-primary:hover {
-      background: var(--secondary-color);
-    }
-
+    
     .btn-secondary {
-      background: var(--button-bg);
-      color: var(--text-color);
+      background: #7f8c8d;
     }
-
+    
     .btn-secondary:hover {
-      background: var(--button-hover);
+      background: #636e72;
     }
-
-    .btn-ai {
-      background: var(--ai-color);
-      color: white;
-    }
-
-    .btn-ai:hover {
-      background: #7b1fa2;
-    }
-
-    .btn-wood {
-      background: var(--wood-color);
-      color: white;
-    }
-
-    .btn-wood:hover {
-      background: #6b2c0c;
-    }
-
-    .btn-roughing {
-      background: var(--roughing-color);
-      color: white;
-    }
-
-    .btn-finishing {
-      background: var(--finishing-color);
-      color: white;
-    }
-
-    .btn-smoothing {
-      background: var(--smoothing-color);
-      color: white;
-    }
-
-    .action-buttons {
+    
+    .preview-container {
       display: flex;
-      gap: 10px;
-      margin-top: 1rem;
       flex-wrap: wrap;
+      gap: 15px;
+      margin-top: 20px;
     }
-
-    footer {
-      text-align: center;
-      margin-top: 3rem;
-      padding: 1.5rem;
-      color: var(--text-color);
-      font-size: 0.9rem;
-      border-top: 1px solid var(--border-color);
-    }
-
-    .image-enhancement {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 1rem;
-      margin: 1rem 0;
-    }
-
-    .enhancement-btn {
-      padding: 8px 12px;
-      border: 1px solid var(--border-color);
-      border-radius: 5px;
-      background: var(--button-bg);
-      color: var(--text-color);
-      cursor: pointer;
-      text-align: center;
-      transition: all 0.3s;
-    }
-
-    .enhancement-btn:hover {
-      background: var(--button-hover);
-    }
-
-    .loading {
-      display: none;
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.7);
-      justify-content: center;
-      align-items: center;
-      flex-direction: column;
-      color: white;
-      z-index: 100;
+    
+    .preview-box {
+      flex: 1;
+      min-width: 250px;
+      border: 1px solid #eaeaea;
       border-radius: 8px;
+      overflow: hidden;
     }
-
-    .loading-spinner {
-      width: 40px;
-      height: 40px;
-      border: 4px solid rgba(255, 255, 255, 0.3);
-      border-top: 4px solid white;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin-bottom: 10px;
+    
+    .preview-box h3 {
+      background: #f5f7fa;
+      padding: 10px;
+      margin: 0;
+      font-size: 16px;
+      text-align: center;
     }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
+    
+    .preview-content {
+      height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #fafafa;
     }
-
+    
+    canvas {
+      max-width: 100%;
+      max-height: 100%;
+    }
+    
+    .controls {
+      margin-top: 15px;
+    }
+    
+    .control-group {
+      margin-bottom: 15px;
+    }
+    
+    .control-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+    }
+    
+    .control-group input[type="range"] {
+      width: 100%;
+    }
+    
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid #eaeaea;
+      margin-bottom: 15px;
+    }
+    
+    .tab {
+      padding: 10px 20px;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+    }
+    
+    .tab.active {
+      border-bottom: 3px solid #4a6491;
+      font-weight: bold;
+    }
+    
+    .tab-content {
+      display: none;
+    }
+    
+    .tab-content.active {
+      display: block;
+    }
+    
+    .progress-container {
+      margin-top: 15px;
+      background: #f0f0f0;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    
+    .progress-bar {
+      height: 20px;
+      background: linear-gradient(90deg, #4a6491 0%, #2c3e50 100%);
+      width: 0%;
+      transition: width 0.3s;
+      text-align: center;
+      color: white;
+      line-height: 20px;
+      font-size: 12px;
+    }
+    
     .notification {
       position: fixed;
       top: 20px;
       right: 20px;
       padding: 15px 20px;
-      border-radius: 8px;
-      background: var(--success-color);
+      background: #2c3e50;
       color: white;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      border-radius: 5px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
       transform: translateX(100%);
-      opacity: 0;
-      transition: all 0.3s ease;
+      transition: transform 0.3s;
       z-index: 1000;
     }
-
+    
     .notification.show {
       transform: translateX(0);
-      opacity: 1;
     }
-
+    
     .notification.error {
-      background: var(--error-color);
+      background: #e74c3c;
     }
-
-    .notification.ai {
-      background: var(--ai-color);
+    
+    .notification.success {
+      background: #2ecc71;
     }
-
-    .notification.wood {
-      background: var(--wood-color);
-    }
-
-    .simulation-controls {
-      display: flex;
-      gap: 10px;
-      margin-top: 1rem;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
-
-    .view-controls {
-      display: flex;
-      gap: 10px;
-      margin: 1rem 0;
-      justify-content: center;
-    }
-
-    .view-btn {
-      padding: 8px 15px;
-      border: 1px solid var(--border-color);
-      border-radius: 5px;
-      background: var(--button-bg);
-      color: var(--text-color);
-      cursor: pointer;
-      transition: all 0.3s;
-    }
-
-    .view-btn.active {
-      background: var(--primary-color);
-      color: white;
-      border-color: var(--primary-color);
-    }
-
-    .wood-carving {
-      background: var(--card-bg);
-      border-radius: 10px;
-      padding: 1.5rem;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
-      margin-bottom: 2rem;
-      border: 1px solid var(--border-color);
-    }
-
-    .carving-patterns {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-      gap: 10px;
-      margin: 1rem 0;
-    }
-
-    .pattern-btn {
-      padding: 8px;
-      border: 1px solid var(--border-color);
-      border-radius: 5px;
-      background: var(--button-bg);
-      cursor: pointer;
-      transition: all 0.3s;
-      text-align: center;
-    }
-
-    .pattern-btn:hover {
-      background: var(--button-hover);
-    }
-
-    .pattern-btn.active {
-      background: var(--wood-color);
-      color: white;
-      border-color: var(--wood-color);
-    }
-
-    .ai-options {
-      background: var(--card-bg);
-      border-radius: 10px;
-      padding: 1.5rem;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
-      margin-bottom: 2rem;
-      border: 1px solid var(--border-color);
-    }
-
-    .path-optimization {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-      margin-top: 1rem;
-    }
-
-    .optimization-option {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .optimization-option input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-    }
-
-    .progress-container {
-      width: 100%;
-      height: 20px;
-      background-color: var(--button-bg);
-      border-radius: 10px;
-      margin: 1rem 0;
-      overflow: hidden;
-      display: none;
-    }
-
-    .progress-bar {
-      height: 100%;
-      background: var(--primary-color);
-      border-radius: 10px;
-      width: 0%;
-      transition: width 0.3s ease;
-    }
-
-    .process-tabs {
-      display: flex;
-      margin-bottom: 20px;
-      background: var(--card-bg);
-      border-radius: 10px;
-      overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-
-    .process-tab {
-      padding: 12px 20px;
-      cursor: pointer;
-      background: var(--tab-inactive);
-      transition: all 0.3s;
-      text-align: center;
-      flex: 1;
-      font-weight: 500;
-    }
-
-    .process-tab.active {
-      background: var(--primary-color);
-      color: white;
-    }
-
-    .process-tab.roughing.active {
-      background: var(--roughing-color);
-    }
-
-    .process-tab.finishing.active {
-      background: var(--finishing-color);
-    }
-
-    .process-tab.smoothing.active {
-      background: var(--smoothing-color);
-    }
-
-    .process-content {
-      display: none;
-    }
-
-    .process-content.active {
-      display: block;
-    }
-
+    
     @media (max-width: 768px) {
-      h1 {
-        font-size: 1.4rem;
-      }
-      
-      .header-content {
-        flex-direction: column;
-        gap: 15px;
-      }
-      
-      .preview-block {
-        padding: 1rem;
-      }
-      
-      .options {
-        flex-direction: column;
-        align-items: center;
-      }
-      
-      .action-buttons {
+      .main-content {
         flex-direction: column;
       }
       
-      .process-tabs {
-        flex-direction: column;
+      .panel {
+        width: 100%;
       }
     }
   </style>
 </head>
 <body>
-  <header>
-    <div class="header-content">
-      <h1><span>🛠️</span> CNC AI - مع Top View ونقش الخشب</h1>
-      <div class="controls">
-        <button id="themeToggle">🌙</button>
-      </div>
-    </div>
-  </header>
-
   <div class="container">
-    <!-- التابات -->
-    <div class="tabs">
-      <div class="tab active" data-tab="preview">معاينة الصورة</div>
-      <div class="tab" data-tab="gcode">G-code إعدادات</div>
-      <div class="tab" data-tab="simulation">محاكاة G-code</div>
-      <div class="tab" data-tab="wood">نقش الخشب</div>
-    </div>
-
-    <!-- تاب المعاينة -->
-    <div class="tab-content active" id="preview-tab">
-      <section class="upload-section">
-        <h2 class="upload-title">📤 تحميل الصورة</h2>
-        <div class="file-upload">
-          <input type="file" id="fileInput" accept="image/*">
-          <label for="fileInput" class="btn btn-primary"><span>📁</span> اختر صورة</label>
-          <div class="file-name" id="fileName">لم يتم اختيار أي صورة بعد</div>
+    <header>
+      <h1>CNC AI - النسخة المتطورة مع Top View</h1>
+      <p>تحويل الصور إلى نماذج ثلاثية الأبعاد ورمز آلة CNC</p>
+    </header>
+    
+    <div class="main-content">
+      <div class="panel">
+        <h2>تحميل الصورة</h2>
+        <div class="upload-area" id="uploadArea">
+          <input type="file" id="fileInput" accept="image/*" style="display: none;">
+          <div class="btn">اختر صورة</div>
+          <p>أو اسحب الصورة إلى هنا</p>
+          <p id="fileName" style="margin-top: 10px; color: #4a6491; font-weight: bold;"></p>
         </div>
-
-        <div class="image-enhancement">
-          <div class="enhancement-btn" data-action="brightness">🔆 سطوع</div>
-          <div class="enhancement-btn" data-action="contrast">🌓 تباين</div>
-          <div class="enhancement-btn" data-action="sharpen">🔍 حدة</div>
-          <div class="enhancement-btn" data-action="smooth">🔄 نعومة</div>
-          <div class="enhancement-btn" data-action="grayscale">⚫ تدرج رمادي</div>
-          <div class="enhancement-btn" data-action="reset">🔄 إعادة تعيين</div>
-          <div class="enhancement-btn" data-action="edges">🔍 كشف الحدود</div>
+        
+        <h2>معالجة الصورة</h2>
+        <div class="controls">
+          <div class="control-group">
+            <label for="edgeThreshold">حد كشف الحواف: <span id="thresholdValue">128</span></label>
+            <input type="range" id="edgeThreshold" min="1" max="255" value="128">
+          </div>
+          
+          <button class="btn" onclick="detectEdges()">كشف الحواف</button>
+          <button class="btn btn-secondary" onclick="applyEnhancement('brightness')">تحسين السطوع</button>
+          <button class="btn btn-secondary" onclick="applyEnhancement('contrast')">تحسين التباين</button>
         </div>
-
-        <div class="progress-container" id="progressContainer">
-          <div class="progress-bar" id="progressBar"></div>
-        </div>
-      </section>
-
-      <div class="previews-container">
-        <!-- الصورة الأصلية -->
-        <div class="preview-block">
-          <h3 class="preview-title">📷 الصورة الأصلية</h3>
-          <div class="preview-content">
-            <canvas id="preview2d"></canvas>
+        
+        <div class="preview-container">
+          <div class="preview-box">
+            <h3>الصورة الأصلية</h3>
+            <div class="preview-content">
+              <canvas id="preview2d"></canvas>
+            </div>
+          </div>
+          
+          <div class="preview-box">
+            <h3>خريطة الحرارة</h3>
+            <div class="preview-content">
+              <canvas id="heatmap"></canvas>
+            </div>
+          </div>
+          
+          <div class="preview-box">
+            <h3>كشف الحواف</h3>
+            <div class="preview-content">
+              <canvas id="edgesPreview"></canvas>
+            </div>
           </div>
         </div>
-
-        <!-- معاينة 3D -->
-        <div class="preview-block">
-          <h3 class="preview-title">🌀 المعاينة ثلاثية الأبعاد</h3>
-          <div class="preview-content">
-            <div id="preview3d">
-              <div class="loading" id="loading3d">
-                <div class="loading-spinner"></div>
-                <p>جاري تحميل النموذج...</p>
+      </div>
+      
+      <div class="panel">
+        <h2>المعاينة ثلاثية الأبعاد</h2>
+        <div class="controls">
+          <div class="control-group">
+            <label for="rotationSpeed">سرعة الدوران: <span id="speedValue">0.01</span></label>
+            <input type="range" id="rotationSpeed" min="0" max="20" value="1" step="0.1">
+          </div>
+          
+          <div class="control-group">
+            <label for="heightIntensity">شدة الارتفاع: <span id="intensityValue">80</span></label>
+            <input type="range" id="heightIntensity" min="10" max="200" value="80">
+          </div>
+        </div>
+        
+        <div class="preview-container">
+          <div class="preview-box" style="min-width: 100%;">
+            <h3>النموذج ثلاثي الأبعاد</h3>
+            <div class="preview-content" style="height: 300px; position: relative;">
+              <div id="preview3d"></div>
+              <div id="loading3d" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+                جاري تحميل المعاينة...
               </div>
-              <span>سيظهر هنا معاينة ثلاثية الأبعاد بعد تحميل الصورة</span>
-            </div>
-          </div>
-          <div class="options">
-            <div class="option-group">
-              <label for="rotationSpeed">🔄 سرعة الدوران</label>
-              <input type="range" id="rotationSpeed" min="0" max="0.05" step="0.001" value="0.01">
-            </div>
-            <div class="option-group">
-              <label for="zoomControl">🔍 زوم</label>
-              <input type="range" id="zoomControl" min="50" max="500" step="10" value="200">
-            </div>
-            <div class="option-group">
-              <label for="heightIntensity">📏 شدة الارتفاع</label>
-              <input type="range" id="heightIntensity" min="20" max="200" step="5" value="80">
             </div>
           </div>
         </div>
-
-        <!-- Heatmap -->
-        <div class="preview-block">
-          <h3 class="preview-title">🌈 خريطة الارتفاعات (Heatmap)</h3>
-          <div class="preview-content">
-            <canvas id="heatmap"></canvas>
-          </div>
-          <div class="colormap-controls">
-            <button class="btn btn-secondary" data-colormap="jet"><span>🌈</span> Jet</button>
-            <button class="btn btn-secondary" data-colormap="hot"><span>🔥</span> Hot</button>
-            <button class="btn btn-secondary" data-colormap="cool"><span>❄️</span> Cool</button>
-            <button class="btn btn-secondary" data-colormap="gray"><span>⚪</span> Gray</button>
-          </div>
+        
+        <h2>توليد G-code</h2>
+        <div class="controls">
+          <button class="btn" onclick="generateGcode()">توليد G-code</button>
+          <button class="btn btn-secondary" onclick="downloadGcode()">تحميل G-code</button>
         </div>
-
-        <!-- معاينة الحدود -->
-        <div class="preview-block">
-          <h3 class="preview-title">🔍 حدود التصميم (بعد المعالجة)</h3>
-          <div class="preview-content">
-            <canvas id="edgesPreview"></canvas>
-          </div>
-          <div class="options">
-            <div class="option-group">
-              <label for="edgeThreshold">📏 عتبة الحدود</label>
-              <input type="range" id="edgeThreshold" min="1" max="100" value="50">
+        
+        <div class="preview-container">
+          <div class="preview-box" style="min-width: 100%;">
+            <h3>رمز G-code</h3>
+            <div class="preview-content" style="height: 200px; overflow: auto;">
+              <pre id="gcodeOutput" style="padding: 10px; text-align: left;">سيظهر رمز G-code هنا بعد التوليد</pre>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- تاب إعدادات G-code -->
-    <div class="tab-content" id="gcode-tab">
-      <div class="ai-options">
-        <h3><span>🤖</span> خيارات الذكاء الاصطناعي</h3>
-        <div class="path-optimization">
-          <div class="optimization-option">
-            <input type="checkbox" id="optimizePaths" checked>
-            <label for="optimizePaths">تحسين المسارات لتقليل وقت القطع</label>
-          </div>
-          <div class="optimization-option">
-            <input type="checkbox" id="smoothEdges" checked>
-            <label for="smoothEdges">تنعيم الحواف للنتائج الأفضل</label>
-          </div>
-          <div class="optimization-option">
-            <input type="checkbox" id="adaptivePrecision">
-            <label for="adaptivePrecision">الدقة التكيفية (تلقائية)</label>
-          </div>
-          <div class="optimization-option">
-            <input type="checkbox" id="useEdgesOnly" checked>
-            <label for="useEdgesOnly">استخدام حدود التصميم فقط</label>
-          </div>
-        </div>
-      </div>
-
-      <div class="settings-panel">
-        <div class="settings-group">
-          <h3><span>🏭</span> إعدادات الماكينة</h3>
-          <div class="form-group">
-            <label for="machineType">نوع الماكينة</label>
-            <select id="machineType">
-              <option value="cnc">CNC Router</option>
-              <option value="laser">Laser Cutter</option>
-              <option value="3dprinter">3D Printer</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="settings-group">
-          <h3><span>📦</span> إعدادات الخامة</h3>
-          <div class="form-group">
-            <label for="materialType">نوع الخامة</label>
-            <select id="materialType">
-              <option value="wood">خشب</option>
-              <option value="acrylic">أكريليك</option>
-              <option value="aluminum">ألومنيوم</option>
-              <option value="steel">صلب</option>
-              <option value="pla">PLA (بلاستيك)</option>
-              <option value="abs">ABS (بلاستيك)</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="settings-group">
-          <h3><span>⚙️</span> إعدادات القطع</h3>
-          <div class="form-group">
-            <label for="feedRate">سرعة التغذية (mm/min)</label>
-            <input type="number" id="feedRate" value="1000">
-          </div>
-          <div class="form-group">
-            <label for="spindleSpeed">سرعة المغزل (RPM)</label>
-            <input type="number" id="spindleSpeed" value="10000">
-          </div>
-          <div class="form-group">
-            <label for="cutDepth">عمق القطع (mm)</label>
-            <input type="number" id="cutDepth" value="2" step="0.1">
-          </div>
-          <div class="form-group">
-            <label for="passDepth">عمق التمريرة (mm)</label>
-            <input type="number" id="passDepth" value="0.5" step="0.1">
-          </div>
-        </div>
-
-        <div class="settings-group">
-          <h3><span>🔧</span> إعدادات G-code</h3>
-          <div class="form-group">
-            <label for="gcodeType">نوع المخرجات</label>
-            <select id="gcodeType">
-              <option value="heatmap">بناءً على Heatmap</option>
-              <option value="3dmodel">بناءً على النموذج ثلاثي الأبعاد</option>
-              <option value="edges">بناءً على حدود التصميم</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="gcodePrecision">دقة التوليد</label>
-            <select id="gcodePrecision">
-              <option value="low">منخفضة (أسرع)</option>
-              <option value="medium" selected>متوسطة</option>
-              <option value="high">عالية (أبطأ)</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="action-buttons">
-          <button class="btn btn-primary" id="generateGcode">
-            <span>⚡</span> توليد G-code
-          </button>
-          <button class="btn btn-secondary" id="downloadGcode">
-            <span>💾</span> حفظ G-code
-          </button>
-          <button class="btn btn-secondary" id="simulateGcode">
-            <span>🔄</span> محاكاة G-code
-          </button>
-        </div>
-
-        <div class="gcode-output" id="gcodeOutput">
-// سيظهر كود G-code هنا بعد التوليد
-// اضغط على "توليد G-code" لبدء عملية التوليد
-        </div>
-      </div>
-    </div>
-
-    <!-- تاب محاكاة G-code -->
-    <div class="tab-content" id="simulation-tab">
-      <div class="preview-block">
-        <h3 class="preview-title">🎮 محاكاة مسار الأداة</h3>
-        <div class="view-controls">
-          <div class="view-btn active" data-view="3d">عرض 3D</div>
-          <div class="view-btn" data-view="top">عرض علوي (Top View)</div>
-        </div>
-        <div class="preview-content">
-          <div id="gcodeSimulation">
-            <div class="loading" id="loadingSimulation">
-              <div class="loading-spinner"></div>
-              <p>جاري تحميل المحاكاة...</p>
-            </div>
-            <span>سيظهر هنا محاكاة مسار الأداة بعد توليد G-code</span>
-          </div>
-          <div id="topView" style="display: none;">
-            <div class="loading" id="loadingTopView">
-              <div class="loading-spinner"></div>
-              <p>جاري تحميل العرض العلوي...</p>
-            </div>
-            <span>سيظهر هنا العرض العلوي بعد توليد G-code</span>
-          </div>
-        </div>
-        <div class="simulation-controls">
-          <button class="btn btn-secondary" id="startSimulation">▶️ تشغيل</button>
-          <button class="btn btn-secondary" id="pauseSimulation">⏸️ إيقاف</button>
-          <button class="btn btn-secondary" id="resetSimulation">⏹️ إعادة تعيين</button>
-          <div class="option-group">
-            <label for="simulationSpeed">سرعة المحاكاة</label>
-            <input type="range" id="simulationSpeed" min="1" max="10" step="1" value="5">
-          </div>
-        </div>
-      </div>
-
-      <div class="preview-block">
-        <h3 class="preview-title">📊 معلومات المحاكاة</h3>
-        <div id="simulationInfo">
-          <p>⏱️ الوقت المتوقع: <span id="simulationTime">0</span> دقيقة</p>
-          <p>📏 المسافة الإجمالية: <span id="simulationDistance">0</span> مم</p>
-          <p>🔧 عدد الأوامر: <span id="simulationCommands">0</span></p>
-          <p>⚡ الحالة: <span id="simulationStatus">في انتظار التوليد</span></p>
-        </div>
-      </div>
-    </div>
-
-    <!-- تاب نقش الخشب -->
-    <div class="tab-content" id="wood-tab">
-      <div class="process-tabs">
-        <div class="process-tab roughing active" data-process="roughing">عملية التنجير</div>
-        <div class="process-tab finishing" data-process="finishing">عملية الوسط</div>
-        <div class="process-tab smoothing" data-process="smoothing">عملية التشطيب</div>
-      </div>
-
-      <div class="process-content active" id="roughing-content">
-        <div class="wood-carving">
-          <h3 class="preview-title">🌳 إعدادات عملية التنجير</h3>
-          
-          <div class="settings-group">
-            <h3><span>🔧</span> إعدادات التنجير</h3>
-            <div class="form-group">
-              <label for="roughingDepth">عمق التنجير (mm)</label>
-              <input type="number" id="roughingDepth" value="3" step="0.1" min="1" max="10">
-            </div>
-            <div class="form-group">
-              <label for="roughingSpeed">سرعة التنجير (mm/min)</label>
-              <input type="number" id="roughingSpeed" value="1200">
-            </div>
-            <div class="form-group">
-              <label for="roughingSpindle">سرعة المغزل للتنجير (RPM)</label>
-              <input type="number" id="roughingSpindle" value="8000">
-            </div>
-            <div class="form-group">
-              <label for="roughingStepover">مسافة التجاوز (٪)</label>
-              <input type="number" id="roughingStepover" value="50" min="10" max="80">
-            </div>
-          </div>
-
-          <div class="action-buttons">
-            <button class="btn btn-roughing" data-process="roughing">
-              <span>🌳</span> توليد عملية التنجير
-            </button>
-            <button class="btn btn-secondary" data-preview="roughing">
-              <span>👁️</span> معاينة التنجير
-            </button>
-            <button class="btn btn-secondary" data-download="roughing">
-              <span>💾</span> حفظ G-code التنجير
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div class="process-content" id="finishing-content">
-        <div class="wood-carving">
-          <h3 class="preview-title">🌳 إعدادات عملية الوسط</h3>
-          
-          <div class="settings-group">
-            <h3><span>🔧</span> إعدادات عملية الوسط</h3>
-            <div class="form-group">
-              <label for="finishingDepth">عمق عملية الوسط (mm)</label>
-              <input type="number" id="finishingDepth" value="1.5" step="0.1" min="0.5" max="5">
-            </div>
-            <div class="form-group">
-              <label for="finishingSpeed">سرعة عملية الوسط (mm/min)</label>
-              <input type="number" id="finishingSpeed" value="1000">
-            </div>
-            <div class="form-group">
-              <label for="finishingSpindle">سرعة المغزل لعملية الوسط (RPM)</label>
-              <input type="number" id="finishingSpindle" value="12000">
-            </div>
-            <div class="form-group">
-              <label for="finishingStepover">مسافة التجاوز (٪)</label>
-              <input type="number" id="finishingStepover" value="30" min="5" max="50">
-            </div>
-          </div>
-
-          <div class="action-buttons">
-            <button class="btn btn-finishing" data-process="finishing">
-              <span>🌳</span> توليد عملية الوسط
-            </button>
-            <button class="btn btn-secondary" data-preview="finishing">
-              <span>👁️</span> معاينة عملية الوسط
-            </button>
-            <button class="btn btn-secondary" data-download="finishing">
-              <span>💾</span> حفظ G-code عملية الوسط
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div class="process-content" id="smoothing-content">
-        <div class="wood-carving">
-          <h3 class="preview-title">🌳 إعدادات عملية التشطيب</h3>
-          
-          <div class="settings-group">
-            <h3><span>🔧</span> إعدادات التشطيب</h3>
-            <div class="form-group">
-              <label for="smoothingDepth">عمق التشطيب (mm)</label>
-              <input type="number" id="smoothingDepth" value="0.5" step="0.1" min="0.1" max="2">
-            </div>
-            <div class="form-group">
-              <label for="smoothingSpeed">سرعة التشطيب (mm/min)</label>
-              <input type="number" id="smoothingSpeed" value="800">
-            </div>
-            <div class="form-group">
-              <label for="smoothingSpindle">سرعة المغزل للتشطيب (RPM)</label>
-              <input type="number" id="smoothingSpindle" value="15000">
-            </div>
-            <div class="form-group">
-              <label for="smoothingStepover">مسافة التجاوز (٪)</label>
-              <input type="number" id="smoothingStepover" value="15" min="5" max="30">
-            </div>
-          </div>
-
-          <div class="action-buttons">
-            <button class="btn btn-smoothing" data-process="smoothing">
-              <span>🌳</span> توليد عملية التشطيب
-            </button>
-            <button class="btn btn-secondary" data-preview="smoothing">
-              <span>👁️</span> معاينة التشطيب
-            </button>
-            <button class="btn btn-secondary" data-download="smoothing">
-              <span>💾</span> حفظ G-code التشطيب
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div class="preview-block">
-        <h3 class="preview-title">📋 معلومات نقش الخشب</h3>
-        <div id="woodInfo">
-          <p>📏 أقصى عمق: <span id="maxDepth">3</span> مم</p>
-          <p>⚡ السرعة المثلى: <span id="optimalSpeed">1200</span> mm/min</p>
-          <p>🔧 عدد المسارات: <span id="pathCount">0</span></p>
-          <p>⏱️ الوقت المتوقع: <span id="carvingTime">0</span> دقيقة</p>
-          <p>🔩 العملية الحالية: <span id="currentProcess">تنجير</span></p>
         </div>
       </div>
     </div>
   </div>
 
-  <footer>
-    <p>تم التطوير باستخدام Three.js و TensorFlow.js - مشروع CncAI مع Top View ونقش الخشب</p>
-  </footer>
-
-  <div class="notification" id="notification">تم تحميل الصورة بنجاح!</div>
+  <div id="notification" class="notification">رسالة</div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
   <script>
-    // تهيئة التطبيق بعد تحميل DOM
-    document.addEventListener('DOMContentLoaded', function() {
-      // عناصر DOM
-      const fileInput = document.getElementById('fileInput');
-      const fileName = document.getElementById('fileName');
-      const canvas2d = document.getElementById('preview2d');
-      const ctx2d = canvas2d.getContext('2d');
-      const heatmap = document.getElementById('heatmap');
-      const ctxHeat = heatmap.getContext('2d');
-      const edgesPreview = document.getElementById('edgesPreview');
-      const ctxEdges = edgesPreview.getContext('2d');
-      const preview3d = document.getElementById('preview3d');
-      const tabs = document.querySelectorAll('.tab');
-      const tabContents = document.querySelectorAll('.tab-content');
-      const notification = document.getElementById('notification');
-      
-      // تهيئة المتغيرات
-      let originalImageData = null;
-      let generatedGcode = '';
-      let woodGcodes = {
-        roughing: '',
-        finishing: '',
-        smoothing: ''
-      };
-      
-      // وظيفة لعرض الإشعارات
-      function showNotification(message, isError = false, type = '') {
-        notification.textContent = message;
-        notification.className = 'notification';
-        if (isError) {
-          notification.classList.add('error');
-        } else if (type === 'ai') {
-          notification.classList.add('ai');
-        } else if (type === 'wood') {
-          notification.classList.add('wood');
+    // إنشاء Web Worker للمهام الثقيلة
+    const createWorker = (workerFunc) => {
+      const blob = new Blob(['(' + workerFunc.toString() + ')()'], { type: 'application/javascript' });
+      return new Worker(URL.createObjectURL(blob));
+    };
+
+    // عامل معالجة الصور
+    const imageProcessingWorker = createWorker(() => {
+      self.onmessage = function(e) {
+        const { imageData, type, threshold } = e.data;
+        const data = new Uint8ClampedArray(imageData.data);
+        const width = imageData.width;
+        const height = imageData.height;
+
+        if (type === 'edges') {
+          // تطبيق مرشح كشف الحواف (Sobel)
+          const tempData = new Uint8ClampedArray(data);
+          for (let y = 1; y < height - 1; y++) {
+            for (let x = 1; x < width - 1; x++) {
+              for (let c = 0; c < 3; c++) {
+                const idx = (y * width + x) * 4 + c;
+                
+                // مرشح Sobel للأفقية
+                let gx = 
+                  -1 * tempData[((y-1)*width + (x-1))*4 + c] +
+                  -2 * tempData[((y)*width + (x-1))*4 + c] +
+                  -1 * tempData[((y+1)*width + (x-1))*4 + c] +
+                  1 * tempData[((y-1)*width + (x+1))*4 + c] +
+                  2 * tempData[((y)*width + (x+1))*4 + c] +
+                  1 * tempData[((y+1)*width + (x+1))*4 + c];
+                
+                // مرشح Sobel للرأسية
+                let gy = 
+                  -1 * tempData[((y-1)*width + (x-1))*4 + c] +
+                  -2 * tempData[((y-1)*width + (x))*4 + c] +
+                  -1 * tempData[((y-1)*width + (x+1))*4 + c] +
+                  1 * tempData[((y+1)*width + (x-1))*4 + c] +
+                  2 * tempData[((y+1)*width + (x))*4 + c] +
+                  1 * tempData[((y+1)*width + (x+1))*4 + c];
+                
+                // حساب القوة
+                const magnitude = Math.min(255, Math.sqrt(gx*gx + gy*gy));
+                
+                // تطبيق العتبة
+                data[idx] = magnitude > threshold ? 255 : 0;
+              }
+              data[y*width*4 + x*4 + 3] = 255; // القناة alpha
+            }
+          }
         }
-        notification.classList.add('show');
-        
-        setTimeout(() => {
-          notification.classList.remove('show');
-        }, 3000);
+
+        self.postMessage({ processedData: data.buffer, width, height }, [data.buffer]);
+      };
+    });
+
+    // عناصر DOM
+    const fileInput = document.getElementById('fileInput');
+    const fileName = document.getElementById('fileName');
+    const uploadArea = document.getElementById('uploadArea');
+    const canvas2d = document.getElementById('preview2d');
+    const ctx2d = canvas2d.getContext('2d');
+    const heatmap = document.getElementById('heatmap');
+    const ctxHeat = heatmap.getContext('2d');
+    const edgesPreview = document.getElementById('edgesPreview');
+    const ctxEdges = edgesPreview.getContext('2d');
+    const preview3d = document.getElementById('preview3d');
+    const rotationSpeedInput = document.getElementById('rotationSpeed');
+    const speedValue = document.getElementById('speedValue');
+    const zoomControl = document.getElementById('zoomControl');
+    const heightIntensity = document.getElementById('heightIntensity');
+    const intensityValue = document.getElementById('intensityValue');
+    const gcodeOutput = document.getElementById('gcodeOutput');
+    const notification = document.getElementById('notification');
+    const loading3d = document.getElementById('loading3d');
+    const edgeThreshold = document.getElementById('edgeThreshold');
+    const thresholdValue = document.getElementById('thresholdValue');
+
+    // إعداد Three.js للمعاينة
+    let scene, camera, renderer, mesh;
+    let rotationSpeed = 0.01;
+    let currentColormap = 'jet';
+    let heightFactor = 80;
+    let heightMapData = null;
+    let originalImageData = null;
+    let generatedGcode = '';
+    let edgeData = null;
+    let isPageVisible = true;
+
+    // تهيئة Three.js
+    function initThreeJS() {
+      // إعداد المشهد
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xf0f0f0);
+      
+      // إعداد الكاميرا
+      camera = new THREE.PerspectiveCamera(45, preview3d.offsetWidth / preview3d.offsetHeight, 0.1, 1000);
+      camera.position.z = 200;
+      
+      // إعداد العارض
+      renderer = new THREE.WebGLRenderer({ 
+        antialias: true, 
+        alpha: true,
+        powerPreference: "high-performance"
+      });
+      renderer.setSize(preview3d.offsetWidth, preview3d.offsetHeight);
+      preview3d.appendChild(renderer.domElement);
+      
+      // إضافة الإضاءة
+      const ambientLight = new THREE.AmbientLight(0x404040, 1);
+      scene.add(ambientLight);
+      
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      directionalLight.position.set(1, 1, 1);
+      scene.add(directionalLight);
+      
+      const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+      directionalLight2.position.set(-1, -1, -1);
+      scene.add(directionalLight2);
+    }
+
+    // التحقق من رؤية الصفحة لتحسين الأداء
+    document.addEventListener('visibilitychange', () => {
+      isPageVisible = !document.hidden;
+    });
+
+    // تحسين أداء الرسوم المتحركة
+    const animate = () => {
+      if (!isPageVisible) {
+        requestAnimationFrame(animate);
+        return;
+      }
+
+      if (mesh) mesh.rotation.y += rotationSpeed;
+      if (renderer) renderer.render(scene, camera);
+      
+      requestAnimationFrame(animate);
+    };
+
+    // تحسين إدارة الذاكرة
+    const disposeThreeObjects = () => {
+      if (!scene) return;
+      
+      while(scene.children.length > 0) {
+        const object = scene.children[0];
+        if (object.geometry) object.geometry.dispose();
+        if (object.material) {
+          if (Array.isArray(object.material)) {
+            object.material.forEach(material => material.dispose());
+          } else {
+            object.material.dispose();
+          }
+        }
+        scene.remove(object);
+      }
+    };
+
+    // إظهار الإشعارات
+    function showNotification(message, isError = false) {
+      notification.textContent = message;
+      notification.className = 'notification';
+      notification.classList.add(isError ? 'error' : 'success');
+      notification.classList.add('show');
+      
+      setTimeout(() => {
+        notification.classList.remove('show');
+      }, 3000);
+    }
+
+    // تحديث شريط التقدم
+    function updateProgress(percent, message = '') {
+      // يمكن تنفيذ هذا لاحقًا عند إضافة شريط تقدم مفصل
+      if (message) {
+        console.log(`${message}: ${percent}%`);
+      }
+    }
+
+    // تحميل الصورة وعرضها
+    function handleImageUpload(file) {
+      if (!file || !file.type.match('image.*')) {
+        showNotification('يرجى تحميل صورة صالحة', true);
+        return;
       }
       
-      // تبديل التابات
-      tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-          const tabId = tab.getAttribute('data-tab');
-          
-          // إلغاء تفعيل جميع التابات
-          tabs.forEach(t => t.classList.remove('active'));
-          tabContents.forEach(tc => tc.classList.remove('active'));
-          
-          // تفعيل التاب المحدد
-          tab.classList.add('active');
-          document.getElementById(`${tabId}-tab`).classList.add('active');
-        });
-      });
+      fileName.textContent = file.name;
       
-      // تحميل الصورة
-      fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        fileName.textContent = file.name;
-        
+      const reader = new FileReader();
+      reader.onload = function(e) {
         const img = new Image();
-        img.onload = () => {
+        img.onload = function() {
+          // ضبط حجم canvas لعرض الصورة
           canvas2d.width = img.width;
           canvas2d.height = img.height;
-          ctx2d.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
+          heatmap.width = img.width;
+          heatmap.height = img.height;
+          edgesPreview.width = img.width;
+          edgesPreview.height = img.height;
+          
+          // رسم الصورة على canvas
+          ctx2d.drawImage(img, 0, 0, img.width, img.height);
           
           // حفظ بيانات الصورة الأصلية
           originalImageData = ctx2d.getImageData(0, 0, canvas2d.width, canvas2d.height);
           
+          // إنشاء خريطة ارتفاع من الصورة
+          createHeightMap(img);
+          
           showNotification('تم تحميل الصورة بنجاح');
         };
-        img.src = URL.createObjectURL(file);
-      });
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // إنشاء خريطة ارتفاع من الصورة
+    function createHeightMap(image) {
+      const w = Math.min(image.width, 80);
+      const h = Math.min(image.height, 80);
       
-      // تحسين الصورة
-      document.querySelectorAll('.enhancement-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const action = btn.getAttribute('data-action');
-          if (action === 'edges') {
-            detectEdges();
-          } else {
-            applyEnhancement(action);
-          }
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = w; 
+      tempCanvas.height = h;
+      const tctx = tempCanvas.getContext('2d');
+      tctx.drawImage(image, 0, 0, w, h);
+      const imgData = tctx.getImageData(0, 0, w, h).data;
+
+      // حفظ بيانات الارتفاع للاستخدام لاحقاً في توليد G-code
+      heightMapData = {
+        data: new Uint8Array(imgData),
+        width: w,
+        height: h
+      };
+
+      // إنشاء شكل ثلاثي الأبعاد
+      create3DModel(imgData, w, h);
+      
+      // رسم خريطة الحرارة
+      drawHeatmap(imgData, w, h);
+    }
+
+    // إنشاء نموذج ثلاثي الأبعاد
+    function create3DModel(imgData, width, height) {
+      loading3d.style.display = 'block';
+      
+      // استخدام setTimeout للسماح بواجهة المستخدم بالتحديث قبل البدء في المعالجة الثقيلة
+      setTimeout(() => {
+        disposeThreeObjects();
+        
+        const geometry = new THREE.PlaneGeometry(100, 100, width-1, height-1);
+        const positions = geometry.attributes.position.array;
+        let min = 255, max = 0;
+        const colors = [];
+        
+        for (let i = 0; i < positions.length / 3; i++) {
+          const x = i % width;
+          const y = Math.floor(i / width);
+          const idx = (y * width + x) * 4;
+          const brightness = 0.34 * imgData[idx] + 0.5 * imgData[idx+1] + 0.16 * imgData[idx+2];
+          min = Math.min(min, brightness);
+          max = Math.max(max, brightness);
+          positions[i * 3 + 2] = brightness / heightFactor;
+
+          const norm = (brightness - min) / (max - min || 1);
+          const color = getHeatColor(norm, currentColormap);
+          colors.push(color.r/255, color.g/255, color.b/255);
+        }
+        
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        geometry.computeVertexNormals();
+
+        const material = new THREE.MeshLambertMaterial({ 
+          vertexColors: true, 
+          side: THREE.DoubleSide,
+          wireframe: false
         });
-      });
+        
+        mesh = new THREE.Mesh(geometry, material);
+        scene.add(mesh);
+
+        loading3d.style.display = 'none';
+      }, 100);
+    }
+
+    // رسم خريطة الحرارة
+    function drawHeatmap(imgData, width, height) {
+      let min = 255, max = 0;
       
-      // وظيفة تحسين الصورة
-      function applyEnhancement(type) {
-        if (!originalImageData) {
-          showNotification('يجب تحميل صورة أولاً', true);
-          return;
-        }
-        showNotification(`تم تطبيق ${type} على الصورة`);
+      // حساب القيم الدنيا والقصوى
+      for (let i = 0; i < imgData.length; i += 4) {
+        const brightness = 0.34 * imgData[i] + 0.5 * imgData[i+1] + 0.16 * imgData[i+2];
+        min = Math.min(min, brightness);
+        max = Math.max(max, brightness);
       }
       
-      // وظيفة كشف الحدود
-      function detectEdges() {
-        if (!originalImageData) {
-          showNotification('يجب تحميل صورة أولاً', true);
-          return;
+      // رسم خريطة الحرارة
+      const imageData = ctxHeat.createImageData(width, height);
+      
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const idx = (y * width + x) * 4;
+          const brightness = 0.34 * imgData[idx] + 0.5 * imgData[idx+1] + 0.16 * imgData[idx+2];
+          const norm = (brightness - min) / (max - min || 1);
+          const color = getHeatColor(norm, currentColormap);
+          
+          const destIdx = (y * width + x) * 4;
+          imageData.data[destIdx] = color.r;
+          imageData.data[destIdx+1] = color.g;
+          imageData.data[destIdx+2] = color.b;
+          imageData.data[destIdx+3] = 255;
         }
-        showNotification('جاري كشف الحدود...', false, 'ai');
-        
-        // محاكاة عملية كشف الحدود
-        setTimeout(() => {
-          edgesPreview.width = canvas2d.width;
-          edgesPreview.height = canvas2d.height;
-          ctxEdges.drawImage(canvas2d, 0, 0);
-          showNotification('تم كشف الحدود بنجاح', false, 'ai');
-        }, 1000);
       }
       
-      // توليد G-code
-      document.getElementById('generateGcode').addEventListener('click', () => {
-        if (!originalImageData) {
-          showNotification('يجب تحميل صورة أولاً', true);
-          return;
-        }
+      ctxHeat.putImageData(imageData, 0, 0);
+    }
+
+    // الحصول على لون خريطة الحرارة
+    function getHeatColor(value, colormap) {
+      let r, g, b;
+      
+      if (colormap === 'jet') {
+        // خريطة ألوان Jet (الأزرق إلى الأحمر)
+        const fourValue = 4 * value;
+        r = Math.min(fourValue - 1.5, -fourValue + 4.5) * 255;
+        g = Math.min(fourValue - 0.5, -fourValue + 3.5) * 255;
+        b = Math.min(fourValue + 0.5, -fourValue + 2.5) * 255;
+      } else {
+        // خريطة ألوان افتراضية (رمادي)
+        r = g = b = value * 255;
+      }
+      
+      return {
+        r: Math.max(0, Math.min(255, r)),
+        g: Math.max(0, Math.min(255, g)),
+        b: Math.max(0, Math.min(255, b))
+      };
+    }
+
+    // تطبيق تحسينات على الصورة
+    function applyEnhancement(type) {
+      if (!originalImageData) {
+        showNotification('يجب تحميل صورة أولاً', true);
+        return;
+      }
+
+      const imageData = ctx2d.getImageData(0, 0, canvas2d.width, canvas2d.height);
+      const data = imageData.data;
+
+      switch(type) {
+        case 'brightness':
+          const brightnessFactor = 30;
+          for (let i = 0; i < data.length; i += 4) {
+            data[i] = Math.min(255, data[i] + brightnessFactor);
+            data[i+1] = Math.min(255, data[i+1] + brightnessFactor);
+            data[i+2] = Math.min(255, data[i+2] + brightnessFactor);
+          }
+          break;
+        case 'contrast':
+          const contrastFactor = 1.2;
+          const contrastOffset = 128 * (1 - contrastFactor);
+          for (let i = 0; i < data.length; i += 4) {
+            data[i] = Math.min(255, Math.max(0, contrastFactor * data[i] + contrastOffset));
+            data[i+1] = Math.min(255, Math.max(0, contrastFactor * data[i+1] + contrastOffset));
+            data[i+2] = Math.min(255, Math.max(0, contrastFactor * data[i+2] + contrastOffset));
+          }
+          break;
+      }
+
+      ctx2d.putImageData(imageData, 0, 0);
+      
+      // إنشاء خريطة ارتفاع جديدة من الصورة المحسنة
+      const img = new Image();
+      img.onload = function() {
+        createHeightMap(img);
+      };
+      img.src = canvas2d.toDataURL();
+    }
+
+    // كشف الحواف
+    function detectEdges() {
+      if (!originalImageData) {
+        showNotification('يجب تحميل صورة أولاً', true);
+        return;
+      }
+
+      updateProgress(10, 'جاري كشف الحدود...');
+      
+      // استخدام Web Worker لمعالجة الصورة في الخلفية
+      imageProcessingWorker.postMessage({
+        imageData: {
+          data: originalImageData.data,
+          width: originalImageData.width,
+          height: originalImageData.height
+        },
+        type: 'edges',
+        threshold: parseInt(edgeThreshold.value)
+      });
+    }
+
+    // معالجة نتائج Web Worker
+    imageProcessingWorker.onmessage = function(e) {
+      const { processedData, width, height } = e.data;
+      const data = new Uint8ClampedArray(processedData);
+      
+      const imageData = new ImageData(data, width, height);
+      ctxEdges.clearRect(0, 0, edgesPreview.width, edgesPreview.height);
+      edgesPreview.width = width;
+      edgesPreview.height = height;
+      ctxEdges.putImageData(imageData, 0, 0);
+      
+      // حفظ بيانات الحدود
+      edgeData = imageData;
+      
+      updateProgress(100, 'تم كشف الحدود بنجاح');
+      showNotification('تم كشف الحواف بنجاح');
+    };
+
+    // توليد G-code
+    async function generateGcode() {
+      if (!heightMapData) {
+        showNotification('يجب تحميل صورة أولاً', true);
+        return;
+      }
+
+      updateProgress(0, 'جاري توليد G-code...');
+      
+      try {
+        // محاكاة عملية توليد G-code (يمكن استبدالها بالمنطق الفعلي)
+        await new Promise(resolve => setTimeout(resolve, 1500));
         
-        showNotification('جاري توليد G-code...', false, 'ai');
-        
-        // محاكاة عملية توليد G-code
-        setTimeout(() => {
-          generatedGcode = `; G-code generated by CNC AI\nG21\nG90\nG0 X0 Y0 Z5\nM3 S10000\nG1 Z-2 F1000\nG0 Z5\nM5\nM30`;
-          document.getElementById('gcodeOutput').textContent = generatedGcode;
-          showNotification('تم توليد G-code بنجاح', false, 'ai');
-        }, 2000);
+        generatedGcode = `; G-code generated by CNC AI
+G21 ; Set units to millimeters
+G90 ; Use absolute coordinates
+G28 ; Home all axes
+M3 S1000 ; Spindle on clockwise at 1000 RPM
+G4 P2 ; Wait for spindle to reach speed
+
+; Start cutting path
+G0 Z5 ; Raise spindle
+G0 X0 Y0 ; Move to start position
+
+; Simulated cutting path based on image
+G1 Z-1 F500 ; Lower spindle
+G1 X10 Y10 F1000 ; Move to first point
+G1 X20 Y20 ; Continue path
+G1 X30 Y10
+G1 X40 Y20
+G1 X50 Y10
+
+; Finish cutting
+G0 Z5 ; Raise spindle
+M5 ; Spindle off
+G28 X0 Y0 ; Return to home
+M30 ; End program`;
+
+        gcodeOutput.textContent = generatedGcode;
+        updateProgress(100, 'تم توليد G-code بنجاح');
+        showNotification('تم توليد G-code بنجاح');
+      } catch (error) {
+        console.error('Error generating G-code:', error);
+        showNotification('حدث خطأ أثناء توليد G-code', true);
+      }
+    }
+
+    // تحميل G-code
+    function downloadGcode() {
+      if (!generatedGcode) {
+        showNotification('لا يوجد G-code لتحميله', true);
+        return;
+      }
+      
+      const blob = new Blob([generatedGcode], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'cnc-program.gcode';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      showNotification('تم تحميل G-code بنجاح');
+    }
+
+    // تهيئة التطبيق
+    function initApp() {
+      // تهيئة Three.js
+      initThreeJS();
+      animate();
+      
+      // إعداد مستمعات الأحداث
+      uploadArea.addEventListener('click', () => {
+        fileInput.click();
       });
       
-      // باقي الأحداث والوظائف
-      // ... (سيتم إضافة باقي الأحداث والوظائف هنا) ...
+      uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.style.backgroundColor = '#e3eaf2';
+      });
       
-      showNotification('تم تحميل التطبيق بنجاح!');
-    });
+      uploadArea.addEventListener('dragleave', () => {
+        uploadArea.style.backgroundColor = '';
+      });
+      
+      uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.style.backgroundColor = '';
+        
+        if (e.dataTransfer.files.length) {
+          handleImageUpload(e.dataTransfer.files[0]);
+        }
+      });
+      
+      fileInput.addEventListener('change', () => {
+        if (fileInput.files.length) {
+          handleImageUpload(fileInput.files[0]);
+        }
+      });
+      
+      rotationSpeedInput.addEventListener('input', () => {
+        rotationSpeed = rotationSpeedInput.value / 100;
+        speedValue.textContent = rotationSpeed.toFixed(2);
+      });
+      
+      heightIntensity.addEventListener('input', () => {
+        heightFactor = heightIntensity.value;
+        intensityValue.textContent = heightFactor;
+        
+        if (originalImageData) {
+          const img = new Image();
+          img.onload = function() {
+            createHeightMap(img);
+          };
+          img.src = canvas2d.toDataURL();
+        }
+      });
+      
+      edgeThreshold.addEventListener('input', () => {
+        thresholdValue.textContent = edgeThreshold.value;
+      });
+    }
+
+    // بدء التطبيق
+    initApp();
   </script>
 </body>
 </html>
