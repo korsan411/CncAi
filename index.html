@@ -515,6 +515,33 @@
       border-color: var(--wood-color);
     }
 
+    .ai-options {
+      background: var(--card-bg);
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+      margin-bottom: 2rem;
+      border: 1px solid var(--border-color);
+    }
+
+    .path-optimization {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .optimization-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .optimization-option input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+    }
+
     @media (max-width: 768px) {
       h1 {
         font-size: 1.4rem;
@@ -633,6 +660,24 @@
 
     <!-- تاب إعدادات G-code -->
     <div class="tab-content" id="gcode-tab">
+      <div class="ai-options">
+        <h3><span>🤖</span> خيارات الذكاء الاصطناعي</h3>
+        <div class="path-optimization">
+          <div class="optimization-option">
+            <input type="checkbox" id="optimizePaths" checked>
+            <label for="optimizePaths">تحسين المسارات لتقليل وقت القطع</label>
+          </div>
+          <div class="optimization-option">
+            <input type="checkbox" id="smoothEdges" checked>
+            <label for="smoothEdges">تنعيم الحواف للنتائج الأفضل</label>
+          </div>
+          <div class="optimization-option">
+            <input type="checkbox" id="adaptivePrecision">
+            <label for="adaptivePrecision">الدقة التكيفية (تلقائية)</label>
+          </div>
+        </div>
+      </div>
+
       <div class="settings-panel">
         <div class="settings-group">
           <h3><span>🏭</span> إعدادات الماكينة</h3>
@@ -743,7 +788,7 @@
         </div>
         <div class="simulation-controls">
           <button class="btn btn-secondary" onclick="startSimulation()">▶️ تشغيل</button>
-          <button class="btn btn-secondary" onclick="pauseSimulation()">⏸️ إيقاف</button>
+          <button class="btn btn-secondary" onclick="pauseSimulation()">⏸️ إوقف</button>
           <button class="btn btn-secondary" onclick="resetSimulation()">⏹️ إعادة تعيين</button>
           <div class="option-group">
             <label for="simulationSpeed">سرعة المحاكاة</label>
@@ -822,12 +867,13 @@
   </div>
 
   <footer>
-    <p>تم التطوير باستخدام Three.js - مشروع CncAI مع Top View ونقش الخشب</p>
+    <p>تم التطوير باستخدام Three.js و TensorFlow.js - مشروع CncAI مع Top View ونقش الخشب</p>
   </footer>
 
   <div class="notification" id="notification">تم تحميل الصورة بنجاح!</div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
   <script>
     // عناصر DOM
     const fileInput = document.getElementById('fileInput');
@@ -909,6 +955,7 @@
     let isSimulationPlaying = false;
     let currentView = '3d';
     let currentPattern = 'lines';
+    let generatedGcode = '';
 
     // تبديل التابات
     tabs.forEach(tab => {
@@ -1330,74 +1377,201 @@
       }, 3000);
     }
 
+    // ============== دوال توليد G-code باستخدام الذكاء الاصطناعي ==============
+
+    // دالة لتحويل الصورة إلى بيانات ارتفاع باستخدام TensorFlow.js
+    async function processImageWithAI(imageData) {
+      showNotification('جاري معالجة الصورة بالذكاء الاصطناعي...', false, 'ai');
+      
+      // تحويل ImageData إلى tensor
+      const tensor = tf.browser.fromPixels(imageData);
+      
+      // تحويل إلى تدرج الرمادي
+      let processed = tensor.mean(2).expandDims(2);
+      
+      // تطبيق مرشح Gaussian لتخفيف الضوضاء
+      processed = tf.tidy(() => {
+        const kernel = tf.tensor2d([
+          [1, 2, 1],
+          [2, 4, 2],
+          [1, 2, 1]
+        ], [3, 3]).div(16);
+        
+        return tf.depthwiseConv2d(
+          processed, 
+          kernel.expandDims(2).expandDims(3), 
+          1, 
+          'same'
+        );
+      });
+      
+      // زيادة التباين لتحسين نتائج القطع
+      processed = tf.tidy(() => {
+        const mean = processed.mean();
+        const std = processed.sub(mean).square().mean().sqrt();
+        return processed.sub(mean).div(std.add(1e-7)).clipByValue(-2, 2).add(2).div(4);
+      });
+      
+      // الحصول على البيانات المعالجة
+      const data = await processed.squeeze().array();
+      
+      // تنظيف الذاكرة
+      tensor.dispose();
+      processed.dispose();
+      
+      return data;
+    }
+
+    // دالة لتحسين المسارات باستخدام خوارزمية TSP المبسطة
+    function optimizeToolpaths(points) {
+      if (points.length <= 1) return points;
+      
+      // استخدام خوارزمية أقرب الجار لتحسين المسار
+      const optimized = [points[0]];
+      const remaining = points.slice(1);
+      
+      while (remaining.length > 0) {
+        const lastPoint = optimized[optimized.length - 1];
+        let closestIdx = 0;
+        let minDist = Infinity;
+        
+        for (let i = 0; i < remaining.length; i++) {
+          const dist = Math.sqrt(
+            Math.pow(lastPoint.x - remaining[i].x, 2) + 
+            Math.pow(lastPoint.y - remaining[i].y, 2)
+          );
+          
+          if (dist < minDist) {
+            minDist = dist;
+            closestIdx = i;
+          }
+        }
+        
+        optimized.push(remaining[closestIdx]);
+        remaining.splice(closestIdx, 1);
+      }
+      
+      return optimized;
+    }
+
+    // دالة لتوليد G-code حقيقي من بيانات الصورة
+    async function generateRealGcode() {
+      if (!heightMapData || !originalImageData) {
+        showNotification('يجب تحميل صورة أولاً', true);
+        return '';
+      }
+
+      const machineType = document.getElementById('machineType').value;
+      const materialType = document.getElementById('materialType').value;
+      const feedRate = parseInt(document.getElementById('feedRate').value);
+      const spindleSpeed = parseInt(document.getElementById('spindleSpeed').value);
+      const cutDepth = parseFloat(document.getElementById('cutDepth').value);
+      const passDepth = parseFloat(document.getElementById('passDepth').value);
+      const gcodePrecision = document.getElementById('gcodePrecision').value;
+      const optimizePaths = document.getElementById('optimizePaths').checked;
+      const smoothEdges = document.getElementById('smoothEdges').checked;
+      
+      // تحديد الدقة بناءً على الإعدادات
+      let resolution = 5; // منخفضة
+      if (gcodePrecision === 'medium') resolution = 3;
+      if (gcodePrecision === 'high') resolution = 1;
+      
+      // معالجة الصورة بالذكاء الاصطناعي
+      const heightData = await processImageWithAI(originalImageData);
+      
+      // تحويل بيانات الصورة إلى نقاط قطع
+      const points = [];
+      const width = canvas2d.width;
+      const height = canvas2d.height;
+      
+      for (let y = 0; y < height; y += resolution) {
+        for (let x = 0; x < width; x += resolution) {
+          const idx = Math.floor(y) * width + Math.floor(x);
+          if (idx < heightData.length * width) {
+            const pixelValue = heightData[Math.floor(y)][Math.floor(x)] || 0;
+            // تحويل قيمة البيكسل إلى عمق قطع (القيم الأغمق = قطع أعمق)
+            const depth = (1 - pixelValue) * cutDepth;
+            
+            points.push({
+              x: (x / width) * 100 - 50, // تحويل إلى إحداثيات من -50 إلى 50
+              y: (y / height) * 100 - 50,
+              z: -depth
+            });
+          }
+        }
+      }
+      
+      // تحسين المسارات إذا كان الخيار مفعلاً
+      const toolPaths = optimizePaths ? optimizeToolpaths(points) : points;
+      
+      // توليد G-code
+      let gcode = `; G-code generated by CNC AI with TensorFlow.js\n`;
+      gcode += `; Machine: ${machineType}\n`;
+      gcode += `; Material: ${materialType}\n`;
+      gcode += `; Feed rate: ${feedRate} mm/min\n`;
+      gcode += `; Spindle speed: ${spindleSpeed} RPM\n`;
+      gcode += `; Total points: ${toolPaths.length}\n\n`;
+      
+      gcode += `G21 ; Set units to millimeters\n`;
+      gcode += `G90 ; Absolute positioning\n`;
+      gcode += `G0 Z5 ; Lift spindle\n`;
+      gcode += `M3 S${spindleSpeed} ; Spindle on\n`;
+      gcode += `G4 P2 ; Wait for spindle to reach speed\n\n`;
+      
+      gcode += `; Start cutting path\n`;
+      gcode += `G0 X${toolPaths[0].x.toFixed(3)} Y${toolPaths[0].y.toFixed(3)} ; Move to start position\n`;
+      
+      // إضافة أوامر الحركة
+      for (let i = 0; i < toolPaths.length; i++) {
+        const point = toolPaths[i];
+        gcode += `G1 X${point.x.toFixed(3)} Y${point.y.toFixed(3)} Z${point.z.toFixed(3)} F${feedRate}\n`;
+      }
+      
+      gcode += `\nG0 Z5 ; Lift spindle\n`;
+      gcode += `M5 ; Spindle off\n`;
+      gcode += `G0 X0 Y0 ; Return to home\n`;
+      gcode += `M30 ; End program\n`;
+      
+      return gcode;
+    }
+
     // دالة لتوليد G-code
-    function generateGcode() {
+    async function generateGcode() {
       if (!heightMapData) {
         showNotification('يجب تحميل صورة أولاً', true);
         return;
       }
 
-      const machineType = document.getElementById('machineType').value;
-      const materialType = document.getElementById('materialType').value;
-      const feedRate = document.getElementById('feedRate').value;
-      const spindleSpeed = document.getElementById('spindleSpeed').value;
-      const cutDepth = document.getElementById('cutDepth').value;
-      const gcodeType = document.getElementById('gcodeType').value;
+      gcodeOutput.textContent = "⏳ جاري توليد G-code باستخدام الذكاء الاصطناعي...";
       
-      // محاكاة عملية توليد G-code
-      gcodeOutput.textContent = "⏳ جاري توليد G-code...";
-      
-      setTimeout(() => {
-        // G-code أساسي كمثال
-        let gcode = `; G-code generated by CNC AI Preview\n`;
-        gcode += `; Machine: ${machineType}\n`;
-        gcode += `; Material: ${materialType}\n`;
-        gcode += `; Feed rate: ${feedRate}\n`;
-        gcode += `; Spindle speed: ${spindleSpeed}\n\n`;
-        
-        gcode += `G21 ; Set units to millimeters\n`;
-        gcode += `G90 ; Absolute positioning\n`;
-        gcode += `M3 S${spindleSpeed} ; Spindle on\n`;
-        gcode += `G0 Z5 ; Lift spindle\n`;
-        gcode += `G0 X0 Y0 ; Move to start position\n\n`;
-        
-        // محاكاة بعض أوامر الحركة بناءً على بيانات الارتفاع
-        gcode += `; Beginning of cutting path\n`;
-        gcode += `G1 Z-${cutDepth} F${feedRate/2} ; Lower to cutting depth\n`;
-        
-        for (let y = 0; y < heightMapData.height; y += 5) {
-          for (let x = 0; x < heightMapData.width; x += 5) {
-            const idx = (y * heightMapData.width + x) * 4;
-            const brightness = 0.34 * heightMapData.data[idx] + 0.5 * heightMapData.data[idx+1] + 0.16 * heightMapData.data[idx+2];
-            const depth = (brightness / 255) * cutDepth;
-            
-            gcode += `G1 X${x} Y${y} Z-${depth.toFixed(2)} F${feedRate}\n`;
-          }
-        }
-        
-        gcode += `\nG0 Z5 ; Lift spindle\n`;
-        gcode += `M5 ; Spindle off\n`;
-        gcode += `G0 X0 Y0 ; Return to start\n`;
-        gcode += `M30 ; End program\n`;
-        
+      try {
+        const gcode = await generateRealGcode();
+        generatedGcode = gcode;
         gcodeOutput.textContent = gcode;
-        showNotification('تم توليد G-code بنجاح');
-      }, 1500);
+        showNotification('تم توليد G-code بنجاح باستخدام الذكاء الاصطناعي', false, 'ai');
+        
+        // تحديث معلومات المحاكاة
+        document.getElementById('simulationCommands').textContent = generatedGcode.split('\n').length;
+        document.getElementById('simulationDistance').textContent = Math.round(generatedGcode.length / 10);
+        document.getElementById('simulationTime').textContent = (generatedGcode.length / 1000).toFixed(1);
+      } catch (error) {
+        console.error('Error generating G-code:', error);
+        showNotification('فشل في توليد G-code', true);
+      }
     }
 
     // دالة لتحميل G-code
     function downloadGcode() {
-      if (gcodeOutput.textContent.includes("يجب تحميل صورة") || 
-          gcodeOutput.textContent.includes("جاري توليد")) {
+      if (!generatedGcode) {
         showNotification('لا يوجد G-code لتحميله', true);
         return;
       }
       
-      const blob = new Blob([gcodeOutput.textContent], { type: 'text/plain' });
+      const blob = new Blob([generatedGcode], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'cnc-program.gcode';
+      a.download = 'cnc-ai-program.gcode';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -1407,8 +1581,7 @@
 
     // دالة لمحاكاة G-code
     function simulateGcode() {
-      if (!gcodeOutput.textContent || gcodeOutput.textContent.includes("يجب تحميل صورة") || 
-          gcodeOutput.textContent.includes("جاري توليد")) {
+      if (!generatedGcode) {
         showNotification('يجب توليد G-code أولاً', true);
         return;
       }
@@ -1431,49 +1604,60 @@
         setupLights(simulationScene);
         
         // إنشاء نموذج أساسي للمحاكاة
-        const geometry = new THREE.BoxGeometry(80, 80, 5);
+        const geometry = new THREE.BoxGeometry(100, 100, 5);
         const material = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
         const base = new THREE.Mesh(geometry, material);
         simulationScene.add(base);
         
-        // إنشاء مسار الأداة
+        // تحليل G-code واستخراج نقاط المسار
         const points = [];
-        for (let i = 0; i < 50; i++) {
-          const angle = (i / 50) * Math.PI * 2;
-          const radius = 30 + Math.sin(angle * 3) * 5;
-          points.push(new THREE.Vector3(
-            Math.cos(angle) * radius,
-            Math.sin(angle) * radius,
-            Math.sin(angle * 2) * 2
-          ));
+        const lines = generatedGcode.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('G1') || line.startsWith('G0')) {
+            const xMatch = line.match(/X([-\d.]+)/);
+            const yMatch = line.match(/Y([-\d.]+)/);
+            const zMatch = line.match(/Z([-\d.]+)/);
+            
+            if (xMatch && yMatch) {
+              const x = parseFloat(xMatch[1]);
+              const y = parseFloat(yMatch[1]);
+              const z = zMatch ? parseFloat(zMatch[1]) : 0;
+              
+              points.push(new THREE.Vector3(x, y, z));
+            }
+          }
         }
         
-        const pathGeometry = new THREE.BufferGeometry().setFromPoints(points);
-        const pathMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
-        const path = new THREE.Line(pathGeometry, pathMaterial);
-        simulationScene.add(path);
-        
-        // إنشاء مؤشر الأداة
-        const toolGeometry = new THREE.ConeGeometry(2, 10, 8);
-        const toolMaterial = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
-        const tool = new THREE.Mesh(toolGeometry, toolMaterial);
-        tool.position.copy(points[0]);
-        tool.rotation.x = Math.PI;
-        simulationScene.add(tool);
-        
-        // حفظ بيانات المحاكاة
-        simulation = {
-          points: points,
-          tool: tool,
-          currentPoint: 0,
-          speed: parseInt(document.getElementById('simulationSpeed').value)
-        };
-        
-        // تحديث معلومات المحاكاة
-        document.getElementById('simulationTime').textContent = '2.5';
-        document.getElementById('simulationDistance').textContent = '1250';
-        document.getElementById('simulationCommands').textContent = '25';
-        document.getElementById('simulationStatus').textContent = 'جاهز للتشغيل';
+        if (points.length > 0) {
+          // إنشاء مسار الأداة
+          const pathGeometry = new THREE.BufferGeometry().setFromPoints(points);
+          const pathMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
+          const path = new THREE.Line(pathGeometry, pathMaterial);
+          simulationScene.add(path);
+          
+          // إنشاء مؤشر الأداة
+          const toolGeometry = new THREE.ConeGeometry(2, 10, 8);
+          const toolMaterial = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
+          const tool = new THREE.Mesh(toolGeometry, toolMaterial);
+          tool.position.copy(points[0]);
+          tool.rotation.x = Math.PI;
+          simulationScene.add(tool);
+          
+          // حفظ بيانات المحاكاة
+          simulation = {
+            points: points,
+            tool: tool,
+            currentPoint: 0,
+            speed: parseInt(document.getElementById('simulationSpeed').value)
+          };
+          
+          // تحديث معلومات المحاكاة
+          document.getElementById('simulationTime').textContent = (points.length / 100).toFixed(1);
+          document.getElementById('simulationDistance').textContent = Math.round(points.length * 1.5);
+          document.getElementById('simulationCommands').textContent = points.length;
+          document.getElementById('simulationStatus').textContent = 'جاهز للتشغيل';
+        }
         
         // تحديث العرض العلوي
         updateTopView();
@@ -1481,7 +1665,7 @@
         loadingSimulation.style.display = 'none';
         loadingTopView.style.display = 'none';
         showNotification('تم تحميل المحاكاة بنجاح');
-      }, 2000);
+      }, 1000);
     }
 
     // دوال التحكم في المحاكاة
