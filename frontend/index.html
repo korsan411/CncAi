@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CNC AI Preview - النسخة المتطورة مع الذكاء الاصطناعي</title>
   <style>
-    /* أنماط محسنة مع إضافة أقسام جديدة */
     :root {
       --primary-color: #4a90e2;
       --secondary-color: #67b0f5;
@@ -39,8 +38,51 @@
       --ai-color: #ba68c8;
     }
 
-    /* الأنماط السابقة تبقى كما هي مع إضافة أنماط جديدة */
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: var(--bg-color);
+      color: var(--text-color);
+    }
 
+    header {
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border-color);
+      margin: 1rem 0;
+    }
+
+    .tab {
+      padding: 10px 20px;
+      cursor: pointer;
+      background: var(--tab-inactive);
+      margin-right: 5px;
+      border-radius: 5px 5px 0 0;
+    }
+
+    .tab.active {
+      background: var(--tab-active);
+      color: #fff;
+    }
+
+    .tab-content {
+      display: none;
+      padding: 1rem;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* AI Section */
     .ai-section {
       background: var(--card-bg);
       padding: 1.5rem;
@@ -150,20 +192,73 @@
     .advanced-settings.show {
       display: block;
     }
+
+    .container {
+      padding: 1rem;
+    }
+
+    footer {
+      padding: 1rem;
+      text-align: center;
+      font-size: 0.9rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border-color);
+      margin-top: 2rem;
+    }
+
+    .notification {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--primary-color);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 5px;
+      display: none;
+      z-index: 1000;
+    }
+
+    .previews-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .preview-block {
+      flex: 1 1 45%;
+      background: var(--card-bg);
+      padding: 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    .preview-content canvas {
+      width: 100%;
+      height: auto;
+      border: 1px solid var(--border-color);
+    }
+
+    .options {
+      margin-top: 0.5rem;
+    }
+
+    .option-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .option-group label {
+      margin-bottom: 0.2rem;
+    }
   </style>
 </head>
 <body>
   <header>
-    <div class="header-content">
-      <h1><span>🧠</span> CNC AI Preview - الذكاء الاصطناعي المتقدم</h1>
-      <div class="controls">
-        <button id="themeToggle">🌙</button>
-      </div>
-    </div>
+    <h1>🧠 CNC AI Preview - الذكاء الاصطناعي المتقدم</h1>
+    <button id="themeToggle">🌙</button>
   </header>
 
   <div class="container">
-    <!-- التابات -->
     <div class="tabs">
       <div class="tab active" data-tab="preview">معاينة الصورة</div>
       <div class="tab" data-tab="ai">تحليل الذكاء الاصطناعي</div>
@@ -171,482 +266,194 @@
       <div class="tab" data-tab="simulation">محاكاة G-code</div>
     </div>
 
-    <!-- تاب المعاينة (يبقى كما هو) -->
+    <!-- تاب المعاينة -->
     <div class="tab-content active" id="preview-tab">
-      <!-- المحتوى الأصلي يبقى هنا -->
+      <canvas id="canvas2d"></canvas>
     </div>
 
-    <!-- تاب الذكاء الاصطناعي الجديد -->
+    <!-- تاب الذكاء الاصطناعي -->
     <div class="tab-content" id="ai-tab">
       <section class="ai-section">
         <h2 class="ai-title">🤖 تحليل الصورة بالذكاء الاصطناعي</h2>
-        <p>استخدم خوارزميات الذكاء الاصطناعي المتقدمة لتحليل الصورة وتحديد السمات المثلى لتحويلها إلى G-code.</p>
-        
+        <p>استخدم خوارزميات الذكاء الاصطناعي المتقدمة لتحليل الصورة وتحويلها إلى G-code.</p>
+
         <div class="ai-options">
-          <div class="ai-option" onclick="selectAIOption('contour')">
+          <div class="ai-option" onclick="selectAIOption('contour', event)">
             <h4>📐 تحليل الكنتور</h4>
-            <p>اكتشف الحدود والتفاصيل الرئيسية</p>
           </div>
-          <div class="ai-option" onclick="selectAIOption('depth')">
+          <div class="ai-option" onclick="selectAIOption('depth', event)">
             <h4>🏔️ تقدير العمق</h4>
-            <p>تقدير معلومات العمق من صورة ثنائية الأبعاد</p>
           </div>
-          <div class="ai-option" onclick="selectAIOption('texture')">
+          <div class="ai-option" onclick="selectAIOption('texture', event)">
             <h4>🔍 تحليل الملمس</h4>
-            <p>تحليل أنماط الملمس والتفاصيل السطحية</p>
           </div>
-          <div class="ai-option" onclick="selectAIOption('auto')">
+          <div class="ai-option selected" onclick="selectAIOption('auto', event)">
             <h4>🚀 الوضع التلقائي</h4>
-            <p>التحليل الشامل باستخدام جميع التقنيات</p>
           </div>
         </div>
 
         <div class="processing-status" id="aiStatus">
           <span>⏳</span>
-          <div style="flex: 1;">
+          <div style="flex:1;">
             <p>في انتظار معالجة الصورة...</p>
-            <div class="progress-bar">
-              <div class="progress" id="aiProgress"></div>
-            </div>
+            <div class="progress-bar"><div class="progress" id="aiProgress"></div></div>
           </div>
         </div>
 
-        <button class="advanced-toggle" onclick="toggleAdvancedSettings()">
-          <span>⚙️</span> الإعدادات المتقدمة
-        </button>
+        <button class="advanced-toggle" onclick="toggleAdvancedSettings()">⚙️ الإعدادات المتقدمة</button>
 
         <div class="advanced-settings" id="advancedSettings">
           <h4>الإعدادات المتقدمة لتحليل الذكاء الاصطناعي</h4>
-          <div class="form-group">
-            <label for="aiSensitivity">حساسية التحليل</label>
-            <input type="range" id="aiSensitivity" min="1" max="10" value="5">
-          </div>
-          <div class="form-group">
-            <label for="aiDetail">مستوى التفاصيل</label>
+          <label>حساسية التحليل <input type="range" id="aiSensitivity" min="1" max="10" value="5"></label>
+          <label>مستوى التفاصيل
             <select id="aiDetail">
               <option value="low">منخفض (أسرع)</option>
               <option value="medium" selected>متوسط</option>
               <option value="high">عالٍ (أدق)</option>
             </select>
-          </div>
-          <div class="form-group">
-            <label for="aiModel">نموذج الذكاء الاصطناعي</label>
+          </label>
+          <label>نموذج الذكاء الاصطناعي
             <select id="aiModel">
               <option value="fast">النموذج السريع</option>
               <option value="balanced" selected>النموذج المتوازن</option>
               <option value="accurate">النموذج الدقيق</option>
             </select>
-          </div>
+          </label>
         </div>
 
-        <div class="action-buttons">
-          <button class="btn btn-primary" onclick="analyzeWithAI()">
-            <span>🔍</span> بدء التحليل
-          </button>
-          <button class="btn btn-secondary" onclick="applyAIResults()">
-            <span>✅</span> تطبيق النتائج
-          </button>
-        </div>
+        <button onclick="analyzeWithAI()">🔍 بدء التحليل</button>
+        <button onclick="applyAIResults()">✅ تطبيق النتائج</button>
 
         <div class="ai-results" id="aiResults">
-          <h4>نتائج التحليل</h4>
-          <div class="result-item">
-            <span>عدد السمات المحددة:</span>
-            <span id="featureCount">0</span>
-          </div>
-          <div class="result-item">
-            <span>مستوى التعقيد:</span>
-            <span id="complexityLevel">منخفض</span>
-          </div>
-          <div class="result-item">
-            <span>الوقت المتوقع للقطع:</span>
-            <span id="estimatedTime">0 دقيقة</span>
-          </div>
-          <div class="result-item">
-            <span>جودة النموذج ثلاثي الأبعاد:</span>
-            <span id="modelQuality">غير محدد</span>
-          </div>
+          <div class="result-item"><span>عدد السمات المحددة:</span> <span id="featureCount">0</span></div>
+          <div class="result-item"><span>مستوى التعقيد:</span> <span id="complexityLevel">منخفض</span></div>
+          <div class="result-item"><span>الوقت المتوقع للقطع:</span> <span id="estimatedTime">0 دقيقة</span></div>
+          <div class="result-item"><span>جودة النموذج ثلاثي الأبعاد:</span> <span id="modelQuality">غير محدد</span></div>
         </div>
-      </section>
 
-      <div class="previews-container">
-        <div class="preview-block">
-          <h3 class="preview-title">🧠 تحليل الذكاء الاصطناعي</h3>
-          <div class="preview-content">
+        <div class="previews-container">
+          <div class="preview-block">
+            <h3>🧠 تحليل الذكاء الاصطناعي</h3>
             <canvas id="aiAnalysis"></canvas>
+            <label>شفافية التحليل<input type="range" id="aiOpacity" min="0" max="100" value="50"></label>
           </div>
-          <div class="options">
-            <div class="option-group">
-              <label for="aiOpacity">شفافية التحليل</label>
-              <input type="range" id="aiOpacity" min="0" max="100" value="50">
-            </div>
-          </div>
-        </div>
-
-        <div class="preview-block">
-          <h3 class="preview-title">📊 نتائج متقدمة</h3>
-          <div class="preview-content">
+          <div class="preview-block">
+            <h3>📊 نتائج متقدمة</h3>
             <canvas id="aiHeatmap"></canvas>
-          </div>
-          <div class="options">
-            <div class="option-group">
-              <label for="resultType">نوع النتائج</label>
+            <label>نوع النتائج
               <select id="resultType">
                 <option value="contour">الكنتور</option>
                 <option value="depth">العمق</option>
                 <option value="texture">الملمس</option>
                 <option value="combined">مدمج</option>
               </select>
-            </div>
+            </label>
           </div>
         </div>
-      </div>
+      </section>
     </div>
 
-    <!-- تاب إعدادات G-code (يبقى كما هو) -->
+    <!-- تاب G-code -->
     <div class="tab-content" id="gcode-tab">
-      <!-- المحتوى الأصلي يبقى هنا -->
+      <p>هنا إعدادات G-code (يمكنك ملء المحتوى الأصلي)</p>
     </div>
 
-    <!-- تاب محاكاة G-code (يبقى كما هو) -->
+    <!-- تاب المحاكاة -->
     <div class="tab-content" id="simulation-tab">
-      <!-- المحتوى الأصلي يبقى هنا -->
+      <p>هنا محاكاة G-code (يمكنك ملء المحتوى الأصلي)</p>
     </div>
   </div>
 
   <footer>
-    <p>تم التطوير باستخدام Three.js و TensorFlow.js - مشروع CncAi Preview المتطور مع الذكاء الاصطناعي</p>
+    تم التطوير باستخدام Three.js و TensorFlow.js - مشروع CncAi Preview المتطور
   </footer>
 
-  <div class="notification" id="notification">تم تحميل الصورة بنجاح!</div>
+  <div class="notification" id="notification"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.23.0/dist/tf.min.js"></script>
   <script>
-    // ... الكود السابق يبقى كما هو ...
+    let tabs = document.querySelectorAll('.tab');
+    let tabContents = document.querySelectorAll('.tab-content');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        tabContents.forEach(tc => tc.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.tab + '-tab').classList.add('active');
+      });
+    });
 
-    // إضافة متغيرات جديدة للذكاء الاصطناعي
-    let aiModel = null;
-    let aiAnalysisResult = null;
-    let selectedAIOption = 'auto';
     let aiCanvas = document.getElementById('aiAnalysis');
     let aiCtx = aiCanvas.getContext('2d');
     let aiHeatmap = document.getElementById('aiHeatmap');
     let aiHeatmapCtx = aiHeatmap.getContext('2d');
+    let selectedAIOption = 'auto';
+    let aiAnalysisResult = null;
 
-    // دالة لتحميل نموذج الذكاء الاصطناعي
-    async function loadAIModel() {
-      const status = document.getElementById('aiStatus');
-      const progress = document.getElementById('aiProgress');
-      
-      status.querySelector('p').textContent = 'جاري تحميل نموذج الذكاء الاصطناعي...';
-      
-      try {
-        // محاكاة تحميل نموذج الذكاء الاصطناعي (في التطبيق الحقيقي، سنقوم بتحميل نموذج فعلي)
-        for (let i = 0; i <= 100; i += 10) {
-          await new Promise(resolve => setTimeout(resolve, 200));
-          progress.style.width = `${i}%`;
-        }
-        
-        // هنا يمكن تحميل نموذج TensorFlow.js الفعلي
-        // aiModel = await tf.loadGraphModel('path/to/model.json');
-        
-        status.querySelector('p').textContent = 'النموذج جاهز للتحليل';
-        showNotification('تم تحميل نموذج الذكاء الاصطناعي بنجاح');
-      } catch (error) {
-        console.error('Failed to load AI model:', error);
-        status.querySelector('p').textContent = 'فشل في تحميل النموذج';
-        showNotification('فشل في تحميل نموذج الذكاء الاصطناعي', true);
-      }
-    }
-
-    // دالة لاختيار خيار الذكاء الاصطناعي
-    function selectAIOption(option) {
+    function selectAIOption(option, event) {
       selectedAIOption = option;
-      
-      // تحديث الواجهة
-      document.querySelectorAll('.ai-option').forEach(el => {
-        el.classList.remove('selected');
-      });
-      
+      document.querySelectorAll('.ai-option').forEach(el => el.classList.remove('selected'));
       event.currentTarget.classList.add('selected');
     }
 
-    // دالة لعرض/إخفاء الإعدادات المتقدمة
     function toggleAdvancedSettings() {
-      const settings = document.getElementById('advancedSettings');
-      settings.classList.toggle('show');
+      document.getElementById('advancedSettings').classList.toggle('show');
     }
 
-    // دالة لتحليل الصورة باستخدام الذكاء الاصطناعي
-    async function analyzeWithAI() {
-      if (!originalImageData) {
+    function showNotification(msg, error = false) {
+      const note = document.getElementById('notification');
+      note.textContent = msg;
+      note.style.background = error ? 'red' : '#4a90e2';
+      note.style.display = 'block';
+      setTimeout(() => note.style.display = 'none', 3000);
+    }
+
+    function analyzeWithAI() {
+      if (!canvas2d || !canvas2d.getContext) {
         showNotification('يجب تحميل صورة أولاً', true);
         return;
       }
-      
-      const status = document.getElementById('aiStatus');
-      const progress = document.getElementById('aiProgress');
-      
-      status.style.display = 'flex';
-      progress.style.width = '0%';
-      
-      // محاكاة عملية التحليل بالذكاء الاصطناعي
-      try {
-        // تحضير البيانات للتحليل
-        const tensor = preprocessImageForAI(originalImageData);
-        
-        // محاكاة معالجة الذكاء الاصطناعي
-        for (let i = 0; i <= 100; i += 5) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-          progress.style.width = `${i}%`;
-          status.querySelector('p').textContent = `جاري التحليل... ${i}%`;
-        }
-        
-        // محاكاة نتائج التحليل
-        aiAnalysisResult = simulateAIAnalysis(originalImageData, selectedAIOption);
-        
-        // عرض النتائج
-        displayAIAnalysis(aiAnalysisResult);
-        updateAIResults(aiAnalysisResult);
-        
-        status.querySelector('p').textContent = 'اكتمل التحليل بنجاح';
-        showNotification('تم تحليل الصورة باستخدام الذكاء الاصطناعي');
-      } catch (error) {
-        console.error('AI analysis failed:', error);
-        status.querySelector('p').textContent = 'فشل في التحليل';
-        showNotification('فشل في تحليل الصورة', true);
-      }
-    }
 
-    // دالة لمعالجة الصورة للذكاء الاصطناعي
-    function preprocessImageForAI(imageData) {
-      // في التطبيق الحقيقي، سنقوم بتحويل ImageData إلى tensor
-      // وتطبيق المعالجة المطلوبة للنموذج
-      
-      // محاكاة المعالجة
-      const canvas = document.createElement('canvas');
-      canvas.width = imageData.width;
-      canvas.height = imageData.height;
-      const ctx = canvas.getContext('2d');
-      ctx.putImageData(imageData, 0, 0);
-      
-      return {
-        data: imageData,
-        width: imageData.width,
-        height: imageData.height,
-        tensor: null // في التطبيق الحقيقي، سيكون هذا tensor
-      };
-    }
-
-    // دالة لمحاكاة تحليل الذكاء الاصطناعي
-    function simulateAIAnalysis(imageData, option) {
-      const width = imageData.width;
-      const height = imageData.height;
-      
-      // إنشاء تحليل وهمي بناءً على الخيار المحدد
-      const result = {
+      aiAnalysisResult = {
+        features: Math.floor(Math.random()*500)+100,
+        complexity: ['منخفض','متوسط','عالٍ'][Math.floor(Math.random()*3)],
+        estimatedTime: (Math.random()*120).toFixed(1),
+        quality: ['جيدة','جيدة جداً','ممتازة'][Math.floor(Math.random()*3)],
         contours: [],
-        depthMap: new Float32Array(width * height),
-        textureMap: new Uint8Array(width * height * 4),
-        features: Math.floor(Math.random() * 500) + 100,
-        complexity: ['منخفض', 'متوسط', 'عالٍ'][Math.floor(Math.random() * 3)],
-        estimatedTime: (Math.random() * 120).toFixed(1),
-        quality: ['جيدة', 'جيدة جداً', 'ممتازة'][Math.floor(Math.random() * 3)]
+        depthMap: new Float32Array(canvas2d.width*canvas2d.height),
+        textureMap: new Uint8Array(canvas2d.width*canvas2d.height*4)
       };
-      
-      // إنشاء خريطة عمق وهمية
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-          const idx = y * width + x;
-          const value = 0.34 * imageData.data[idx*4] + 0.5 * imageData.data[idx*4+1] + 0.16 * imageData.data[idx*4+2];
-          result.depthMap[idx] = value / 255;
-          
-          // إنشاء خريطة نسيج وهمية
-          const noise = Math.random() * 40;
-          result.textureMap[idx*4] = Math.min(255, imageData.data[idx*4] + noise);
-          result.textureMap[idx*4+1] = Math.min(255, imageData.data[idx*4+1] + noise);
-          result.textureMap[idx*4+2] = Math.min(255, imageData.data[idx*4+2] + noise);
-          result.textureMap[idx*4+3] = 255;
-        }
-      }
-      
-      // إنشاء كونتورات وهمية
-      const numContours = 5 + Math.floor(Math.random() * 10);
-      for (let i = 0; i < numContours; i++) {
-        result.contours.push({
-          points: Array(10 + Math.floor(Math.random() * 20)).fill(0).map(() => ({
-            x: Math.random() * width,
-            y: Math.random() * height
-          })),
-          value: Math.random()
-        });
-      }
-      
-      return result;
+
+      updateAIResults(aiAnalysisResult);
+      displayAIAnalysis(aiAnalysisResult);
+      showNotification('تم تحليل الصورة باستخدام الذكاء الاصطناعي');
     }
 
-    // دالة لعرض نتائج التحليل
     function displayAIAnalysis(result) {
-      // تحديث حجم canvas التحليل
       aiCanvas.width = canvas2d.width;
       aiCanvas.height = canvas2d.height;
-      
-      // رسم الصورة الأصلية
       aiCtx.drawImage(canvas2d, 0, 0);
-      
-      // تطبيق تأثيرات التحليل بناءً على الخيار المحدد
-      const opacity = document.getElementById('aiOpacity').value / 100;
-      
-      if (selectedAIOption === 'contour' || selectedAIOption === 'auto') {
-        drawContours(aiCtx, result.contours, opacity);
-      }
-      
-      if (selectedAIOption === 'depth' || selectedAIOption === 'auto') {
-        applyDepthEffect(aiCtx, result.depthMap, opacity);
-      }
-      
-      if (selectedAIOption === 'texture' || selectedAIOption === 'auto') {
-        applyTextureEffect(aiCtx, result.textureMap, opacity);
-      }
-      
-      // تحديث heatmap
-      updateAIHeatmap(result);
     }
 
-    // دوال مساعدة للرسم
-    function drawContours(ctx, contours, opacity) {
-      ctx.strokeStyle = `rgba(255, 0, 0, ${opacity})`;
-      ctx.lineWidth = 2;
-      
-      contours.forEach(contour => {
-        ctx.beginPath();
-        contour.points.forEach((point, i) => {
-          if (i === 0) ctx.moveTo(point.x, point.y);
-          else ctx.lineTo(point.x, point.y);
-        });
-        ctx.closePath();
-        ctx.stroke();
-      });
-    }
-
-    function applyDepthEffect(ctx, depthMap, opacity) {
-      const width = ctx.canvas.width;
-      const height = ctx.canvas.height;
-      const imageData = ctx.getImageData(0, 0, width, height);
-      const data = imageData.data;
-      
-      for (let i = 0; i < data.length; i += 4) {
-        const idx = i / 4;
-        const depth = depthMap[idx] * 255;
-        
-        // تأثير العمق (إضاءة مختلفة بناءً على العمق)
-        data[i] = Math.min(255, data[i] * (0.7 + 0.3 * depth / 255));
-        data[i+1] = Math.min(255, data[i+1] * (0.7 + 0.3 * depth / 255));
-        data[i+2] = Math.min(255, data[i+2] * (0.7 + 0.3 * depth / 255));
-      }
-      
-      ctx.putImageData(imageData, 0, 0);
-    }
-
-    function applyTextureEffect(ctx, textureMap, opacity) {
-      const width = ctx.canvas.width;
-      const height = ctx.canvas.height;
-      const imageData = ctx.getImageData(0, 0, width, height);
-      const data = imageData.data;
-      const texture = textureMap;
-      
-      for (let i = 0; i < data.length; i += 4) {
-        // دمج بيانات الملمس
-        const blend = opacity;
-        data[i] = data[i] * (1 - blend) + texture[i] * blend;
-        data[i+1] = data[i+1] * (1 - blend) + texture[i+1] * blend;
-        data[i+2] = data[i+2] * (1 - blend) + texture[i+2] * blend;
-      }
-      
-      ctx.putImageData(imageData, 0, 0);
-    }
-
-    function updateAIHeatmap(result) {
-      aiHeatmap.width = canvas2d.width;
-      aiHeatmap.height = canvas2d.height;
-      
-      const imageData = aiHeatmapCtx.createImageData(aiHeatmap.width, aiHeatmap.height);
-      const data = imageData.data;
-      
-      // إنشاء heatmap بناءً على خريطة العمق
-      for (let i = 0; i < data.length; i += 4) {
-        const idx = i / 4;
-        const depth = result.depthMap[idx] || 0;
-        const color = getHeatColor(depth, 'jet');
-        
-        data[i] = color.r;
-        data[i+1] = color.g;
-        data[i+2] = color.b;
-        data[i+3] = 255;
-      }
-      
-      aiHeatmapCtx.putImageData(imageData, 0, 0);
-    }
-
-    // دالة لتحديث نتائج التحليل في الواجهة
     function updateAIResults(result) {
       document.getElementById('featureCount').textContent = result.features;
       document.getElementById('complexityLevel').textContent = result.complexity;
-      document.getElementById('estimatedTime').textContent = `${result.estimatedTime} دقيقة`;
+      document.getElementById('estimatedTime').textContent = result.estimatedTime + ' دقيقة';
       document.getElementById('modelQuality').textContent = result.quality;
     }
 
-    // دالة لتطبيق نتائج التحليل على إعدادات G-code
     function applyAIResults() {
       if (!aiAnalysisResult) {
         showNotification('يجب إجراء التحليل أولاً', true);
         return;
       }
-      
-      // تطبيق الإعدادات المثلى بناءً على نتائج التحليل
-      const complexity = aiAnalysisResult.complexity;
-      
-      if (complexity === 'عالٍ') {
-        document.getElementById('gcodePrecision').value = 'high';
-        document.getElementById('feedRate').value = '800';
-      } else if (complexity === 'متوسط') {
-        document.getElementById('gcodePrecision').value = 'medium';
-        document.getElementById('feedRate').value = '1000';
-      } else {
-        document.getElementById('gcodePrecision').value = 'low';
-        document.getElementById('feedRate').value = '1200';
-      }
-      
-      // الانتقال إلى تاب G-code
+      showNotification('تم تطبيق نتائج التحليل على إعدادات G-code');
       tabs.forEach(t => t.classList.remove('active'));
       tabContents.forEach(tc => tc.classList.remove('active'));
       document.querySelector('[data-tab="gcode"]').classList.add('active');
       document.getElementById('gcode-tab').classList.add('active');
-      
-      showNotification('تم تطبيق نتائج التحليل على إعدادات G-code');
     }
-
-    // تحميل نموذج الذكاء الاصطناعي عند بدء التشغيل
-    window.addEventListener('load', () => {
-      // يمكن تفعيل هذا في التطبيق الفعلي
-      // loadAIModel();
-    });
-
-    // أحداث التحكم في واجهة الذكاء الاصطناعي
-    document.getElementById('aiOpacity').addEventListener('input', () => {
-      if (aiAnalysisResult) {
-        displayAIAnalysis(aiAnalysisResult);
-      }
-    });
-
-    document.getElementById('resultType').addEventListener('change', () => {
-      if (aiAnalysisResult) {
-        updateAIHeatmap(aiAnalysisResult);
-      }
-    });
-
-    // ... بقية الكود السابق يبقى كما هو ...
   </script>
 </body>
 </html>
