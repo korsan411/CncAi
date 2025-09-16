@@ -23,6 +23,8 @@
       --wood-color: #8b4513;
       --tab-inactive: #e9ecef;
       --tab-active: var(--primary-color);
+      --progress-bg: #e9ecef;
+      --progress-fill: var(--primary-color);
     }
 
     body.dark {
@@ -37,6 +39,7 @@
       --wood-color: #a0522d;
       --tab-inactive: #333;
       --tab-active: #4a90e2;
+      --progress-bg: #333;
     }
 
     * {
@@ -542,6 +545,105 @@
       height: 18px;
     }
 
+    /* تحسينات جديدة */
+    .progress-container {
+      width: 100%;
+      height: 20px;
+      background-color: var(--progress-bg);
+      border-radius: 10px;
+      margin: 1rem 0;
+      overflow: hidden;
+      display: none;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background-color: var(--progress-fill);
+      border-radius: 10px;
+      transition: width 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .advanced-preview {
+      background: var(--card-bg);
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+      margin-bottom: 2rem;
+      border: 1px solid var(--border-color);
+    }
+
+    .preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .preview-item {
+      text-align: center;
+    }
+
+    .preview-item canvas {
+      max-width: 100%;
+      height: 150px;
+    }
+
+    .preview-item p {
+      margin-top: 0.5rem;
+      font-weight: 500;
+    }
+
+    .generation-source {
+      display: flex;
+      gap: 10px;
+      margin: 1rem 0;
+      flex-wrap: wrap;
+    }
+
+    .source-btn {
+      padding: 8px 15px;
+      border: 1px solid var(--border-color);
+      border-radius: 5px;
+      background: var(--button-bg);
+      color: var(--text-color);
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .source-btn.active {
+      background: var(--primary-color);
+      color: white;
+      border-color: var(--primary-color);
+    }
+
+    .carving-stages {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+
+    .carving-stage {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+
+    .carving-stage h4 {
+      margin-bottom: 0.5rem;
+      color: var(--wood-color);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
     @media (max-width: 768px) {
       h1 {
         font-size: 1.4rem;
@@ -563,6 +665,10 @@
       
       .action-buttons {
         flex-direction: column;
+      }
+      
+      .preview-grid {
+        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -602,9 +708,32 @@
           <div class="enhancement-btn" onclick="applyEnhancement('sharpen')">🔍 حدة</div>
           <div class="enhancement-btn" onclick="applyEnhancement('smooth')">🔄 نعومة</div>
           <div class="enhancement-btn" onclick="applyEnhancement('grayscale')">⚫ تدرج رمادي</div>
+          <div class="enhancement-btn" onclick="applyEnhancement('edges')">📐 استخراج الحواف</div>
           <div class="enhancement-btn" onclick="applyEnhancement('reset')">🔄 إعادة تعيين</div>
         </div>
+
+        <div class="progress-container" id="analysisProgress">
+          <div class="progress-bar" id="progressBar">0%</div>
+        </div>
       </section>
+
+      <div class="advanced-preview">
+        <h3 class="preview-title">🔍 معاينة متقدمة بعد التحليل</h3>
+        <div class="preview-grid">
+          <div class="preview-item">
+            <canvas id="edgesPreview"></canvas>
+            <p>الحواف المستخرجة</p>
+          </div>
+          <div class="preview-item">
+            <canvas id="contoursPreview"></canvas>
+            <p>المنحنيات الرئيسية</p>
+          </div>
+          <div class="preview-item">
+            <canvas id="heightPreview"></canvas>
+            <p>خريطة الارتفاعات</p>
+          </div>
+        </div>
+      </div>
 
       <div class="previews-container">
         <!-- الصورة الأصلية -->
@@ -676,6 +805,12 @@
             <label for="adaptivePrecision">الدقة التكيفية (تلقائية)</label>
           </div>
         </div>
+
+        <div class="generation-source">
+          <div class="source-btn active" data-source="heatmap">من Heatmap</div>
+          <div class="source-btn" data-source="3dmodel">من النموذج ثلاثي الأبعاد</div>
+          <div class="source-btn" data-source="edges">من الحواف المستخرجة</div>
+        </div>
       </div>
 
       <div class="settings-panel">
@@ -726,23 +861,8 @@
           </div>
         </div>
 
-        <div class="settings-group">
-          <h3><span>🔧</span> إعدادات G-code</h3>
-          <div class="form-group">
-            <label for="gcodeType">نوع المخرجات</label>
-            <select id="gcodeType">
-              <option value="heatmap">بناءً على Heatmap</option>
-              <option value="3dmodel">بناءً على النموذج ثلاثي الأبعاد</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="gcodePrecision">دقة التوليد</label>
-            <select id="gcodePrecision">
-              <option value="low">منخفضة (أسرع)</option>
-              <option value="medium" selected>متوسطة</option>
-              <option value="high">عالية (أبطأ)</option>
-            </select>
-          </div>
+        <div class="progress-container" id="gcodeProgress">
+          <div class="progress-bar" id="gcodeProgressBar">0%</div>
         </div>
 
         <div class="action-buttons">
@@ -814,14 +934,10 @@
         <h3 class="preview-title">🌳 إعدادات نقش الخشب</h3>
         
         <div class="settings-group">
-          <h3><span>🔧</span> إعدادات النقش</h3>
+          <h3><span>🔧</span> إعدادات النقش العامة</h3>
           <div class="form-group">
-            <label for="carvingDepth">عمق النقش (mm)</label>
-            <input type="number" id="carvingDepth" value="1.5" step="0.1" min="0.5" max="5">
-          </div>
-          <div class="form-group">
-            <label for="carvingSpeed">سرعة النقش (mm/min)</label>
-            <input type="number" id="carvingSpeed" value="800">
+            <label for="carvingDepth">عمق النقش الإجمالي (mm)</label>
+            <input type="number" id="carvingDepth" value="3" step="0.1" min="1" max="10">
           </div>
           <div class="form-group">
             <label for="woodType">نوع الخشب</label>
@@ -831,6 +947,68 @@
               <option value="walnut">خشب الجوز</option>
               <option value="mahogany">خشب الماهوجني</option>
             </select>
+          </div>
+        </div>
+
+        <div class="carving-stages">
+          <div class="carving-stage">
+            <h4><span>🔨</span> مرحلة التنجير الخشن</h4>
+            <div class="form-group">
+              <label for="roughDepth">عمق التنجير (mm)</label>
+              <input type="number" id="roughDepth" value="2.5" step="0.1" min="0.5" max="5">
+            </div>
+            <div class="form-group">
+              <label for="roughSpeed">السرعة (mm/min)</label>
+              <input type="number" id="roughSpeed" value="1200">
+            </div>
+            <div class="form-group">
+              <label for="roughTool">أداة التنجير</label>
+              <select id="roughTool">
+                <option value="6mm">6mm End Mill</option>
+                <option value="8mm">8mm End Mill</option>
+                <option value="10mm">10mm End Mill</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="carving-stage">
+            <h4><span>✂️</span> مرحلة التشطيب</h4>
+            <div class="form-group">
+              <label for="finishDepth">عمق التشطيب (mm)</label>
+              <input type="number" id="finishDepth" value="0.4" step="0.1" min="0.1" max="1">
+            </div>
+            <div class="form-group">
+              <label for="finishSpeed">السرعة (mm/min)</label>
+              <input type="number" id="finishSpeed" value="800">
+            </div>
+            <div class="form-group">
+              <label for="finishTool">أداة التشطيب</label>
+              <select id="finishTool">
+                <option value="3mm">3mm Ball Nose</option>
+                <option value="4mm">4mm Ball Nose</option>
+                <option value="6mm">6mm Ball Nose</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="carving-stage">
+            <h4><span>✨</span> مرحلة التنعيم</h4>
+            <div class="form-group">
+              <label for="smoothDepth">عمق التنعيم (mm)</label>
+              <input type="number" id="smoothDepth" value="0.1" step="0.05" min="0.05" max="0.3">
+            </div>
+            <div class="form-group">
+              <label for="smoothSpeed">السرعة (mm/min)</label>
+              <input type="number" id="smoothSpeed" value="600">
+            </div>
+            <div class="form-group">
+              <label for="smoothTool">أداة التنعيم</label>
+              <select id="smoothTool">
+                <option value="2mm">2mm Ball Nose</option>
+                <option value="3mm">3mm Ball Nose</option>
+                <option value="1mm">1mm Tapered</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -844,6 +1022,10 @@
           </div>
         </div>
 
+        <div class="progress-container" id="carvingProgress">
+          <div class="progress-bar" id="carvingProgressBar">0%</div>
+        </div>
+
         <div class="action-buttons">
           <button class="btn btn-wood" onclick="generateWoodCarving()">
             <span>🌳</span> توليد نقش الخشب
@@ -851,16 +1033,19 @@
           <button class="btn btn-secondary" onclick="previewWoodCarving()">
             <span>👁️</span> معاينة النقش
           </button>
+          <button class="btn btn-secondary" onclick="downloadWoodGcode()">
+            <span>💾</span> حفظ أكواد النقش
+          </button>
         </div>
       </div>
 
       <div class="preview-block">
         <h3 class="preview-title">📋 معلومات نقش الخشب</h3>
         <div id="woodInfo">
-          <p>📏 أقصى عمق: <span id="maxDepth">1.5</span> مم</p>
-          <p>⚡ السرعة المثلى: <span id="optimalSpeed">800</span> mm/min</p>
-          <p>🔧 عدد المسارات: <span id="pathCount">0</span></p>
+          <p>📏 أقصى عمق: <span id="maxDepth">3</span> مم</p>
+          <p>🔧 عدد المراحل: <span id="stageCount">3</span></p>
           <p>⏱️ الوقت المتوقع: <span id="carvingTime">0</span> دقيقة</p>
+          <p>📊 حالة التوليد: <span id="carvingStatus">في الانتظار</span></p>
         </div>
       </div>
     </div>
@@ -897,6 +1082,19 @@
     const loadingTopView = document.getElementById('loadingTopView');
     const viewButtons = document.querySelectorAll('.view-btn');
     const patternButtons = document.querySelectorAll('.pattern-btn');
+    const sourceButtons = document.querySelectorAll('.source-btn');
+    const analysisProgress = document.getElementById('analysisProgress');
+    const progressBar = document.getElementById('progressBar');
+    const gcodeProgress = document.getElementById('gcodeProgress');
+    const gcodeProgressBar = document.getElementById('gcodeProgressBar');
+    const carvingProgress = document.getElementById('carvingProgress');
+    const carvingProgressBar = document.getElementById('carvingProgressBar');
+    const edgesPreview = document.getElementById('edgesPreview');
+    const ctxEdges = edgesPreview.getContext('2d');
+    const contoursPreview = document.getElementById('contoursPreview');
+    const ctxContours = contoursPreview.getContext('2d');
+    const heightPreview = document.getElementById('heightPreview');
+    const ctxHeight = heightPreview.getContext('2d');
 
     // إعداد Three.js للمعاينة
     const scene = new THREE.Scene();
@@ -956,6 +1154,14 @@
     let currentView = '3d';
     let currentPattern = 'lines';
     let generatedGcode = '';
+    let currentSource = 'heatmap';
+    let edgesData = null;
+    let contoursData = null;
+    let woodCarvingGcodes = {
+      rough: '',
+      finish: '',
+      smooth: ''
+    };
 
     // تبديل التابات
     tabs.forEach(tab => {
@@ -996,6 +1202,15 @@
         patternButtons.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentPattern = btn.getAttribute('data-pattern');
+      });
+    });
+
+    // اختيار مصدر توليد G-code
+    sourceButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        sourceButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentSource = btn.getAttribute('data-source');
       });
     });
 
@@ -1055,6 +1270,18 @@
       gridHelper.rotation.x = Math.PI / 2;
       gridHelper.position.y = -0.1;
       topViewScene.add(gridHelper);
+    }
+
+    // دالة لتحديث شريط التقدم
+    function updateProgress(progressElement, progressBarElement, percentage, text = '') {
+      progressElement.style.display = 'block';
+      progressBarElement.style.width = `${percentage}%`;
+      progressBarElement.textContent = text || `${percentage}%`;
+    }
+
+    // دالة لإخفاء شريط التقدم
+    function hideProgress(progressElement) {
+      progressElement.style.display = 'none';
     }
 
     // دالة لتحسين الصورة
@@ -1137,6 +1364,11 @@
             data[i] = data[i+1] = data[i+2] = avg;
           }
           break;
+        case 'edges':
+          // استخراج الحواف
+          updateProgress(analysisProgress, progressBar, 10, 'جاري استخراج الحواف...');
+          setTimeout(() => extractEdges(imageData, canvas.width, canvas.height), 100);
+          return;
         case 'reset':
           // إعادة تعيين إلى الصورة الأصلية
           ctx.putImageData(originalImageData, 0, 0);
@@ -1149,6 +1381,97 @@
       
       // إنشاء خريطة ارتفاع جديدة من الصورة المحسنة
       createHeightMapFromCanvas(canvas);
+    }
+
+    // دالة لاستخراج الحواف
+    function extractEdges(imageData, width, height) {
+      const data = imageData.data;
+      const edgeData = new Uint8ClampedArray(data.length);
+      
+      // تطبيق كشف الحواف (Sobel operator)
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          const idx = (y * width + x) * 4;
+          
+          // حساب التدرج في الاتجاه الأفقي
+          let gx = 0;
+          gx += -1 * data[((y-1)*width + (x-1))*4];
+          gx += -2 * data[((y-1)*width + x)*4];
+          gx += -1 * data[((y-1)*width + (x+1))*4];
+          gx += 1 * data[((y+1)*width + (x-1))*4];
+          gx += 2 * data[((y+1)*width + x)*4];
+          gx += 1 * data[((y+1)*width + (x+1))*4];
+          
+          // حساب التدرج في الاتجاه الرأسي
+          let gy = 0;
+          gy += -1 * data[((y-1)*width + (x-1))*4];
+          gy += -2 * data[(y*width + (x-1))*4];
+          gy += -1 * data[((y+1)*width + (x-1))*4];
+          gy += 1 * data[((y-1)*width + (x+1))*4];
+          gy += 2 * data[(y*width + (x+1))*4];
+          gy += 1 * data[((y+1)*width + (x+1))*4];
+          
+          // حساب مقدار التدرج
+          const magnitude = Math.min(255, Math.sqrt(gx*gx + gy*gy));
+          
+          edgeData[idx] = magnitude;
+          edgeData[idx+1] = magnitude;
+          edgeData[idx+2] = magnitude;
+          edgeData[idx+3] = 255;
+        }
+        
+        // تحديث شريط التقدم
+        if (y % 10 === 0) {
+          const progress = Math.floor((y / height) * 90);
+          updateProgress(analysisProgress, progressBar, progress, `جاري استخراج الحواف... ${progress}%`);
+        }
+      }
+      
+      // حفظ بيانات الحواف
+      edgesData = new ImageData(edgeData, width, height);
+      
+      // رسم الحواف على canvas المعاينة
+      edgesPreview.width = width;
+      edgesPreview.height = height;
+      ctxEdges.putImageData(edgesData, 0, 0);
+      
+      // استخراج المنحنيات
+      updateProgress(analysisProgress, progressBar, 95, 'جاري استخراج المنحنيات...');
+      setTimeout(() => extractContours(edgesData, width, height), 100);
+    }
+
+    // دالة لاستخراج المنحنيات
+    function extractContours(edgeData, width, height) {
+      const data = edgeData.data;
+      const contourData = new Uint8ClampedArray(data.length);
+      
+      // تطبيق خوارزمية مبسطة لاكتشاف المنحنيات
+      for (let i = 0; i < data.length; i += 4) {
+        // إذا كانت قيمة الحافة عالية، نعتبرها جزءًا من منحنى
+        if (data[i] > 100) {
+          contourData[i] = 255;
+          contourData[i+1] = 255;
+          contourData[i+2] = 255;
+        } else {
+          contourData[i] = 0;
+          contourData[i+1] = 0;
+          contourData[i+2] = 0;
+        }
+        contourData[i+3] = 255;
+      }
+      
+      // حفظ بيانات المنحنيات
+      contoursData = new ImageData(contourData, width, height);
+      
+      // رسم المنحنيات على canvas المعاينة
+      contoursPreview.width = width;
+      contoursPreview.height = height;
+      ctxContours.putImageData(contoursData, 0, 0);
+      
+      // إخفاء شريط التقدم
+      hideProgress(analysisProgress);
+      
+      showNotification('تم استخراج الحواف والمنحنيات بنجاح');
     }
 
     // دالة لإنشاء خريطة ارتفاع من canvas
@@ -1218,6 +1541,31 @@
       scene.add(mesh);
 
       drawHeatmap(imgData, w, h, min, max);
+      
+      // تحديث معاينة خريطة الارتفاعات
+      updateHeightPreview(imgData, w, h, min, max);
+    }
+
+    // دالة لتحديث معاينة خريطة الارتفاعات
+    function updateHeightPreview(imgData, w, h, min, max) {
+      heightPreview.width = w;
+      heightPreview.height = h;
+      const heightData = ctxHeight.createImageData(w, h);
+      
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const idx = (y * w + x) * 4;
+          const brightness = 0.34 * imgData[idx] + 0.5 * imgData[idx+1] + 0.16 * imgData[idx+2];
+          const norm = (brightness - min) / (max - min || 1);
+          const color = getHeatColor(norm, 'jet');
+          heightData.data[idx] = color.r;
+          heightData.data[idx+1] = color.g;
+          heightData.data[idx+2] = color.b;
+          heightData.data[idx+3] = 255;
+        }
+      }
+      
+      ctxHeight.putImageData(heightData, 0, 0);
     }
 
     // دالة لرسم خريطة الحرارة
@@ -1310,8 +1658,13 @@
         // حفظ بيانات الصورة الأصلية
         originalImageData = ctx2d.getImageData(0, 0, canvas2d.width, canvas2d.height);
         
-        createHeightMap(img);
-        showNotification('تم تحميل الصورة بنجاح');
+        // إظهار شريط التقدم
+        updateProgress(analysisProgress, progressBar, 5, 'جاري معالجة الصورة...');
+        
+        setTimeout(() => {
+          createHeightMap(img);
+          hideProgress(analysisProgress);
+        }, 500);
       };
       img.src = URL.createObjectURL(file);
     });
@@ -1477,7 +1830,9 @@
       if (gcodePrecision === 'high') resolution = 1;
       
       // معالجة الصورة بالذكاء الاصطناعي
+      updateProgress(gcodeProgress, gcodeProgressBar, 10, 'جاري معالجة الصورة...');
       const heightData = await processImageWithAI(originalImageData);
+      updateProgress(gcodeProgress, gcodeProgressBar, 30, 'جاري تحويل البيانات...');
       
       // تحويل بيانات الصورة إلى نقاط قطع
       const points = [];
@@ -1499,10 +1854,18 @@
             });
           }
         }
+        
+        // تحديث شريط التقدم
+        if (y % 20 === 0) {
+          const progress = 30 + Math.floor((y / height) * 40);
+          updateProgress(gcodeProgress, gcodeProgressBar, progress, `جاري تحويل البيانات... ${progress}%`);
+        }
       }
       
       // تحسين المسارات إذا كان الخيار مفعلاً
+      updateProgress(gcodeProgress, gcodeProgressBar, 70, 'جاري تحسين المسارات...');
       const toolPaths = optimizePaths ? optimizeToolpaths(points) : points;
+      updateProgress(gcodeProgress, gcodeProgressBar, 80, 'جاري توليد G-code...');
       
       // توليد G-code
       let gcode = `; G-code generated by CNC AI with TensorFlow.js\n`;
@@ -1525,12 +1888,99 @@
       for (let i = 0; i < toolPaths.length; i++) {
         const point = toolPaths[i];
         gcode += `G1 X${point.x.toFixed(3)} Y${point.y.toFixed(3)} Z${point.z.toFixed(3)} F${feedRate}\n`;
+        
+        // تحديث شريط التقدم
+        if (i % 100 === 0) {
+          const progress = 80 + Math.floor((i / toolPaths.length) * 15);
+          updateProgress(gcodeProgress, gcodeProgressBar, progress, `جاري توليد G-code... ${progress}%`);
+        }
       }
       
       gcode += `\nG0 Z5 ; Lift spindle\n`;
       gcode += `M5 ; Spindle off\n`;
       gcode += `G0 X0 Y0 ; Return to home\n`;
       gcode += `M30 ; End program\n`;
+      
+      updateProgress(gcodeProgress, gcodeProgressBar, 100, 'اكتمل التوليد!');
+      setTimeout(() => hideProgress(gcodeProgress), 1000);
+      
+      return gcode;
+    }
+
+    // دالة لتوليد G-code من الحواف
+    async function generateGcodeFromEdges() {
+      if (!edgesData) {
+        showNotification('يجب استخراج الحواف أولاً', true);
+        return '';
+      }
+
+      updateProgress(gcodeProgress, gcodeProgressBar, 10, 'جاري معالجة الحواف...');
+      
+      const width = edgesData.width;
+      const height = edgesData.height;
+      const data = edgesData.data;
+      
+      // استخراج نقاط الحواف
+      const edgePoints = [];
+      for (let y = 0; y < height; y += 2) {
+        for (let x = 0; x < width; x += 2) {
+          const idx = (y * width + x) * 4;
+          if (data[idx] > 100) { // إذا كانت نقطة حافة
+            edgePoints.push({
+              x: (x / width) * 100 - 50,
+              y: (y / height) * 100 - 50,
+              z: -1 // عمق ثابت للحواف
+            });
+          }
+        }
+        
+        // تحديث شريط التقدم
+        if (y % 20 === 0) {
+          const progress = 10 + Math.floor((y / height) * 50);
+          updateProgress(gcodeProgress, gcodeProgressBar, progress, `جاري معالجة الحواف... ${progress}%`);
+        }
+      }
+      
+      updateProgress(gcodeProgress, gcodeProgressBar, 60, 'جاري تحسين المسارات...');
+      const toolPaths = optimizeToolpaths(edgePoints);
+      
+      updateProgress(gcodeProgress, gcodeProgressBar, 70, 'جاري توليد G-code...');
+      
+      // توليد G-code للحواف
+      const feedRate = parseInt(document.getElementById('feedRate').value);
+      const spindleSpeed = parseInt(document.getElementById('spindleSpeed').value);
+      
+      let gcode = `; G-code generated from edges\n`;
+      gcode += `; Total edge points: ${toolPaths.length}\n\n`;
+      
+      gcode += `G21 ; Set units to millimeters\n`;
+      gcode += `G90 ; Absolute positioning\n`;
+      gcode += `G0 Z5 ; Lift spindle\n`;
+      gcode += `M3 S${spindleSpeed} ; Spindle on\n`;
+      gcode += `G4 P2 ; Wait for spindle to reach speed\n\n`;
+      
+      gcode += `; Start cutting edges\n`;
+      gcode += `G0 X${toolPaths[0].x.toFixed(3)} Y${toolPaths[0].y.toFixed(3)} ; Move to start position\n`;
+      gcode += `G1 Z${toolPaths[0].z.toFixed(3)} F${feedRate/2} ; Lower to cutting depth\n`;
+      
+      for (let i = 0; i < toolPaths.length; i++) {
+        const point = toolPaths[i];
+        gcode += `G1 X${point.x.toFixed(3)} Y${point.y.toFixed(3)} F${feedRate}\n`;
+        
+        // تحديث شريط التقدم
+        if (i % 100 === 0) {
+          const progress = 70 + Math.floor((i / toolPaths.length) * 25);
+          updateProgress(gcodeProgress, gcodeProgressBar, progress, `جاري توليد G-code... ${progress}%`);
+        }
+      }
+      
+      gcode += `\nG0 Z5 ; Lift spindle\n`;
+      gcode += `M5 ; Spindle off\n`;
+      gcode += `G0 X0 Y0 ; Return to home\n`;
+      gcode += `M30 ; End program\n`;
+      
+      updateProgress(gcodeProgress, gcodeProgressBar, 100, 'اكتمل التوليد!');
+      setTimeout(() => hideProgress(gcodeProgress), 1000);
       
       return gcode;
     }
@@ -1545,7 +1995,13 @@
       gcodeOutput.textContent = "⏳ جاري توليد G-code باستخدام الذكاء الاصطناعي...";
       
       try {
-        const gcode = await generateRealGcode();
+        let gcode;
+        if (currentSource === 'edges') {
+          gcode = await generateGcodeFromEdges();
+        } else {
+          gcode = await generateRealGcode();
+        }
+        
         generatedGcode = gcode;
         gcodeOutput.textContent = gcode;
         showNotification('تم توليد G-code بنجاح باستخدام الذكاء الاصطناعي', false, 'ai');
@@ -1557,6 +2013,7 @@
       } catch (error) {
         console.error('Error generating G-code:', error);
         showNotification('فشل في توليد G-code', true);
+        hideProgress(gcodeProgress);
       }
     }
 
@@ -1717,28 +2174,172 @@
       }
     });
 
-    // توليد نقش الخشب
-    function generateWoodCarving() {
-      const carvingDepth = document.getElementById('carvingDepth').value;
-      const carvingSpeed = document.getElementById('carvingSpeed').value;
+    // توليد نقش الخشب (3 مراحل)
+    async function generateWoodCarving() {
+      if (!heightMapData) {
+        showNotification('يجب تحميل صورة أولاً', true);
+        return;
+      }
+
+      const totalDepth = parseFloat(document.getElementById('carvingDepth').value);
       const woodType = document.getElementById('woodType').value;
+      const pattern = currentPattern;
       
-      showNotification('جاري توليد نقش الخشب', false, 'wood');
+      const roughDepth = parseFloat(document.getElementById('roughDepth').value);
+      const roughSpeed = parseInt(document.getElementById('roughSpeed').value);
+      const roughTool = document.getElementById('roughTool').value;
       
-      setTimeout(() => {
-        // محاكاة توليد نقش الخشب
-        document.getElementById('maxDepth').textContent = carvingDepth;
-        document.getElementById('optimalSpeed').textContent = carvingSpeed;
-        document.getElementById('pathCount').textContent = '120';
-        document.getElementById('carvingTime').textContent = '15';
+      const finishDepth = parseFloat(document.getElementById('finishDepth').value);
+      const finishSpeed = parseInt(document.getElementById('finishSpeed').value);
+      const finishTool = document.getElementById('finishTool').value;
+      
+      const smoothDepth = parseFloat(document.getElementById('smoothDepth').value);
+      const smoothSpeed = parseInt(document.getElementById('smoothSpeed').value);
+      const smoothTool = document.getElementById('smoothTool').value;
+      
+      // التحقق من أن عمق المراحل لا يتجاوز العمق الإجمالي
+      if (roughDepth + finishDepth + smoothDepth > totalDepth) {
+        showNotification('مجموع أعماق المراحل يتجاوز العمق الإجمالي', true);
+        return;
+      }
+      
+      showNotification('جاري توليد نقش الخشب (3 مراحل)', false, 'wood');
+      updateProgress(carvingProgress, carvingProgressBar, 0, 'جاري التحضير...');
+      document.getElementById('carvingStatus').textContent = 'جاري التوليد';
+      
+      try {
+        // المرحلة 1: التنجير الخشن
+        updateProgress(carvingProgress, carvingProgressBar, 10, 'جاري التنجير الخشن...');
+        woodCarvingGcodes.rough = await generateWoodStage('rough', roughDepth, roughSpeed, roughTool, pattern);
+        updateProgress(carvingProgress, carvingProgressBar, 40, 'اكتمل التنجير الخشن');
         
-        showNotification('تم توليد نقش الخشب بنجاح', false, 'wood');
-      }, 2000);
+        // المرحلة 2: التشطيب
+        updateProgress(carvingProgress, carvingProgressBar, 50, 'جاري التشطيب...');
+        woodCarvingGcodes.finish = await generateWoodStage('finish', finishDepth, finishSpeed, finishTool, pattern);
+        updateProgress(carvingProgress, carvingProgressBar, 70, 'اكتمل التشطيب');
+        
+        // المرحلة 3: التنعيم
+        updateProgress(carvingProgress, carvingProgressBar, 80, 'جاري التنعيم...');
+        woodCarvingGcodes.smooth = await generateWoodStage('smooth', smoothDepth, smoothSpeed, smoothTool, pattern);
+        updateProgress(carvingProgress, carvingProgressBar, 100, 'اكتمل التنعيم');
+        
+        // تحديث معلومات النقش
+        document.getElementById('maxDepth').textContent = totalDepth;
+        document.getElementById('carvingTime').textContent = '25'; // وقت تقديري
+        document.getElementById('carvingStatus').textContent = 'اكتمل التوليد';
+        
+        setTimeout(() => hideProgress(carvingProgress), 1000);
+        showNotification('تم توليد نقش الخشب بنجاح (3 مراحل)', false, 'wood');
+      } catch (error) {
+        console.error('Error generating wood carving:', error);
+        showNotification('فشل في توليد نقش الخشب', true);
+        hideProgress(carvingProgress);
+        document.getElementById('carvingStatus').textContent = 'فشل التوليد';
+      }
+    }
+
+    // دالة لتوليد مرحلة من مراحل نقش الخشب
+    async function generateWoodStage(stage, depth, speed, tool, pattern) {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          // محاكاة توليد G-code للمرحلة
+          let gcode = `; ${stage} stage wood carving\n`;
+          gcode += `; Depth: ${depth}mm, Speed: ${speed}mm/min, Tool: ${tool}\n`;
+          gcode += `; Pattern: ${pattern}\n\n`;
+          
+          gcode += `G21 ; Set units to millimeters\n`;
+          gcode += `G90 ; Absolute positioning\n`;
+          gcode += `G0 Z5 ; Lift spindle\n`;
+          gcode += `M3 S${10000} ; Spindle on\n`;
+          gcode += `G4 P2 ; Wait for spindle to reach speed\n\n`;
+          
+          // محاكاة إنشاء نمط النقش بناءً على النمط المحدد
+          const points = generatePatternPoints(pattern, depth);
+          
+          gcode += `; Start ${stage} stage\n`;
+          gcode += `G0 X${points[0].x.toFixed(3)} Y${points[0].y.toFixed(3)} ; Move to start position\n`;
+          gcode += `G1 Z${points[0].z.toFixed(3)} F${speed/2} ; Lower to cutting depth\n`;
+          
+          for (let i = 0; i < points.length; i++) {
+            gcode += `G1 X${points[i].x.toFixed(3)} Y${points[i].y.toFixed(3)} Z${points[i].z.toFixed(3)} F${speed}\n`;
+          }
+          
+          gcode += `\nG0 Z5 ; Lift spindle\n`;
+          gcode += `M5 ; Spindle off\n`;
+          gcode += `G0 X0 Y0 ; Return to home\n`;
+          gcode += `M30 ; End program\n`;
+          
+          resolve(gcode);
+        }, 1000); // محاكاة وقت المعالجة
+      });
+    }
+
+    // دالة لتوليد نقاط النمط
+    function generatePatternPoints(pattern, depth) {
+      const points = [];
+      const steps = 100;
+      
+      switch(pattern) {
+        case 'lines':
+          // نمط الخطوط المتوازية
+          for (let i = 0; i <= steps; i++) {
+            const x = -40 + (i / steps) * 80;
+            for (let j = 0; j <= 10; j++) {
+              const y = -40 + j * 8;
+              points.push({ x, y, z: -depth });
+            }
+          }
+          break;
+          
+        case 'cross':
+          // نمط التقاطع
+          for (let i = 0; i <= steps; i++) {
+            const x = -40 + (i / steps) * 80;
+            const y = -40 + (i / steps) * 80;
+            points.push({ x, y, z: -depth });
+            points.push({ x: -x, y, z: -depth });
+          }
+          break;
+          
+        case 'circle':
+          // نمط الدوائر
+          for (let r = 5; r <= 40; r += 5) {
+            for (let i = 0; i <= 100; i++) {
+              const angle = (i / 100) * Math.PI * 2;
+              const x = Math.cos(angle) * r;
+              const y = Math.sin(angle) * r;
+              points.push({ x, y, z: -depth });
+            }
+          }
+          break;
+          
+        case 'wave':
+          // نمط الأمواج
+          for (let i = 0; i <= steps; i++) {
+            const x = -40 + (i / steps) * 80;
+            for (let j = 0; j <= 20; j++) {
+              const y = -40 + j * 4;
+              const wave = Math.sin(x / 10) * 5;
+              points.push({ x, y: y + wave, z: -depth });
+            }
+          }
+          break;
+      }
+      
+      return points;
     }
 
     // معاينة نقش الخشب
     function previewWoodCarving() {
+      if (!woodCarvingGcodes.rough) {
+        showNotification('يجب توليد نقش الخشب أولاً', true);
+        return;
+      }
+      
       showNotification('جاري تحضير معاينة نقش الخشب', false, 'wood');
+      
+      // استخدام كود التنجير الخشن للمعاينة
+      generatedGcode = woodCarvingGcodes.rough;
       
       // الانتقال إلى تاب المحاكاة
       tabs.forEach(t => t.classList.remove('active'));
@@ -1748,6 +2349,35 @@
       
       // محاكاة معاينة نقش الخشب
       simulateGcode();
+    }
+
+    // تحميل أكواد نقش الخشب
+    function downloadWoodGcode() {
+      if (!woodCarvingGcodes.rough) {
+        showNotification('يجب توليد نقش الخشب أولاً', true);
+        return;
+      }
+      
+      // إنرشيف يحتوي على الملفات الثلاثة
+      const stages = [
+        { name: 'rough', title: 'التنجير الخشن' },
+        { name: 'finish', title: 'التشطيب' },
+        { name: 'smooth', title: 'التنعيم' }
+      ];
+      
+      stages.forEach(stage => {
+        const blob = new Blob([woodCarvingGcodes[stage.name]], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `wood-carving-${stage.name}.gcode`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+      
+      showNotification('تم تحميل ملفات النقش بنجاح', false, 'wood');
     }
 
     // تحديث خيارات الخامة بناءً على نوع الماكينة
