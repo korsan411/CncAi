@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CNC AI - النسخة المتطورة مع Top View</title>
   <style>
+    /* أنماط CSS الأصلية تبقى كما هي */
     :root {
       --primary-color: #4a90e2;
       --secondary-color: #67b0f5;
@@ -1079,6 +1080,114 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
   <script>
+    // ============ تهيئة المتغيرات العالمية ============
+    let mesh;
+    let rotationSpeed = 0.01;
+    let currentColormap = 'jet';
+    let heightFactor = 80;
+    let heightMapData = null;
+    let originalImageData = null;
+    let simulation = null;
+    let isSimulationPlaying = false;
+    let currentView = '3d';
+    let currentPattern = 'lines';
+    let generatedGcode = '';
+    let simulationPoints = [];
+    let originalSimulationPoints = [];
+    let isDraggingEnabled = false;
+    let draggablePoints = [];
+    let rTree = new RTree();
+
+    // عناصر DOM
+    const fileInput = document.getElementById('fileInput');
+    const fileName = document.getElementById('fileName');
+    const canvas2d = document.getElementById('preview2d');
+    const ctx2d = canvas2d.getContext('2d');
+    const heatmap = document.getElementById('heatmap');
+    const ctxHeat = heatmap.getContext('2d');
+    const preview3d = document.getElementById('preview3d');
+    const rotationSpeedInput = document.getElementById('rotationSpeed');
+    const zoomControl = document.getElementById('zoomControl');
+    const heightIntensity = document.getElementById('heightIntensity');
+    const tabs = document.querySelectorAll('.tab');
+    const tabContents = document.querySelectorAll('.tab-content');
+    const gcodeOutput = document.getElementById('gcodeOutput');
+    const notification = document.getElementById('notification');
+    const loading3d = document.getElementById('loading3d');
+    const gcodeSimulation = document.getElementById('gcodeSimulation');
+    const loadingSimulation = document.getElementById('loadingSimulation');
+    const topView = document.getElementById('topView');
+    const loadingTopView = document.getElementById('loadingTopView');
+    const viewButtons = document.querySelectorAll('.view-btn');
+    const patternButtons = document.querySelectorAll('.pattern-btn');
+    const gcodeProgressBar = document.getElementById('gcodeProgressBar');
+    const gcodeProgressContainer = document.getElementById('gcodeProgressContainer');
+    const simulationProgressBar = document.getElementById('simulationProgressBar');
+    const simulationProgressContainer = document.getElementById('simulationProgressContainer');
+
+    // إعداد Three.js للمعاينة
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
+    const camera = new THREE.PerspectiveCamera(45, preview3d.offsetWidth / preview3d.offsetHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(preview3d.offsetWidth, preview3d.offsetHeight);
+    preview3d.appendChild(renderer.domElement);
+
+    // إعداد Three.js للمحاكاة
+    const simulationScene = new THREE.Scene();
+    simulationScene.background = new THREE.Color(0xf0f0f0);
+    const simulationCamera = new THREE.PerspectiveCamera(45, gcodeSimulation.offsetWidth / gcodeSimulation.offsetHeight, 0.1, 1000);
+    const simulationRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    simulationRenderer.setSize(gcodeSimulation.offsetWidth, gcodeSimulation.offsetHeight);
+    gcodeSimulation.appendChild(simulationRenderer.domElement);
+
+    // إعداد Three.js للعرض العلوي
+    const topViewScene = new THREE.Scene();
+    topViewScene.background = new THREE.Color(0xf0f0f0);
+    const topViewCamera = new THREE.OrthographicCamera(-50, 50, 50, -50, 0.1, 1000);
+    const topViewRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    topViewRenderer.setSize(topView.offsetWidth, topView.offsetHeight);
+    topView.appendChild(topViewRenderer.domElement);
+
+    // إضاءة المشاهد
+    function setupLights(scene) {
+      const ambientLight = new THREE.AmbientLight(0x404040, 1);
+      scene.add(ambientLight);
+      
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      directionalLight.position.set(1, 1, 1);
+      scene.add(directionalLight);
+      
+      const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+      directionalLight2.position.set(-1, -1, -1);
+      scene.add(directionalLight2);
+    }
+
+    setupLights(scene);
+    setupLights(simulationScene);
+    setupLights(topViewScene);
+
+    camera.position.z = 200;
+    simulationCamera.position.z = 200;
+    topViewCamera.position.z = 100;
+    topViewCamera.lookAt(0, 0, 0);
+
+    // دورة الرسوم المتحركة
+    function animate() {
+      requestAnimationFrame(animate);
+      if (mesh) mesh.rotation.y += rotationSpeed;
+      renderer.render(scene, camera);
+      
+      if (simulationRenderer) {
+        simulationRenderer.render(simulationScene, simulationCamera);
+      }
+      
+      if (topViewRenderer) {
+        topViewRenderer.render(topViewScene, topViewCamera);
+      }
+    }
+    animate();
+
     // ============ Web Workers لمعالجة الصور ============
     const createImageWorker = () => {
       const workerCode = `
@@ -1164,11 +1273,10 @@
                   }
                   break;
                   
-                case 'heightmap':
-                  for (let i = 0; i < imageData.length; i += 4) {
-                    const avg = 0.3 * imageData[i] + 0.59 * imageData[i+1] + 0.11 * imageData[i+2];
-                    result[i] = result[i+1] = result[i+2] = avg;
-                    result[i+3] = 255;
+                case 'reset':
+                  // إعادة الصورة الأصلية
+                  for (let i = 0; i < imageData.length; i++) {
+                    result[i] = imageData[i];
                   }
                   break;
                   
@@ -1813,24 +1921,6 @@
       }
     }
 
-    // ============ تهيئة المتغيرات العالمية ============
-    let mesh;
-    let rotationSpeed = 0.01;
-    let currentColormap = 'jet';
-    let heightFactor = 80;
-    let heightMapData = null;
-    let originalImageData = null;
-    let simulation = null;
-    let isSimulationPlaying = false;
-    let currentView = '3d';
-    let currentPattern = 'lines';
-    let generatedGcode = '';
-    let simulationPoints = [];
-    let originalSimulationPoints = [];
-    let isDraggingEnabled = false;
-    let draggablePoints = [];
-    let rTree = new RTree();
-
     // ============ تهيئة الصفحة ============
     document.addEventListener('DOMContentLoaded', function() {
       // تحديث إعدادات الخامة عند تغيير الاختيار
@@ -1917,223 +2007,7 @@
       }
     }
 
-    // ============ بقية الكود الأصلي مع التعديلات ============
-    // (يحتوي على جميع الدوال والأحداث الأصلية مع دمج التحسينات الجديدة)
-
-    // إنشاء Web Worker لمعالجة الصور
-    const workerCode = `
-      self.addEventListener('message', async function(e) {
-        const { type, data } = e.data;
-        
-        if (type === 'processImage') {
-          const { imageData, width, height } = data;
-          
-          try {
-            // محاكاة معالجة الصورة (سيتم استبدالها بمعالجة TensorFlow.js الفعلية)
-            let processedData = new Uint8ClampedArray(imageData.length);
-            
-            for (let i = 0; i < imageData.length; i += 4) {
-              const avg = 0.3 * imageData[i] + 0.59 * imageData[i+1] + 0.11 * imageData[i+2];
-              processedData[i] = processedData[i+1] = processedData[i+2] = avg;
-              processedData[i+3] = imageData[i+3];
-            }
-            
-            // إرسال النتيجة مرة أخرى
-            self.postMessage({
-              type: 'imageProcessed',
-              data: {
-                processedData: processedData.buffer,
-                width,
-                height
-              }
-            }, [processedData.buffer]);
-          } catch (error) {
-            self.postMessage({
-              type: 'error',
-              error: error.message
-            });
-          }
-        }
-      });
-    `;
-
-    const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
-    const worker = new Worker(URL.createObjectURL(workerBlob));
-
-    // عناصر DOM
-    const fileInput = document.getElementById('fileInput');
-    const fileName = document.getElementById('fileName');
-    const canvas2d = document.getElementById('preview2d');
-    const ctx2d = canvas2d.getContext('2d');
-    const heatmap = document.getElementById('heatmap');
-    const ctxHeat = heatmap.getContext('2d');
-    const preview3d = document.getElementById('preview3d');
-    const rotationSpeedInput = document.getElementById('rotationSpeed');
-    const zoomControl = document.getElementById('zoomControl');
-    const heightIntensity = document.getElementById('heightIntensity');
-    const tabs = document.querySelectorAll('.tab');
-    const tabContents = document.querySelectorAll('.tab-content');
-    const gcodeOutput = document.getElementById('gcodeOutput');
-    const notification = document.getElementById('notification');
-    const loading3d = document.getElementById('loading3d');
-    const gcodeSimulation = document.getElementById('gcodeSimulation');
-    const loadingSimulation = document.getElementById('loadingSimulation');
-    const topView = document.getElementById('topView');
-    const loadingTopView = document.getElementById('loadingTopView');
-    const viewButtons = document.querySelectorAll('.view-btn');
-    const patternButtons = document.querySelectorAll('.pattern-btn');
-    const gcodeProgressBar = document.getElementById('gcodeProgressBar');
-    const gcodeProgressContainer = document.getElementById('gcodeProgressContainer');
-    const simulationProgressBar = document.getElementById('simulationProgressBar');
-    const simulationProgressContainer = document.getElementById('simulationProgressContainer');
-
-    // إعداد Three.js للمعاينة
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf0f0f0);
-    const camera = new THREE.PerspectiveCamera(45, preview3d.offsetWidth / preview3d.offsetHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(preview3d.offsetWidth, preview3d.offsetHeight);
-    preview3d.appendChild(renderer.domElement);
-
-    // إعداد Three.js للمحاكاة
-    const simulationScene = new THREE.Scene();
-    simulationScene.background = new THREE.Color(0xf0f0f0);
-    const simulationCamera = new THREE.PerspectiveCamera(45, gcodeSimulation.offsetWidth / gcodeSimulation.offsetHeight, 0.1, 1000);
-    const simulationRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    simulationRenderer.setSize(gcodeSimulation.offsetWidth, gcodeSimulation.offsetHeight);
-    gcodeSimulation.appendChild(simulationRenderer.domElement);
-
-    // إعداد Three.js للعرض العلوي
-    const topViewScene = new THREE.Scene();
-    topViewScene.background = new THREE.Color(0xf0f0f0);
-    const topViewCamera = new THREE.OrthographicCamera(-50, 50, 50, -50, 0.1, 1000);
-    const topViewRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    topViewRenderer.setSize(topView.offsetWidth, topView.offsetHeight);
-    topView.appendChild(topViewRenderer.domElement);
-
-    // إضاءة المشاهد
-    function setupLights(scene) {
-      const ambientLight = new THREE.AmbientLight(0x404040, 1);
-      scene.add(ambientLight);
-      
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-      directionalLight.position.set(1, 1, 1);
-      scene.add(directionalLight);
-      
-      const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
-      directionalLight2.position.set(-1, -1, -1);
-      scene.add(directionalLight2);
-    }
-
-    setupLights(scene);
-    setupLights(simulationScene);
-    setupLights(topViewScene);
-
-    camera.position.z = 200;
-    simulationCamera.position.z = 200;
-    topViewCamera.position.z = 100;
-    topViewCamera.lookAt(0, 0, 0);
-
-    // دورة الرسوم المتحركة
-    function animate() {
-      requestAnimationFrame(animate);
-      if (mesh) mesh.rotation.y += rotationSpeed;
-      renderer.render(scene, camera);
-      
-      if (simulationRenderer) {
-        simulationRenderer.render(simulationScene, simulationCamera);
-      }
-      
-      if (topViewRenderer) {
-        topViewRenderer.render(topViewScene, topViewCamera);
-      }
-    }
-    animate();
-
-    // أحداث عناصر التحكم
-    fileInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      
-      fileName.textContent = file.name;
-      
-      const img = new Image();
-      img.onload = () => {
-        canvas2d.width = img.width;
-        canvas2d.height = img.height;
-        ctx2d.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
-        
-        // حفظ بيانات الصورة الأصلية
-        originalImageData = ctx2d.getImageData(0, 0, canvas2d.width, canvas2d.height);
-        
-        createHeightMap(img);
-        showNotification('تم تحميل الصورة بنجاح');
-      };
-      img.src = URL.createObjectURL(file);
-    });
-
-    rotationSpeedInput.addEventListener('input', () => {
-      rotationSpeed = parseFloat(rotationSpeedInput.value);
-    });
-
-    zoomControl.addEventListener('input', () => {
-      camera.position.z = parseFloat(zoomControl.value);
-    });
-
-    heightIntensity.addEventListener('input', () => {
-      heightFactor = parseFloat(heightIntensity.value);
-      if(fileInput.files[0]){
-        const img = new Image();
-        img.onload = () => createHeightMap(img);
-        img.src = URL.createObjectURL(fileInput.files[0]);
-      }
-    });
-
-    // تبديل الوضع الليلي/النهاري
-    const themeToggle = document.getElementById('themeToggle');
-    themeToggle.addEventListener('click', () => {
-      document.body.classList.toggle('dark');
-      themeToggle.textContent = document.body.classList.contains('dark') ? "☀️" : "🌙";
-      
-      // تحديث لون خلفية المشهد ثلاثي الأبعاد
-      scene.background = new THREE.Color(document.body.classList.contains('dark') ? 0x121212 : 0xf0f0f0);
-      simulationScene.background = new THREE.Color(document.body.classList.contains('dark') ? 0x121212 : 0xf0f0f0);
-      topViewScene.background = new THREE.Color(document.body.classList.contains('dark') ? 0x121212 : 0xf0f0f0);
-    });
-
-    // جعل النماذج ثلاثية الأبعاد متجاوبة
-    window.addEventListener('resize', () => {
-      renderer.setSize(preview3d.offsetWidth, preview3d.offsetHeight);
-      camera.aspect = preview3d.offsetWidth / preview3d.offsetHeight;
-      camera.updateProjectionMatrix();
-      
-      simulationRenderer.setSize(gcodeSimulation.offsetWidth, gcodeSimulation.offsetHeight);
-      simulationCamera.aspect = gcodeSimulation.offsetWidth / gcodeSimulation.offsetHeight;
-      simulationCamera.updateProjectionMatrix();
-      
-      topViewRenderer.setSize(topView.offsetWidth, topView.offsetHeight);
-      topViewCamera.updateProjectionMatrix();
-    });
-
-    // دالة لعرض الإشعارات
-    function showNotification(message, isError = false, type = '') {
-      notification.textContent = message;
-      notification.className = 'notification';
-      if (isError) {
-        notification.classList.add('error');
-      } else if (type === 'ai') {
-        notification.classList.add('ai');
-      } else if (type === 'wood') {
-        notification.classList.add('wood');
-      }
-      notification.classList.add('show');
-      
-      setTimeout(() => {
-        notification.classList.remove('show');
-      }, 3000);
-    }
-
-    // ============== دوال توليد G-code باستخدام الذكاء الاصطناعي ==============
+    // ============ دوال توليد G-code باستخدام الذكاء الاصطناعي ============
 
     // دالة لتحويل الصورة إلى بيانات ارتفاع باستخدام TensorFlow.js
     async function processImageWithAI(imageData) {
@@ -2619,38 +2493,41 @@
     });
 
     // معالجة رسائل Web Worker
-    worker.onmessage = function(e) {
+    imageWorker.onmessage = function(e) {
       const { type, data, error } = e.data;
       
       if (type === 'imageProcessed') {
-        const { processedData, width, height } = data;
+        const { processedData, width, height, operation } = data;
         const imageData = new ImageData(new Uint8ClampedArray(processedData), width, height);
         
         // عرض الصورة المعالجة
         ctx2d.putImageData(imageData, 0, 0);
-        showNotification('تم معالجة الصورة باستخدام Web Worker');
+        
+        // إذا كانت العملية ليست إعادة تعيين، احفظ البيانات المعدلة
+        if (operation !== 'reset') {
+          originalImageData = imageData;
+        }
+        
+        // إنشاء خريطة ارتفاع جديدة من الصورة المحسنة
+        createHeightMapFromCanvas(canvas2d);
+        
+        showNotification(`تم تطبيق ${operation} على الصورة`);
       } else if (type === 'error') {
         showNotification(`خطأ في المعالجة: ${error}`, true);
       }
     };
 
-    // إرسال الصورة للمعالجة عبر Web Worker
-    function processImageWithWorker() {
-      if (!originalImageData) {
-        showNotification('يجب تحميل صورة أولاً', true);
-        return;
-      }
+    function createHeightMapFromCanvas(canvas) {
+      loading3d.style.display = 'flex';
       
-      showNotification('جاري معالجة الصورة باستخدام Web Worker...');
-      
-      worker.postMessage({
-        type: 'processImage',
-        data: {
-          imageData: originalImageData.data,
-          width: originalImageData.width,
-          height: originalImageData.height
-        }
-      });
+      setTimeout(() => {
+        const img = new Image();
+        img.onload = () => {
+          createHeightMap(img);
+          loading3d.style.display = 'none';
+        };
+        img.src = canvas.toDataURL();
+      }, 100);
     }
 
     // ============ دوال إضافية للمعاينة ثلاثية الأبعاد ============
@@ -2781,44 +2658,6 @@
       });
     }
 
-    // معالجة رسائل Web Worker لمعالجة الصور
-    imageWorker.onmessage = function(e) {
-      const { type, data, error } = e.data;
-      
-      if (type === 'imageProcessed') {
-        const { processedData, width, height, operation } = data;
-        const imageData = new ImageData(new Uint8ClampedArray(processedData), width, height);
-        
-        // عرض الصورة المعالجة
-        ctx2d.putImageData(imageData, 0, 0);
-        
-        // إذا كانت العملية ليست إعادة تعيين، احفظ البيانات المعدلة
-        if (operation !== 'reset') {
-          originalImageData = imageData;
-        }
-        
-        // إنشاء خريطة ارتفاع جديدة من الصورة المحسنة
-        createHeightMapFromCanvas(canvas2d);
-        
-        showNotification(`تم تطبيق ${operation} على الصورة`);
-      } else if (type === 'error') {
-        showNotification(`خطأ في المعالجة: ${error}`, true);
-      }
-    };
-
-    function createHeightMapFromCanvas(canvas) {
-      loading3d.style.display = 'flex';
-      
-      setTimeout(() => {
-        const img = new Image();
-        img.onload = () => {
-          createHeightMap(img);
-          loading3d.style.display = 'none';
-        };
-        img.src = canvas.toDataURL();
-      }, 100);
-    }
-
     // تحديث العرض العلوي مع تحسينات
     function updateTopView() {
       if (simulationPoints.length === 0) return;
@@ -2890,6 +2729,90 @@
       topViewCamera.lookAt(center.x, center.y, 0);
     }
 
+    // ============ أحداث الصفحة ============
+    // أحداث عناصر التحكم
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      fileName.textContent = file.name;
+      
+      const img = new Image();
+      img.onload = () => {
+        canvas2d.width = img.width;
+        canvas2d.height = img.height;
+        ctx2d.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
+        
+        // حفظ بيانات الصورة الأصلية
+        originalImageData = ctx2d.getImageData(0, 0, canvas2d.width, canvas2d.height);
+        
+        createHeightMap(img);
+        showNotification('تم تحميل الصورة بنجاح');
+      };
+      img.src = URL.createObjectURL(file);
+    });
+
+    rotationSpeedInput.addEventListener('input', () => {
+      rotationSpeed = parseFloat(rotationSpeedInput.value);
+    });
+
+    zoomControl.addEventListener('input', () => {
+      camera.position.z = parseFloat(zoomControl.value);
+    });
+
+    heightIntensity.addEventListener('input', () => {
+      heightFactor = parseFloat(heightIntensity.value);
+      if(fileInput.files[0]){
+        const img = new Image();
+        img.onload = () => createHeightMap(img);
+        img.src = URL.createObjectURL(fileInput.files[0]);
+      }
+    });
+
+    // تبديل الوضع الليلي/النهاري
+    const themeToggle = document.getElementById('themeToggle');
+    themeToggle.addEventListener('click', () => {
+      document.body.classList.toggle('dark');
+      themeToggle.textContent = document.body.classList.contains('dark') ? "☀️" : "🌙";
+      
+      // تحديث لون خلفية المشهد ثلاثي الأبعاد
+      scene.background = new THREE.Color(document.body.classList.contains('dark') ? 0x121212 : 0xf0f0f0);
+      simulationScene.background = new THREE.Color(document.body.classList.contains('dark') ? 0x121212 : 0xf0f0f0);
+      topViewScene.background = new THREE.Color(document.body.classList.contains('dark') ? 0x121212 : 0xf0f0f0);
+    });
+
+    // جعل النماذج ثلاثية الأبعاد متجاوبة
+    window.addEventListener('resize', () => {
+      renderer.setSize(preview3d.offsetWidth, preview3d.offsetHeight);
+      camera.aspect = preview3d.offsetWidth / preview3d.offsetHeight;
+      camera.updateProjectionMatrix();
+      
+      simulationRenderer.setSize(gcodeSimulation.offsetWidth, gcodeSimulation.offsetHeight);
+      simulationCamera.aspect = gcodeSimulation.offsetWidth / gcodeSimulation.offsetHeight;
+      simulationCamera.updateProjectionMatrix();
+      
+      topViewRenderer.setSize(topView.offsetWidth, topView.offsetHeight);
+      topViewCamera.updateProjectionMatrix();
+    });
+
+    // دالة لعرض الإشعارات
+    function showNotification(message, isError = false, type = '') {
+      notification.textContent = message;
+      notification.className = 'notification';
+      if (isError) {
+        notification.classList.add('error');
+      } else if (type === 'ai') {
+        notification.classList.add('ai');
+      } else if (type === 'wood') {
+        notification.classList.add('wood');
+      }
+      notification.classList.add('show');
+      
+      setTimeout(() => {
+        notification.classList.remove('show');
+      }, 3000);
+    }
+
     // تبديل التابات
     tabs.forEach(tab => {
       tab.addEventListener('click', () => {
@@ -2907,7 +2830,7 @@
 
     // تبديل بين العرض 3D والعرض العلوي
     viewButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', () {
         viewButtons.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentView = btn.getAttribute('data-view');
