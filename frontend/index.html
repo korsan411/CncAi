@@ -1098,7 +1098,35 @@
     let draggablePoints = [];
     let rTree = new RTree();
 
-    // ============ رفع الصورة ومعاينتها ============
+ 
+    // عناصر DOM
+    const fileInput = document.getElementById('fileInput');
+    const fileName = document.getElementById('fileName');
+    const canvas2d = document.getElementById('preview2d');
+    const ctx2d = canvas2d.getContext('2d');
+    const heatmap = document.getElementById('heatmap');
+    const ctxHeat = heatmap.getContext('2d');
+    const preview3d = document.getElementById('preview3d');
+    const rotationSpeedInput = document.getElementById('rotationSpeed');
+    const zoomControl = document.getElementById('zoomControl');
+    const heightIntensity = document.getElementById('heightIntensity');
+    const tabs = document.querySelectorAll('.tab');
+    const tabContents = document.querySelectorAll('.tab-content');
+    const gcodeOutput = document.getElementById('gcodeOutput');
+    const notification = document.getElementById('notification');
+    const loading3d = document.getElementById('loading3d');
+    const gcodeSimulation = document.getElementById('gcodeSimulation');
+    const loadingSimulation = document.getElementById('loadingSimulation');
+    const topView = document.getElementById('topView');
+    const loadingTopView = document.getElementById('loadingTopView');
+    const viewButtons = document.querySelectorAll('.view-btn');
+    const patternButtons = document.querySelectorAll('.pattern-btn');
+    const gcodeProgressBar = document.getElementById('gcodeProgressBar');
+    const gcodeProgressContainer = document.getElementById('gcodeProgressContainer');
+    const simulationProgressBar = document.getElementById('simulationProgressBar');
+    const simulationProgressContainer = document.getElementById('simulationProgressContainer');
+
+     // ============ رفع الصورة ومعاينتها ============
     fileInput.addEventListener('change', function(event) {
       const file = event.target.files[0];
       if (!file) return;
@@ -1130,34 +1158,6 @@
     });
 
  
-    // عناصر DOM
-    const fileInput = document.getElementById('fileInput');
-    const fileName = document.getElementById('fileName');
-    const canvas2d = document.getElementById('preview2d');
-    const ctx2d = canvas2d.getContext('2d');
-    const heatmap = document.getElementById('heatmap');
-    const ctxHeat = heatmap.getContext('2d');
-    const preview3d = document.getElementById('preview3d');
-    const rotationSpeedInput = document.getElementById('rotationSpeed');
-    const zoomControl = document.getElementById('zoomControl');
-    const heightIntensity = document.getElementById('heightIntensity');
-    const tabs = document.querySelectorAll('.tab');
-    const tabContents = document.querySelectorAll('.tab-content');
-    const gcodeOutput = document.getElementById('gcodeOutput');
-    const notification = document.getElementById('notification');
-    const loading3d = document.getElementById('loading3d');
-    const gcodeSimulation = document.getElementById('gcodeSimulation');
-    const loadingSimulation = document.getElementById('loadingSimulation');
-    const topView = document.getElementById('topView');
-    const loadingTopView = document.getElementById('loadingTopView');
-    const viewButtons = document.querySelectorAll('.view-btn');
-    const patternButtons = document.querySelectorAll('.pattern-btn');
-    const gcodeProgressBar = document.getElementById('gcodeProgressBar');
-    const gcodeProgressContainer = document.getElementById('gcodeProgressContainer');
-    const simulationProgressBar = document.getElementById('simulationProgressBar');
-    const simulationProgressContainer = document.getElementById('simulationProgressContainer');
-
-  
     // إعداد Three.js للمعاينة
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f0f0);
