@@ -1098,6 +1098,38 @@
     let draggablePoints = [];
     let rTree = new RTree();
 
+    // ============ رفع الصورة ومعاينتها ============
+    fileInput.addEventListener('change', function(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          // ضبط أبعاد الـ Canvas لتساوي أبعاد الصورة
+          canvas2d.width = img.width;
+          canvas2d.height = img.height;
+
+          // رسم الصورة على الـ Canvas
+          ctx2d.drawImage(img, 0, 0);
+
+          // تحديث النص الخاص باسم الملف
+          fileName.textContent = file.name;
+
+          // حفظ بيانات الصورة الأصلية
+          const imageData = ctx2d.getImageData(0, 0, img.width, img.height);
+          originalImageData = imageData.data;
+
+          // إشعار النجاح
+          showNotification('تم تحميل الصورة بنجاح!');
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+ 
     // عناصر DOM
     const fileInput = document.getElementById('fileInput');
     const fileName = document.getElementById('fileName');
@@ -1125,6 +1157,7 @@
     const simulationProgressBar = document.getElementById('simulationProgressBar');
     const simulationProgressContainer = document.getElementById('simulationProgressContainer');
 
+  
     // إعداد Three.js للمعاينة
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f0f0);
