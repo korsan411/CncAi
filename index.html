@@ -27,7 +27,6 @@
       --roughing-color: #8b4513;
       --finishing-color: #5a2d0c;
       --smoothing-color: #3d2108;
-      --drawing-color: #ff5722;
     }
 
     body.dark {
@@ -46,7 +45,6 @@
       --roughing-color: #a0522d;
       --finishing-color: #8b4513;
       --smoothing-color: #5a2d0c;
-      --drawing-color: #ff8a65;
     }
 
     * {
@@ -372,11 +370,6 @@
       color: white;
     }
 
-    .btn-drawing {
-      background: var(--drawing-color);
-      color: white;
-    }
-
     .action-buttons {
       display: flex;
       gap: 10px;
@@ -669,58 +662,6 @@
       justify-content: center;
     }
 
-    .drawing-tools {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-      margin: 1rem 0;
-      padding: 1rem;
-      background: var(--card-bg);
-      border-radius: 8px;
-      border: 1px solid var(--border-color);
-    }
-
-    .drawing-controls {
-      display: flex;
-      gap: 1rem;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-
-    .drawing-instructions {
-      font-size: 0.9rem;
-      color: var(--text-color);
-      text-align: center;
-      margin-top: 0.5rem;
-    }
-
-    .drawing-canvas-container {
-      position: relative;
-      width: 100%;
-      height: 300px;
-      margin-top: 1rem;
-    }
-
-    #drawingCanvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      cursor: crosshair;
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-    }
-
-    .manual-selection {
-      background: var(--card-bg);
-      border-radius: 10px;
-      padding: 1.5rem;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
-      margin-bottom: 2rem;
-      border: 1px solid var(--border-color);
-    }
-
     @media (max-width: 768px) {
       h1 {
         font-size: 1.4rem;
@@ -750,11 +691,6 @@
 
       .wood-stages {
         grid-template-columns: 1fr;
-      }
-
-      .drawing-controls {
-        flex-direction: column;
-        align-items: center;
       }
     }
   </style>
@@ -870,38 +806,6 @@
             </div>
           </div>
         </div>
-
-        <!-- تحديد المناطق يدوياً -->
-        <div class="preview-block">
-          <h3 class="preview-title">✏️ تحديد المناطق يدوياً</h3>
-          <div class="preview-content">
-            <div class="drawing-canvas-container">
-              <canvas id="drawingCanvas"></canvas>
-            </div>
-          </div>
-          <div class="drawing-tools">
-            <div class="drawing-controls">
-              <button class="btn btn-drawing" id="startDrawing">
-                <span>✏️</span> بدء الرسم
-              </button>
-              <button class="btn btn-secondary" id="clearDrawing">
-                <span>🗑️</span> مسح الرسم
-              </button>
-              <button class="btn btn-primary" id="applyDrawing">
-                <span>✅</span> تطبيق الرسم
-              </button>
-            </div>
-            <div class="drawing-instructions">
-              <p>ارسم المنطقة التي تريد قطعها. اضغط على "بدء الرسم" لبدء الرسم، ثم انقر واسحب لرسم المنطقة.</p>
-            </div>
-            <div class="options">
-              <div class="option-group">
-                <label for="brushSize">📏 حجم الفرشاة</label>
-                <input type="range" id="brushSize" min="1" max="20" step="1" value="5">
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -929,10 +833,6 @@
           <div class="optimization-option">
             <input type="checkbox" id="startFromEdges" checked>
             <label for="startFromEdges">بدء القطع من الحواف</label>
-          </div>
-          <div class="optimization-option">
-            <input type="checkbox" id="useManualSelection">
-            <label for="useManualSelection">استخدام التحديد اليدوي للمناطق</label>
           </div>
         </div>
       </div>
@@ -993,7 +893,6 @@
               <option value="heatmap">بناءً على Heatmap</option>
               <option value="3dmodel">بناءً على النموذج ثلاثي الأبعاد</option>
               <option value="edges">بناءً على حواف الصورة</option>
-              <option value="manual">بناءً على التحديد اليدوي</option>
             </select>
           </div>
           <div class="form-group">
@@ -1257,8 +1156,6 @@
     const ctxHeat = heatmap.getContext('2d');
     const edgesCanvas = document.getElementById('edgesCanvas');
     const ctxEdges = edgesCanvas.getContext('2d');
-    const drawingCanvas = document.getElementById('drawingCanvas');
-    const ctxDrawing = drawingCanvas.getContext('2d');
     const preview3d = document.getElementById('preview3d');
     const rotationSpeedInput = document.getElementById('rotationSpeed');
     const zoomControl = document.getElementById('zoomControl');
@@ -1279,10 +1176,6 @@
     const pathSvg = document.getElementById('pathSvg');
     const advancedPathSvg = document.getElementById('advancedPathSvg');
     const materialType = document.getElementById('materialType');
-    const startDrawingBtn = document.getElementById('startDrawing');
-    const clearDrawingBtn = document.getElementById('clearDrawing');
-    const applyDrawingBtn = document.getElementById('applyDrawing');
-    const brushSizeInput = document.getElementById('brushSize');
 
     // إعداد Three.js للمعاينة
     const scene = new THREE.Scene();
@@ -1326,162 +1219,6 @@
       finishing: '',
       smoothing: ''
     };
-
-    // متغيرات للرسم اليدوي
-    let isDrawing = false;
-    let manualSelectionData = null;
-    let lastX = 0;
-    let lastY = 0;
-
-    // ============== دوال الرسم اليدوي ==============
-
-    // تهيئة لوحة الرسم
-    function initDrawingCanvas() {
-      drawingCanvas.width = canvas2d.width;
-      drawingCanvas.height = canvas2d.height;
-      ctxDrawing.fillStyle = 'rgba(0, 0, 0, 0.1)';
-      ctxDrawing.fillRect(0, 0, drawingCanvas.width, drawingCanvas.height);
-    }
-
-    // بدء الرسم
-    function startDrawing() {
-      isDrawing = true;
-      startDrawingBtn.textContent = '⏹️ إيقاف الرسم';
-      startDrawingBtn.classList.remove('btn-drawing');
-      startDrawingBtn.classList.add('btn-secondary');
-      drawingCanvas.style.cursor = 'crosshair';
-      showNotification('بدء الرسم: ارسم المنطقة المطلوبة', false, 'analysis');
-    }
-
-    // إيقاف الرسم
-    function stopDrawing() {
-      isDrawing = false;
-      startDrawingBtn.textContent = '✏️ بدء الرسم';
-      startDrawingBtn.classList.remove('btn-secondary');
-      startDrawingBtn.classList.add('btn-drawing');
-      drawingCanvas.style.cursor = 'default';
-      showNotification('تم إيقاف الرسم', false, 'analysis');
-    }
-
-    // مسح الرسم
-    function clearDrawing() {
-      ctxDrawing.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
-      ctxDrawing.fillStyle = 'rgba(0, 0, 0, 0.1)';
-      ctxDrawing.fillRect(0, 0, drawingCanvas.width, drawingCanvas.height);
-      manualSelectionData = null;
-      showNotification('تم مسح الرسم', false, 'analysis');
-    }
-
-    // تطبيق الرسم على الصورة
-    function applyDrawing() {
-      if (!originalImageData) {
-        showNotification('يجب تحميل صورة أولاً', true);
-        return;
-      }
-
-      // الحصول على بيانات الرسم
-      const drawingData = ctxDrawing.getImageData(0, 0, drawingCanvas.width, drawingCanvas.height);
-      
-      // حفظ بيانات التحديد اليدوي
-      manualSelectionData = drawingData;
-      
-      // تطبيق الرسم على الصورة الأصلية
-      const combinedData = new ImageData(drawingCanvas.width, drawingCanvas.height);
-      const originalData = originalImageData.data;
-      
-      for (let i = 0; i < originalData.length; i += 4) {
-        // إذا كانت المنطقة مرسومة (غير شفافة)
-        if (drawingData.data[i+3] > 50) {
-          // تعزيز المنطقة المرسومة
-          combinedData.data[i] = Math.min(255, originalData[i] * 1.2);
-          combinedData.data[i+1] = Math.min(255, originalData[i+1] * 1.2);
-          combinedData.data[i+2] = Math.min(255, originalData[i+2] * 1.2);
-          combinedData.data[i+3] = 255;
-        } else {
-          // تخفيف المناطق غير المرسومة
-          combinedData.data[i] = originalData[i] * 0.7;
-          combinedData.data[i+1] = originalData[i+1] * 0.7;
-          combinedData.data[i+2] = originalData[i+2] * 0.7;
-          combinedData.data[i+3] = 255;
-        }
-      }
-      
-      // عرض الصورة المعدلة
-      ctx2d.putImageData(combinedData, 0, 0);
-      
-      // إنشاء خريطة ارتفاع جديدة
-      createHeightMapFromCanvas(canvas2d);
-      
-      showNotification('تم تطبيق الرسم على الصورة', false, 'analysis');
-    }
-
-    // رسم على اللوحة
-    function drawOnCanvas(e) {
-      if (!isDrawing) return;
-      
-      const rect = drawingCanvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const brushSize = parseInt(brushSizeInput.value);
-      
-      ctxDrawing.lineJoin = 'round';
-      ctxDrawing.lineCap = 'round';
-      ctxDrawing.lineWidth = brushSize;
-      ctxDrawing.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-      
-      ctxDrawing.beginPath();
-      ctxDrawing.moveTo(lastX, lastY);
-      ctxDrawing.lineTo(x, y);
-      ctxDrawing.stroke();
-      
-      lastX = x;
-      lastY = y;
-    }
-
-    // إعداد أحداث الرسم
-    drawingCanvas.addEventListener('mousedown', (e) => {
-      if (!isDrawing) return;
-      
-      const rect = drawingCanvas.getBoundingClientRect();
-      lastX = e.clientX - rect.left;
-      lastY = e.clientY - rect.top;
-      
-      // رسم نقطة عند النقر
-      const brushSize = parseInt(brushSizeInput.value);
-      ctxDrawing.fillStyle = 'rgba(255, 255, 255, 0.8)';
-      ctxDrawing.beginPath();
-      ctxDrawing.arc(lastX, lastY, brushSize/2, 0, Math.PI * 2);
-      ctxDrawing.fill();
-      
-      drawingCanvas.addEventListener('mousemove', drawOnCanvas);
-    });
-
-    drawingCanvas.addEventListener('mouseup', () => {
-      drawingCanvas.removeEventListener('mousemove', drawOnCanvas);
-    });
-
-    drawingCanvas.addEventListener('mouseleave', () => {
-      drawingCanvas.removeEventListener('mousemove', drawOnCanvas);
-    });
-
-    // إعداد أزرار الرسم
-    startDrawingBtn.addEventListener('click', () => {
-      if (!originalImageData) {
-        showNotification('يجب تحميل صورة أولاً', true);
-        return;
-      }
-      
-      if (isDrawing) {
-        stopDrawing();
-      } else {
-        startDrawing();
-      }
-    });
-
-    clearDrawingBtn.addEventListener('click', clearDrawing);
-    applyDrawingBtn.addEventListener('click', applyDrawing);
-
-    // ============== نهاية دوال الرسم اليدوي ==============
 
     // تبديل التابات
     tabs.forEach(tab => {
@@ -1749,15 +1486,10 @@
         canvas2d.height = img.height;
         edgesCanvas.width = img.width;
         edgesCanvas.height = img.height;
-        drawingCanvas.width = img.width;
-        drawingCanvas.height = img.height;
         ctx2d.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
         
         // حفظ بيانات الصورة الأصلية
         originalImageData = ctx2d.getImageData(0, 0, canvas2d.width, canvas2d.height);
-        
-        // تهيئة لوحة الرسم
-        initDrawingCanvas();
         
         createHeightMap(img);
         showNotification('تم تحميل الصورة بنجاح');
@@ -2290,27 +2022,6 @@
       return points;
     }
 
-    // دالة لاستخراج نقاط من التحديد اليدوي
-    function extractManualSelectionPoints(manualData, width, height, cutDepth) {
-      const points = [];
-      const threshold = 50; // عتبة الشفافية
-      
-      for (let y = 0; y < height; y += 2) { // تقليل العينة لتحسين الأداء
-        for (let x = 0; x < width; x += 2) {
-          const idx = (y * width + x) * 4 + 3; // قناة الشفافية
-          if (manualData.data[idx] > threshold) {
-            points.push({
-              x: (x / width) * 100 - 50, // تحويل إلى إحداثيات من -50 إلى 50
-              y: (y / height) * 100 - 50,
-              z: -cutDepth
-            });
-          }
-        }
-      }
-      
-      return points;
-    }
-
     // دالة لتوليد G-code حقيقي من بيانات الصورة
     async function generateRealGcode(stage = null) {
       if (!heightMapData || !originalImageData) {
@@ -2330,7 +2041,6 @@
       const smoothEdges = document.getElementById('smoothEdges').checked;
       const useEdges = document.getElementById('useEdges').checked;
       const startFromEdges = document.getElementById('startFromEdges').checked;
-      const useManualSelection = document.getElementById('useManualSelection').checked;
       
       // إذا كانت مرحلة محددة، استخدام إعداداتها
       if (stage) {
@@ -2358,11 +2068,7 @@
       
       let points = [];
       
-      if (useManualSelection && manualSelectionData && gcodeType === 'manual') {
-        // استخدام التحديد اليدوي لتوليد المسارات
-        points = extractManualSelectionPoints(manualSelectionData, canvas2d.width, canvas2d.height, cutDepth);
-        updateProgress(50);
-      } else if (useEdges && edgesImageData && gcodeType === 'edges') {
+      if (useEdges && edgesImageData && gcodeType === 'edges') {
         // استخدام حواف الصورة لتوليد المسارات
         const width = edgesCanvas.width;
         const height = edgesCanvas.height;
@@ -2576,7 +2282,7 @@
         <div class="stat-item">
           <h4>📊 حجم الملف</h4>
           <div class="stat-value">${(gcode.length / 1024).toFixed(2)}</div>
-          <div>كيلوبا이트</div>
+          <div>كيلوبايت</div>
         </div>
       `;
     }
@@ -3044,79 +2750,6 @@
         `;
       }
     });
-
-    // تنظيف الذاكرة عند إغلاق الصفحة
-    window.addEventListener('beforeunload', () => {
-      // تنظيف Tensors إذا كانت موجودة
-      if (tf && tf.memory) {
-        tf.disposeVariables();
-      }
-      
-      // تنظيف الذاكرة من Three.js
-      if (mesh) {
-        scene.remove(mesh);
-        mesh.geometry.dispose();
-        mesh.material.dispose();
-        mesh = null;
-      }
-      
-      // تنظيف بيانات الصور
-      originalImageData = null;
-      edgesImageData = null;
-      manualSelectionData = null;
-      heightMapData = null;
-      
-      // إلغاء عناصر DOM المخصصة
-      URL.revokeObjectURL(fileInput.src);
-    });
-
-    // تحسين أداء معالجة الصور باستخدام Web Workers
-    function createImageProcessingWorker() {
-      const workerCode = `
-        self.addEventListener('message', function(e) {
-          const { data, width, height, type } = e.data;
-          let result = new Uint8ClampedArray(data);
-          
-          switch(type) {
-            case 'brightness':
-              for (let i = 0; i < data.length; i += 4) {
-                result[i] = Math.min(255, data[i] + 30);
-                result[i+1] = Math.min(255, data[i+1] + 30);
-                result[i+2] = Math.min(255, data[i+2] + 30);
-                result[i+3] = data[i+3];
-              }
-              break;
-            case 'contrast':
-              const factor = 1.2;
-              for (let i = 0; i < data.length; i += 4) {
-                result[i] = Math.min(255, Math.max(0, factor * (data[i] - 128) + 128));
-                result[i+1] = Math.min(255, Math.max(0, factor * (data[i+1] - 128) + 128));
-                result[i+2] = Math.min(255, Math.max(0, factor * (data[i+2] - 128) + 128));
-                result[i+3] = data[i+3];
-              }
-              break;
-            // يمكن إضافة المزيد من أنواع المعالجة هنا
-          }
-          
-          self.postMessage({ result: result.buffer }, [result.buffer]);
-        });
-      `;
-      
-      const blob = new Blob([workerCode], { type: 'application/javascript' });
-      return new Worker(URL.createObjectURL(blob));
-    }
-
-    // استخدام Web Worker لمعالجة الصور إذا كان متاحًا
-    let imageWorker = null;
-    if (window.Worker) {
-      imageWorker = createImageProcessingWorker();
-      imageWorker.onmessage = function(e) {
-        const processedData = new Uint8ClampedArray(e.data.result);
-        const imageData = new ImageData(processedData, canvas2d.width, canvas2d.height);
-        ctx2d.putImageData(imageData, 0, 0);
-        createHeightMapFromCanvas(canvas2d);
-      };
-    }
   </script>
 </body>
 </html>
