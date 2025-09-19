@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CNC AI - النسخة المتطورة مع التحليلات المتقدمة</title>
+  <style>
+    /* أنماط الصفحة (نفسها كما في الكود الأصلي) */
+    :root {
+      --primary-color: #4a90e2;
+      --secondary-color: #67b0f5;
+      --bg-color: #f8f9fa;
+      --text-color: #212529;
+      --card-bg: #ffffff;
+      --border-color: #dee2e6;
+      --header-bg: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+      --header-text: #ffffff;
+      --button-bg: #e9ecef;
+      --button-hover: #dee2e6;
+      --success-color: #28a745;
+      --warning-color: #ffc107;
+      --error-color: #dc3545;
+      --ai-color: #9c27b0;
+      --wood-color: #8b4513;
+      --tab-inactive: #e9ecef;
+      --tab-active: var(--primary-color);
+      --analysis-color: #17a2b8;
+      --roughing-color: #8b4513;
+      --finishing-color: #5a2d0c;
+      --smoothing-color: #3d2108;
+      --drawing-color: #ff5722;
+      --refill-color: #795548;
+    }
+
+    body.dark {
+      --bg-color: #121212;
+      --text-color: #e0e0e0;
+      --card-bg: #1e1e1e;
+      --border-color: #444;
+      --header-bg: linear-gradient(90deg, #2c2c2c, #444);
+      --button-bg: #333;
+      --button-hover: #555;
+      --ai-color: #ba68c8;
+      --wood-color: #a0522d;
+      --tab-inactive: #333;
+      --tab-active: #4a90e2;
+      --analysis-color: #138496;
+      --roughing-color: #a0522d;
+      --finishing-color: #8b4513;
+      --smoothing-color: #5a2d0c;
+      --drawing-color: #ff8a65;
+      --refill-color: #8d6e63;
+    }
+
+    /* باقي الأنماط تبقى كما هي */
+
+    .btn-refill {
+      background: var(--refill-color);
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <!-- الهيكل الأساسي يبقى كما هو -->
+  <!-- ... -->
+
+  <script>
+    // إضافة خيار Refill إلى قائمة الخامات
+    document.getElementById('machineType').addEventListener('change', function() {
+      const materialSelect = document.getElementById('materialType');
+      const machineType = this.value;
+      
+      // مسح الخيارات الحالية
+      materialSelect.innerHTML = '';
+      
+      // إضافة الخيارات المناسبة بناءً على نوع الماكينة
+      if (machineType === 'cnc') {
+        materialSelect.innerHTML = `
+          <option value="wood">خشب</option>
+          <option value="refill">Refill خشب</option>
+          <option value="acrylic">أكريليك</option>
+          <option value="aluminum">ألومنيوم</option>
+          <option value="steel">صلب</option>
+        `;
+      } else if (machineType === 'laser') {
+        materialSelect.innerHTML = `
+          <option value="wood">خشب</option>
+          <option value="acrylic">أكريليك</option>
+          <option value="leather">جلد</option>
+          <option value="fabric">قماش</option>
+        `;
+      } else if (machineType === '3dprinter') {
+        materialSelect.innerHTML = `
+          <option value="pla">PLA (بلاستيك)</option>
+          <option value="abs">ABS (بلاستيك)</option>
+          <option value="petg">PETG (بلاستيك)</option>
+          <option value="tpu">TPU (مطاطي)</option>
+        `;
+      }
+    });
+
+    // دالة محسنة لتوليد G-code تعتمد على الحواف فقط
+    async function generateEdgeBasedGcode() {
+      if (!edgesImageData) {
+        showNotification('يجب كشف حواف الصورة أولاً', true);
+        return '';
+      }
+
+      const machineType = document.getElementById('machineType').value;
+      const materialType = document.getElementById('materialType').value;
+      let feedRate = parseInt(document.getElementById('feedRate').value);
+      let spindleSpeed = parseInt(document.getElementById('spindleSpeed').value);
+      let cutDepth = parseFloat(document.getElementById('cutDepth').value);
+      const gcodePrecision = document.getElementById('gcodePrecision').value;
+      const optimizePaths = document.getElementById('optimizePaths').checked;
+      
+      // إعدادات خاصة بـ Refill خشب
+      if (materialType === 'refill') {
+        feedRate = 2000; // زيادة سرعة التغذية لـ Refill
+        spindleSpeed = 12000; // زيادة سرعة المغزل لـ Refill
+        cutDepth = 5; // زيادة عمق القطع لـ Refill
+      }
+      
+      showNotification('جاري توليد G-code بناءً على الحواف...', false, 'analysis');
+      updateProgress(10);
+      
+      const width = edgesCanvas.width;
+      const height = edgesCanvas.height;
+      const edgeData = new Uint8ClampedArray(width * height);
+      
+      // تحويل بيانات الصورة إلى مصفوفة حواف
+      for (let i = 0; i < edgesImageData.data.length; i += 4) {
+        edgeData[i/4] = edgesImageData.data[i] > 128 ? 255 : 0;
+      }
+      
+      updateProgress(30);
+      
+      // استخراج نقاط الحواف فقط
+      const edgePoints = extractEdgePoints(edgeData, width, height, cutDepth);
+      updateProgress(60);
+      
+      // تحسين المسارات لتقليل وقت القطع
+      const optimizedPaths = optimizePaths ? optimizeToolpaths(edgePoints) : edgePoints;
+      updateProgress(80);
+      
+      // توليد G-code
+      let gcode = `; G-code generated by CNC AI - Edge Based\n`;
+      gcode += `; Machine: ${machineType}\n`;
+      gcode += `; Material: ${materialType}\n`;
+      gcode += `; Feed rate: ${feedRate} mm/min\n`;
+      gcode += `; Spindle speed: ${spindleSpeed} RPM\n`;
+      gcode += `; Cut depth: ${cutDepth} mm\n`;
+      gcode += `; Optimized: ${optimizePaths}\n`;
+      gcode += `; Total points: ${optimizedPaths.length}\n\n`;
+      
+      gcode += `G21 ; Set units to millimeters\n`;
+      gcode += `G90 ; Absolute positioning\n`;
+      gcode += `G0 Z5 ; Lift spindle\n`;
+      gcode += `M3 S${spindleSpeed} ; Spindle on\n`;
+      gcode += `G4 P2 ; Wait for spindle to reach speed\n\n`;
+      
+      gcode += `; Start cutting path - Edge Based\n`;
+      gcode += `G0 X${optimizedPaths[0].x.toFixed(3)} Y${optimizedPaths[0].y.toFixed(3)} ; Move to start position\n`;
+      gcode += `G1 Z-${cutDepth.toFixed(3)} F${feedRate/2} ; Plunge to cut depth\n`;
+      
+      // إضافة أوامر الحركة
+      for (let i = 0; i < optimizedPaths.length; i++) {
+        const point = optimizedPaths[i];
+        gcode += `G1 X${point.x.toFixed(3)} Y${point.y.toFixed(3)} F${feedRate}\n`;
+      }
+      
+      gcode += `\nG0 Z5 ; Lift spindle\n`;
+      gcode += `M5 ; Spindle off\n`;
+      gcode += `G0 X0 Y0 ; Return to home\n`;
+      gcode += `M30 ; End program\n`;
+      
+      updateProgress(100);
+      return gcode;
+    }
+
+    // دالة محسنة لاستخراج نقاط الحواف
+    function extractEdgePoints(edgeData, width, height, cutDepth) {
+      const points = [];
+      const threshold = parseInt(edgeThreshold.value);
+      
+      // استخدام خوارزمية متقدمة لاستخراج الحواف الرئيسية فقط
+      for (let y = 0; y < height; y += 2) {
+        for (let x = 0; x < width; x += 2) {
+          const idx = y * width + x;
+          if (edgeData[idx] > threshold) {
+            // التحقق من أن النقطة هي جزء من حافة رئيسية وليست ضوضاء
+            if (isMainEdge(edgeData, width, height, x, y)) {
+              points.push({
+                x: (x / width) * 100 - 50,
+                y: (y / height) * 100 - 50,
+                z: -cutDepth
+              });
+            }
+          }
+        }
+      }
+      
+      return points;
+    }
+
+    // دالة للتحقق إذا كانت النقطة جزءًا من حافة رئيسية
+    function isMainEdge(edgeData, width, height, x, y) {
+      const idx = y * width + x;
+      let edgeStrength = 0;
+      
+      // حساب قوة الحافة بناءً على الجوار
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          
+          const newX = x + dx;
+          const newY = y + dy;
+          
+          if (newX >= 0 && newX < width && newY >= 0 && newY < height) {
+            const newIdx = newY * width + newX;
+            if (edgeData[newIdx] > 0) {
+              edgeStrength++;
+            }
+          }
+        }
+      }
+      
+      // إذا كان للنقطة جيران كافٍ، تعتبر حافة رئيسية
+      return edgeStrength >= 4;
+    }
+
+    // دالة محسنة لتحسين المسارات
+    function optimizeToolpaths(points) {
+      if (points.length <= 1) return points;
+      
+      // تقسيم النقاط إلى مجموعات متصلة
+      const groups = groupConnectedPoints(points);
+      
+      // تحسين كل مجموعة على حدة
+      const optimizedPaths = [];
+      for (const group of groups) {
+        if (group.length > 0) {
+          // استخدام خوارزمية أقصر مسار لكل مجموعة
+          const optimizedGroup = optimizeGroup(group);
+          optimizedPaths.push(...optimizedGroup);
+        }
+      }
+      
+      return optimizedPaths;
+    }
+
+    // دالة لتجميع النقاط المتصلة
+    function groupConnectedPoints(points) {
+      const groups = [];
+      const visited = new Set();
+      const distanceThreshold = 5; // مسافة الحد الأقصى للاتصال
+      
+      for (let i = 0; i < points.length; i++) {
+        if (!visited.has(i)) {
+          const group = [points[i]];
+          visited.add(i);
+          
+          // البحث عن النقاط المتصلة
+          let foundNew = true;
+          while (foundNew) {
+            foundNew = false;
+            for (let j = 0; j < points.length; j++) {
+              if (!visited.has(j)) {
+                const lastPoint = group[group.length - 1];
+                const distance = Math.sqrt(
+                  Math.pow(lastPoint.x - points[j].x, 2) + 
+                  Math.pow(lastPoint.y - points[j].y, 2)
+                );
+                
+                if (distance <= distanceThreshold) {
+                  group.push(points[j]);
+                  visited.add(j);
+                  foundNew = true;
+                }
+              }
+            }
+          }
+          
+          groups.push(group);
+        }
+      }
+      
+      return groups;
+    }
+
+    // دالة لتحسين مجموعة نقاط
+    function optimizeGroup(points) {
+      if (points.length <= 1) return points;
+      
+      // استخدام خوارزمية أقصر مسار (تبسيط لخوارزمية TSP)
+      const optimized = [points[0]];
+      const remaining = points.slice(1);
+      
+      while (remaining.length > 0) {
+        const lastPoint = optimized[optimized.length - 1];
+        let closestIdx = 0;
+        let minDist = Infinity;
+        
+        for (let i = 0; i < remaining.length; i++) {
+          const dist = Math.sqrt(
+            Math.pow(lastPoint.x - remaining[i].x, 2) + 
+            Math.pow(lastPoint.y - remaining[i].y, 2)
+          );
+          
+          if (dist < minDist) {
+            minDist = dist;
+            closestIdx = i;
+          }
+        }
+        
+        optimized.push(remaining[closestIdx]);
+        remaining.splice(closestIdx, 1);
+      }
+      
+      return optimized;
+    }
+
+    // تعديل دالة توليد G-code لاستخدام الطريقة الجديدة
+    async function generateGcode() {
+      if (!heightMapData) {
+        showNotification('يجب تحميل صورة أولاً', true);
+        return;
+      }
+
+      const materialType = document.getElementById('materialType').value;
+      const useEdges = document.getElementById('useEdges').checked;
+      
+      gcodeOutput.textContent = "⏳ جاري توليد G-code...";
+      progressContainer.style.display = 'block';
+      
+      try {
+        let gcode;
+        
+        // استخدام الطريقة المناسبة بناءً على الإعدادات
+        if (useEdges || materialType === 'refill') {
+          gcode = await generateEdgeBasedGcode();
+        } else {
+          gcode = await generateRealGcode();
+        }
+        
+        generatedGcode = gcode;
+        gcodeOutput.textContent = gcode;
+        
+        // عرض إحصائيات G-code
+        displayGcodeStats(gcode);
+        
+        // تحديث معاينة المسارات
+        updatePathPreview();
+        
+        showNotification('تم توليد G-code بنجاح', false, 'ai');
+      } catch (error) {
+        console.error('Error generating G-code:', error);
+        showNotification('فشل في توليد G-code', true);
+      }
+    }
+
+    // إضافة زر خاص لتوليد G-code بناءً على الحواف فقط
+    function addEdgeBasedButton() {
+      const actionButtons = document.querySelector('.action-buttons');
+      const edgeButton = document.createElement('button');
+      edgeButton.className = 'btn btn-refill';
+      edgeButton.innerHTML = '<span>⚡</span> توليد G-code للحواف فقط';
+      edgeButton.onclick = generateEdgeBasedGcode;
+      actionButtons.appendChild(edgeButton);
+    }
+
+    // استدعاء الدالة عند تحميل الصفحة
+    window.addEventListener('load', function() {
+      addEdgeBasedButton();
+      
+      // إضافة إعدادات خاصة بـ Refill
+      const materialSettings = document.querySelector('.settings-group:nth-child(2)');
+      const refillSettings = document.createElement('div');
+      refillSettings.className = 'form-group';
+      refillSettings.innerHTML = `
+        <label for="refillDepth">عمق الـ Refill (mm)</label>
+        <input type="number" id="refillDepth" value="5" step="0.1">
+      `;
+      materialSettings.appendChild(refillSettings);
+    });
+  </script>
+</body>
+</html>
