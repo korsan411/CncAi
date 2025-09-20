@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CNC AI - النسخة المتطورة مع Top View</title>
   <style>
+    /* أنماط CSS (نفسها كما في الكود الأصلي) */
     :root {
       --primary-color: #4a90e2;
       --secondary-color: #67b0f5;
@@ -786,9 +787,8 @@
           </button>
           <div class="download-options">
             <select id="fileExtension">
-              <option value=".gcode.txt" selected>.gcode.txt (افتراضي)</option>
+              <option value=".gcode" selected>.gcode (افتراضي)</option>
               <option value=".nc">.nc</option>
-              <option value=".gcode">.gcode</option>
               <option value=".txt">.txt</option>
             </select>
             <button class="btn btn-secondary" onclick="downloadGcode()">
@@ -1493,7 +1493,7 @@
       for (let y = 0; y < height; y += resolution) {
         for (let x = 0; x < width; x += resolution) {
           const idx = Math.floor(y) * width + Math.floor(x);
-          if (idx < heightData.length * width) {
+          if (idx < heightData.length) {
             const pixelValue = heightData[Math.floor(y)][Math.floor(x)] || 0;
             // تحويل قيمة البيكسل إلى عمق قطع (القيم الأغمق = قطع أعمق)
             const depth = (1 - pixelValue) * cutDepth;
@@ -1537,7 +1537,11 @@
       
       let points = [];
       
-      if (useEdges && edgesImageData && gcodeType === 'edges') {
+      if (gcodeType === 'edges') {
+        if (!edgesImageData) {
+          showNotification('يجب كشف حواف الصورة أولاً', true);
+          return '';
+        }
         // استخدام حواف الصورة لتوليد المسارات
         const width = edgesCanvas.width;
         const height = edgesCanvas.height;
@@ -1550,14 +1554,25 @@
         points = extractEdgePoints(edgeData, width, height, cutDepth);
         updateProgress(50);
       } else if (gcodeType === 'heatmap' || gcodeType === '3dmodel') {
-        // استخدام طريقة الارتفاع التقليدية
-        const heightData = await processImageWithAI(originalImageData);
-        updateProgress(50);
+        // استخدام خريطة الارتفاع
+        const width = heightMapData.width;
+        const height = heightMapData.height;
+        const data = heightMapData.data;
         
-        const width = canvas2d.width;
-        const height = canvas2d.height;
+        // تحويل البيانات إلى مصفوفة ثنائية الأبعاد للارتفاعات
+        const heightData = [];
+        for (let y = 0; y < height; y++) {
+          const row = [];
+          for (let x = 0; x < width; x++) {
+            const idx = (y * width + x) * 4;
+            const brightness = 0.34 * data[idx] + 0.5 * data[idx+1] + 0.16 * data[idx+2];
+            row.push(brightness / 255); // تسوية بين 0 و 1
+          }
+          heightData.push(row);
+        }
         
         points = extractHeightPoints(heightData, width, height, cutDepth, resolution);
+        updateProgress(50);
       } else {
         showNotification('نوع توليد G-code غير معروف', true);
         return '';
