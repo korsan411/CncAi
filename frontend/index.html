@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CNC AI - النسخة المتطورة مع Top View</title>
+  <style>
+    /* أنماط CSS الحالية (نفسها) */
+    :root {
+      --primary-color: #4a90e2;
+      --secondary-color: #67b0f5;
+      --bg-color: #f8f9fa;
+      --text-color: #212529;
+      --card-bg: #ffffff;
+      --border-color: #dee2e6;
+      --header-bg: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+      --header-text: #ffffff;
+      --button-bg: #e9ecef;
+      --button-hover: #dee2e6;
+      --success-color: #28a745;
+      --warning-color: #ffc107;
+      --error-color: #dc3545;
+      --ai-color: #9c27b0;
+      --wood-color: #8b4513;
+      --tab-inactive: #e9ecef;
+      --tab-active: var(--primary-color);
+    }
+
+    body.dark {
+      --bg-color: #121212;
+      --text-color: #e0e0e0;
+      --card-bg: #1e1e1e;
+      --border-color: #444;
+      --header-bg: linear-gradient(90deg, #2c2c2c, #444);
+      --button-bg: #333;
+      --button-hover: #555;
+      --ai-color: #ba68c8;
+      --wood-color: #a0522d;
+      --tab-inactive: #333;
+      --tab-active: #4a90e2;
+    }
+
+    /* باقي الأنماط تبقى كما هي */
+    /* ... */
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-content">
+      <h1><span>🛠️</span> CNC AI - النسخة المحسنة</h1>
+      <div class="controls">
+        <button id="themeToggle">🌙</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- التابات -->
+    <div class="tabs">
+      <div class="tab active" data-tab="preview">معاينة الصورة</div>
+      <div class="tab" data-tab="gcode">G-code إعدادات</div>
+      <div class="tab" data-tab="simulation">محاكاة G-code</div>
+    </div>
+
+    <!-- تاب المعاينة -->
+    <div class="tab-content active" id="preview-tab">
+      <section class="upload-section">
+        <h2 class="upload-title">📤 تحميل الصورة</h2>
+        <div class="file-upload">
+          <input type="file" id="fileInput" accept="image/*">
+          <label for="fileInput"><span>📁</span> اختر صورة</label>
+          <div class="file-name" id="fileName">لم يتم اختيار أي صورة بعد</div>
+        </div>
+
+        <div class="progress-container" id="progressContainer">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
+
+        <div class="image-enhancement">
+          <div class="enhancement-btn" onclick="applyEnhancement('brightness')">🔆 سطوع</div>
+          <div class="enhancement-btn" onclick="applyEnhancement('contrast')">🌓 تباين</div>
+          <div class="enhancement-btn" onclick="applyEnhancement('sharpen')">🔍 حدة</div>
+          <div class="enhancement-btn" onclick="applyEnhancement('smooth')">🔄 نعومة</div>
+          <div class="enhancement-btn" onclick="applyEnhancement('grayscale')">⚫ تدرج رمادي</div>
+          <div class="enhancement-btn" onclick="applyEnhancement('reset')">🔄 إعادة تعيين</div>
+        </div>
+
+        <div class="edge-detection">
+          <div class="enhancement-btn" onclick="detectEdges('sobel')">🔍 كشف الحواف (Sobel)</div>
+          <div class="enhancement-btn" onclick="detectEdges('canny')">🔍 كشف الحواف (Canny)</div>
+          <div class="enhancement-btn" onclick="detectEdges('laplacian')">🔍 كشف الحواف (Laplacian)</div>
+        </div>
+      </section>
+
+      <div class="previews-container">
+        <!-- الصورة الأصلية -->
+        <div class="preview-block">
+          <h3 class="preview-title">📷 الصورة الأصلية</h3>
+          <div class="preview-content">
+            <canvas id="preview2d"></canvas>
+          </div>
+          <div class="options">
+            <div class="option-group">
+              <label for="startPointX">📍 نقطة البداية X</label>
+              <input type="range" id="startPointX" min="0" max="100" step="1" value="50">
+            </div>
+            <div class="option-group">
+              <label for="startPointY">📍 نقطة البداية Y</label>
+              <input type="range" id="startPointY" min="0" max="100" step="1" value="50">
+            </div>
+            <button class="btn btn-secondary" onclick="selectStartPoint()">تحديد نقطة البداية</button>
+          </div>
+        </div>
+
+        <!-- معاينة 3D -->
+        <div class="preview-block">
+          <h3 class="preview-title">🌀 المعاينة ثلاثية الأبعاد</h3>
+          <div class="preview-content">
+            <div id="preview3d">
+              <div class="loading" id="loading3d">
+                <div class="loading-spinner"></div>
+                <p>جاري تحميل النموذج...</p>
+              </div>
+            </div>
+          </div>
+          <div class="options">
+            <div class="option-group">
+              <label for="rotationSpeed">🔄 سرعة الدوران</label>
+              <input type="range" id="rotationSpeed" min="0" max="0.05" step="0.001" value="0.01">
+            </div>
+            <div class="option-group">
+              <label for="zoomControl">🔍 زوم</label>
+              <input type="range" id="zoomControl" min="50" max="500" step="10" value="200">
+            </div>
+            <div class="option-group">
+              <label for="heightIntensity">📏 شدة الارتفاع</label>
+              <input type="range" id="heightIntensity" min="20" max="200" step="5" value="80">
+            </div>
+          </div>
+        </div>
+
+        <!-- Heatmap -->
+        <div class="preview-block">
+          <h3 class="preview-title">🌈 خريطة الارتفاعات (Heatmap)</h3>
+          <div class="preview-content">
+            <canvas id="heatmap"></canvas>
+          </div>
+          <div class="colormap-controls">
+            <button class="btn btn-secondary" onclick="setColormap('jet')"><span>🌈</span> Jet</button>
+            <button class="btn btn-secondary" onclick="setColormap('hot')"><span>🔥</span> Hot</button>
+            <button class="btn btn-secondary" onclick="setColormap('cool')"><span>❄️</span> Cool</button>
+            <button class="btn btn-secondary" onclick="setColormap('gray')"><span>⚪</span> Gray</button>
+          </div>
+        </div>
+
+        <!-- حواف الصورة -->
+        <div class="preview-block">
+          <h3 class="preview-title">🔍 حواف الصورة</h3>
+          <div class="preview-content">
+            <canvas id="edgesCanvas"></canvas>
+          </div>
+          <div class="options">
+            <div class="option-group">
+              <label for="edgeThreshold">📊 عتبة الحواف</label>
+              <input type="range" id="edgeThreshold" min="1" max="100" step="1" value="50" oninput="updateEdgeDetection()">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- تاب إعدادات G-code -->
+    <div class="tab-content" id="gcode-tab">
+      <div class="ai-options">
+        <h3><span>🤖</span> خيارات الذكاء الاصطناعي</h3>
+        <div class="path-optimization">
+          <div class="optimization-option">
+            <input type="checkbox" id="optimizePaths" checked>
+            <label for="optimizePaths">تحسين المسارات لتقليل وقت القطع</label>
+          </div>
+          <div class="optimization-option">
+            <input type="checkbox" id="smoothEdges" checked>
+            <label for="smoothEdges">تنعيم الحواف للنتائج الأفضل</label>
+          </div>
+          <div class="optimization-option">
+            <input type="checkbox" id="adaptivePrecision">
+            <label for="adaptivePrecision">الدقة التكيفية (تلقائية)</label>
+          </div>
+          <div class="optimization-option">
+            <input type="checkbox" id="useEdges" checked>
+            <label for="useEdges">استخدام حواف الصورة لتوليد المسارات</label>
+          </div>
+          <div class="optimization-option">
+            <input type="checkbox" id="useHeatmap" checked>
+            <label for="useHeatmap">دمج Heatmap مع الحواف</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-panel">
+        <!-- إعدادات الماكينة والخامة والقطع (نفسها) -->
+        <!-- ... -->
+
+        <div class="settings-group">
+          <h3><span>🔧</span> إعدادات G-code</h3>
+          <div class="form-group">
+            <label for="gcodeType">نوع المخرجات</label>
+            <select id="gcodeType">
+              <option value="heatmap">بناءً على Heatmap</option>
+              <option value="3dmodel">بناءً على النموذج ثلاثي الأبعاد</option>
+              <option value="edges">بناءً على حواف الصورة</option>
+              <option value="hybrid">هجين (حواف + Heatmap)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="gcodePrecision">دقة التوليد</label>
+            <select id="gcodePrecision">
+              <option value="low">منخفضة (أسرع)</option>
+              <option value="medium" selected>متوسطة</option>
+              <option value="high">عالية (أبطأ)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="startPointStrategy">استراتيجية نقطة البداية</label>
+            <select id="startPointStrategy">
+              <option value="auto">تلقائي (أقرب نقطة)</option>
+              <option value="manual">يدوي (محدد من المستخدم)</option>
+              <option value="center">من المركز</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="action-buttons">
+          <button class="btn btn-primary" onclick="generateGcode()">
+            <span>⚡</span> توليد G-code
+          </button>
+          <button class="btn btn-secondary" onclick="downloadGcode()">
+            <span>💾</span> حفظ G-code
+          </button>
+          <button class="btn btn-secondary" onclick="simulateGcode()">
+            <span>🔄</span> محاكاة G-code
+          </button>
+        </div>
+
+        <div class="gcode-output" id="gcodeOutput">
+// سيظهر كود G-code هنا بعد التوليد
+// اضغط على "توليد G-code" لبدء عملية التوليد
+        </div>
+      </div>
+    </div>
+
+    <!-- تاب محاكاة G-code (نفسها) -->
+    <!-- ... -->
+  </div>
+
+  <footer>
+    <p>تم التطوير باستخدام Three.js و TensorFlow.js - مشروع CncAI مع معالجة متقدمة للصور</p>
+  </footer>
+
+  <div class="notification" id="notification">تم تحميل الصورة بنجاح!</div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
+  <script>
+    // ============== المتغيرات العامة ==============
+    let startPoint = { x: 0, y: 0 }; // نقطة البداية الافتراضية
+    let isSelectingStartPoint = false;
+
+    // ============== دوال جديدة ==============
+
+    // دالة لتحديد نقطة البداية يدوياً
+    function selectStartPoint() {
+      isSelectingStartPoint = true;
+      showNotification('انقر على الصورة لتحديد نقطة البداية');
+      
+      // إضافة مستمع حدث للنقر على الصورة
+      canvas2d.addEventListener('click', setStartPointHandler);
+      canvas2d.style.cursor = 'crosshair';
+    }
+
+    // معالج حدث تحديد نقطة البداية
+    function setStartPointHandler(event) {
+      if (!isSelectingStartPoint) return;
+      
+      const rect = canvas2d.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      
+      // تحويل الإحداثيات إلى نسبة مئوية
+      startPoint = {
+        x: (x / canvas2d.width) * 100,
+        y: (y / canvas2d.height) * 100
+      };
+      
+      // تحديث عناصر التحكم
+      document.getElementById('startPointX').value = startPoint.x;
+      document.getElementById('startPointY').value = startPoint.y;
+      
+      // رسم دائرة على نقطة البداية
+      drawStartPointMarker(x, y);
+      
+      // إزالة مستمع الأحداث
+      canvas2d.removeEventListener('click', setStartPointHandler);
+      canvas2d.style.cursor = 'default';
+      isSelectingStartPoint = false;
+      
+      showNotification('تم تحديد نقطة البداية بنجاح');
+    }
+
+    // دالة لرسم علامة نقطة البداية على Canvas
+    function drawStartPointMarker(x, y) {
+      ctx2d.save();
+      ctx2d.beginPath();
+      ctx2d.arc(x, y, 10, 0, Math.PI * 2);
+      ctx2d.strokeStyle = '#00ff00';
+      ctx2d.lineWidth = 3;
+      ctx2d.stroke();
+      ctx2d.restore();
+    }
+
+    // دالة لاستخراج نقاط من Heatmap
+    function extractHeatmapPoints(heightData, width, height, cutDepth, resolution) {
+      const points = [];
+      
+      for (let y = 0; y < height; y += resolution) {
+        for (let x = 0; x < width; x += resolution) {
+          const idx = y * width + x;
+          if (idx < heightData.length) {
+            const pixelValue = heightData[idx] / 255; // تطبيع القيمة بين 0 و1
+            // تحويل قيمة البيكسل إلى عمق قطع (القيم الأغمق = قطع أعمق)
+            const depth = (1 - pixelValue) * cutDepth;
+            
+            points.push({
+              x: (x / width) * 100 - 50, // تحويل إلى إحداثيات من -50 إلى 50
+              y: (y / height) * 100 - 50,
+              z: -depth,
+              value: pixelValue // حفظ قيمة البكسل لأغراض الترجيح
+            });
+          }
+        }
+      }
+      
+      return points;
+    }
+
+    // دالة لدمج مسارات الحواف و Heatmap
+    function mergeEdgeAndHeatmapPaths(edgePoints, heatmapPoints, mergeFactor) {
+      if (edgePoints.length === 0) return heatmapPoints;
+      if (heatmapPoints.length === 0) return edgePoints;
+      
+      const mergedPoints = [...edgePoints];
+      
+      // دمج النقاط بناءً على عامل الدمج
+      for (const heatPoint of heatmapPoints) {
+        // البحث عن أقرب نقطة حافة
+        let closestDist = Infinity;
+        let closestPoint = null;
+        
+        for (const edgePoint of edgePoints) {
+          const dist = Math.sqrt(
+            Math.pow(heatPoint.x - edgePoint.x, 2) + 
+            Math.pow(heatPoint.y - edgePoint.y, 2)
+          );
+          
+          if (dist < closestDist) {
+            closestDist = dist;
+            closestPoint = edgePoint;
+          }
+        }
+        
+        // إذا كانت النقطة قريبة بما يكفي، دمجها
+        if (closestDist < 5) { // عتبة القرب
+          const mergedPoint = {
+            x: (heatPoint.x * mergeFactor + closestPoint.x * (1 - mergeFactor)),
+            y: (heatPoint.y * mergeFactor + closestPoint.y * (1 - mergeFactor)),
+            z: (heatPoint.z * mergeFactor + closestPoint.z * (1 - mergeFactor))
+          };
+          mergedPoints.push(mergedPoint);
+        } else {
+          mergedPoints.push(heatPoint);
+        }
+      }
+      
+      return mergedPoints;
+    }
+
+    // دالة لتحديد نقطة البداية بناءً على الاستراتيجية المختارة
+    function determineStartPoint(points, strategy) {
+      if (points.length === 0) return { x: 0, y: 0, z: 0 };
+      
+      if (strategy === 'manual') {
+        // استخدام النقطة المحددة يدوياً وتحويلها إلى إحداثيات النظام
+        return {
+          x: startPoint.x - 50,
+          y: startPoint.y - 50,
+          z: 0
+        };
+      } else if (strategy === 'center') {
+        // البدء من المركز
+        return { x: 0, y: 0, z: 0 };
+      } else {
+        // استراتيجية تلقائية: العثور على أقرب نقطة إلى الأصل
+        let closestPoint = points[0];
+        let minDist = Math.sqrt(
+          Math.pow(points[0].x, 2) + 
+          Math.pow(points[0].y, 2)
+        );
+        
+        for (let i = 1; i < points.length; i++) {
+          const dist = Math.sqrt(
+            Math.pow(points[i].x, 2) + 
+            Math.pow(points[i].y, 2)
+          );
+          
+          if (dist < minDist) {
+            minDist = dist;
+            closestPoint = points[i];
+          }
+        }
+        
+        return closestPoint;
+      }
+    }
+
+    // ============== تعديل دوال موجودة ==============
+
+    // تعديل دالة generateRealGcode لدعم الخيارات الجديدة
+    async function generateRealGcode() {
+      if (!heightMapData || !originalImageData) {
+        showNotification('يجب تحميل صورة أولاً', true);
+        return '';
+      }
+
+      const machineType = document.getElementById('machineType').value;
+      const materialType = document.getElementById('materialType').value;
+      const feedRate = parseInt(document.getElementById('feedRate').value);
+      const spindleSpeed = parseInt(document.getElementById('spindleSpeed').value);
+      const cutDepth = parseFloat(document.getElementById('cutDepth').value);
+      const passDepth = parseFloat(document.getElementById('passDepth').value);
+      const gcodePrecision = document.getElementById('gcodePrecision').value;
+      const gcodeType = document.getElementById('gcodeType').value;
+      const optimizePaths = document.getElementById('optimizePaths').checked;
+      const smoothEdges = document.getElementById('smoothEdges').checked;
+      const useEdges = document.getElementById('useEdges').checked;
+      const useHeatmap = document.getElementById('useHeatmap').checked;
+      const startStrategy = document.getElementById('startPointStrategy').value;
+      
+      // تحديد الدقة بناءً على الإعدادات
+      let resolution = 5; // منخفضة
+      if (gcodePrecision === 'medium') resolution = 3;
+      if (gcodePrecision === 'high') resolution = 1;
+      
+      updateProgress(10);
+      
+      let points = [];
+      let edgePoints = [];
+      let heatmapPoints = [];
+      
+      // معالجة الحواف إذا كانت مفعلة أو إذا كان النوع هجين
+      if (useEdges && edgesImageData && (gcodeType === 'edges' || gcodeType === 'hybrid')) {
+        const width = edgesCanvas.width;
+        const height = edgesCanvas.height;
+        const edgeData = new Uint8ClampedArray(width * height);
+        
+        for (let i = 0; i < edgesImageData.data.length; i += 4) {
+          edgeData[i/4] = edgesImageData.data[i];
+        }
+        
+        edgePoints = extractEdgePoints(edgeData, width, height, cutDepth);
+        updateProgress(30);
+      }
+      
+      // معالجة Heatmap إذا كانت مفعلة أو إذا كان النوع هجين
+      if (useHeatmap && heightMapData && (gcodeType === 'heatmap' || gcodeType === 'hybrid')) {
+        heatmapPoints = extractHeatmapPoints(
+          heightMapData.data, 
+          heightMapData.width, 
+          heightMapData.height, 
+          cutDepth, 
+          resolution
+        );
+        updateProgress(50);
+      }
+      
+      // دمج المسارات بناءً على نوع المخرجات المطلوب
+      if (gcodeType === 'edges') {
+        points = edgePoints;
+      } else if (gcodeType === 'heatmap') {
+        points = heatmapPoints;
+      } else if (gcodeType === 'hybrid') {
+        points = mergeEdgeAndHeatmapPaths(edgePoints, heatmapPoints, 0.5);
+      }
+      
+      updateProgress(70);
+      
+      // إذا لم يكن هناك نقاط، نستخدم معالجة الصورة بالذكاء الاصطناعي كخيار احتياطي
+      if (points.length === 0) {
+        showNotification('جاري استخدام الذكاء الاصطناعي لاستخراج المعالم...', false, 'ai');
+        const heightData = await processImageWithAI(originalImageData);
+        
+        const width = canvas2d.width;
+        const height = canvas2d.height;
+        
+        for (let y = 0; y < height; y += resolution) {
+          for (let x = 0; x < width; x += resolution) {
+            const idx = Math.floor(y) * width + Math.floor(x);
+            if (idx < heightData.length * width) {
+              const pixelValue = heightData[Math.floor(y)][Math.floor(x)] || 0;
+              const depth = (1 - pixelValue) * cutDepth;
+              
+              points.push({
+                x: (x / width) * 100 - 50,
+                y: (y / height) * 100 - 50,
+                z: -depth
+              });
+            }
+          }
+        }
+      }
+      
+      // تحديد نقطة البداية
+      const startPoint = determineStartPoint(points, startStrategy);
+      
+      // تحسين المسارات إذا كان الخيار مفعلاً
+      const toolPaths = optimizePaths ? optimizeToolpaths(points, startPoint) : points;
+      updateProgress(80);
+      
+      // توليد G-code
+      let gcode = `; G-code generated by CNC AI with TensorFlow.js\n`;
+      gcode += `; Machine: ${machineType}\n`;
+      gcode += `; Material: ${materialType}\n`;
+      gcode += `; Feed rate: ${feedRate} mm/min\n`;
+      gcode += `; Spindle speed: ${spindleSpeed} RPM\n`;
+      gcode += `; Start point: X${startPoint.x.toFixed(2)} Y${startPoint.y.toFixed(2)}\n`;
+      gcode += `; Total points: ${toolPaths.length}\n\n`;
+      
+      gcode += `G21 ; Set units to millimeters\n`;
+      gcode += `G90 ; Absolute positioning\n`;
+      gcode += `G0 Z5 ; Lift spindle\n`;
+      gcode += `M3 S${spindleSpeed} ; Spindle on\n`;
+      gcode += `G4 P2 ; Wait for spindle to reach speed\n\n`;
+      
+      gcode += `; Move to start position\n`;
+      gcode += `G0 X${startPoint.x.toFixed(3)} Y${startPoint.y.toFixed(3)} Z5\n`;
+      gcode += `G1 Z${startPoint.z.toFixed(3)} F${feedRate/2}\n\n`;
+      
+      gcode += `; Start cutting path\n`;
+      
+      // إضافة أوامر الحركة
+      for (let i = 0; i < toolPaths.length; i++) {
+        const point = toolPaths[i];
+        gcode += `G1 X${point.x.toFixed(3)} Y${point.y.toFixed(3)} Z${point.z.toFixed(3)} F${feedRate}\n`;
+      }
+      
+      gcode += `\nG0 Z5 ; Lift spindle\n`;
+      gcode += `M5 ; Spindle off\n`;
+      gcode += `G0 X0 Y0 ; Return to home\n`;
+      gcode += `M30 ; End program\n`;
+      
+      updateProgress(100);
+      return gcode;
+    }
+
+    // تعديل دالة optimizeToolpaths لقبول نقطة البداية
+    function optimizeToolpaths(points, startPoint) {
+      if (points.length <= 1) return points;
+      
+      // إذا كانت هناك نقطة بداية محددة، نبدأ منها
+      const optimized = [startPoint];
+      const remaining = points.filter(p => p !== startPoint);
+      
+      // إذا لم تكن نقطة البداية موجودة في النقاط، نضيفها
+      if (!points.includes(startPoint)) {
+        remaining.unshift(startPoint);
+      }
+      
+      // استخدام خوارزمية أقرب الجار لتحسين المسار
+      while (remaining.length > 0) {
+        const lastPoint = optimized[optimized.length - 1];
+        let closestIdx = 0;
+        let minDist = Infinity;
+        
+        for (let i = 0; i < remaining.length; i++) {
+          const dist = Math.sqrt(
+            Math.pow(lastPoint.x - remaining[i].x, 2) + 
+            Math.pow(lastPoint.y - remaining[i].y, 2) +
+            Math.pow(lastPoint.z - remaining[i].z, 2) * 0.2 // وزن أقل للبعد Z
+          );
+          
+          if (dist < minDist) {
+            minDist = dist;
+            closestIdx = i;
+          }
+        }
+        
+        optimized.push(remaining[closestIdx]);
+        remaining.splice(closestIdx, 1);
+      }
+      
+      return optimized;
+    }
+
+    // ============== باقي الدوال تبقى كما هي مع تعديلات طفيفة ==============
+    // ... (الدوال الأخرى تبقى كما هي)
+
+    // تحديث خيارات واجهة المستخدم عند تغيير نوع G-code
+    document.getElementById('gcodeType').addEventListener('change', function() {
+      const gcodeType = this.value;
+      const useEdges = document.getElementById('useEdges');
+      const useHeatmap = document.getElementById('useHeatmap');
+      
+      if (gcodeType === 'edges') {
+        useEdges.checked = true;
+        useHeatmap.checked = false;
+      } else if (gcodeType === 'heatmap') {
+        useEdges.checked = false;
+        useHeatmap.checked = true;
+      } else if (gcodeType === 'hybrid') {
+        useEdges.checked = true;
+        useHeatmap.checked = true;
+      }
+    });
+
+    // تحديث عناصر التحكم بنقطة البداية عند تحميل الصورة
+    // إضافة هذا في جزء تحميل الصورة
+    fileInput.addEventListener('change', (e) => {
+      // الكود الأصلي لتحميل الصورة
+      // ...
+      
+      // إعادة تعيين نقطة البداية إلى المركز
+      startPoint = { x: 50, y: 50 };
+      document.getElementById('startPointX').value = 50;
+      document.getElementById('startPointY').value = 50;
+    });
+
+    // تهيئة نقطة البداية عند تحميل الصفحة
+    window.addEventListener('load', function() {
+      startPoint = { x: 50, y: 50 };
+      document.getElementById('startPointX').value = 50;
+      document.getElementById('startPointY').value = 50;
+    });
+  </script>
+</body>
+</html>
