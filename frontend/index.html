@@ -820,7 +820,7 @@
           <div class="enhancement-btn" onclick="applyEnhancement('sharpen')">🔍 حدة</div>
           <div class="enhancement-btn" onclick="applyEnhancement('smooth')">🔄 نعومة</div>
           <div class="enhancement-btn" onclick="applyEnhancement('grayscale')">⚫ تدرج رمادي</div>
-          <div class="enhancement-btn极速onclick="applyEnhancement('reset')">🔄 إعادة تعيين</div>
+          <div class="enhancement-btn" onclick="applyEnhancement('reset')">🔄 إعادة تعيين</div>
         </div>
 
         <div class="edge-detection">
@@ -881,7 +881,7 @@
         </div>
 
         <!-- حواف الصورة -->
-        <极速 class="preview-block">
+        <div class="preview-block">
           <h3 class="preview-title">🔍 حواف الصورة</h3>
           <div class="preview-content">
             <canvas id="edgesCanvas"></canvas>
@@ -898,7 +898,7 @@
         <div class="preview-block">
           <h3 class="preview-title">✏️ تحديد المناطق يدوياً</h3>
           <div class="preview-content">
-            <div class极速drawing-canvas-container">
+            <div class="drawing-canvas-container">
               <canvas id="drawingCanvas"></canvas>
             </div>
           </div>
@@ -1010,7 +1010,7 @@
           <div class="form-group">
             <label for="spindleSpeed">سرعة المغزل (RPM)</label>
             <input type="number" id="spindleSpeed" value="10000">
-          </极速div>
+          </div>
           <div class="form-group">
             <label for="cutDepth">عمق القطع (mm)</label>
             <input type="number" id="cutDepth" value="2" step="0.1">
