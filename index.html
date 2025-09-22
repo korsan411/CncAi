@@ -977,7 +977,7 @@
           </div>
           <div class="optimization-option">
             <input type="checkbox" id="useEdges" checked>
-            <label for="use极速">استخدام حواف الصورة لتوليد المسارات</label>
+            <label for="useEdges">استخدام حواف الصورة لتوليد المسارات</label>
           </div>
           <div class="optimization-option">
             <input type="checkbox" id="useHeatmap" checked>
@@ -1359,7 +1359,7 @@
     const analysisPanel = document.getElementById('analysisPanel');
     const analysisResults = document.getElementById('analysisResults');
     const gcodePreview = document.getElementById('gcodePreview');
-    const gcodeStats = document.getElementById('g极速Stats');
+    const gcodeStats = document.getElementById('gcodeStats');
     const woodStages = document.getElementById('woodStages');
     const pathSvg = document.getElementById('pathSvg');
     const advancedPathSvg = document.getElementById('advancedPathSvg');
@@ -1463,7 +1463,7 @@
         document.getElementById('zSpeed').value = settings.zSpeed;
         document.getElementById('acceleration').value = settings.acceleration;
         document.getElementById('tolerance').value = settings.tolerance;
-        document.getElementById('stepover').极速 = settings.stepover;
+        document.getElementById('stepover').value = settings.stepover;
         document.getElementById('resolution').value = settings.resolution;
         document.getElementById('retractDistance').value = settings.retractDistance;
         document.getElementById('retractSpeed').value = settings.retractSpeed;
@@ -1698,7 +1698,7 @@
                 let sum = 0;
                 for (let ky = -1; ky <= 1; ky++) {
                   for (let kx = -1; kx <= 1; kx++) {
-                    const idx = ((y + ky) * canvas.width + (x + k极速)) * 4 + c;
+                    const idx = ((y + ky) * canvas.width + (x + kx)) * 4 + c;
                     const weight = weights[(ky + 1) * 3 + (kx + 1)];
                     sum += tempData[idx] * weight;
                   }
@@ -1742,7 +1742,7 @@
 
       ctx.putImageData(imageData, 0, 0);
       ctx2d.clearRect(0, 0, canvas2d.width, canvas2d.height);
-      ctx2d.drawImage(c极速nvas, 0, 0);
+      ctx2d.drawImage(canvas, 0, 0);
       
       // إنشاء خريطة ارتفاع جديدة من الصورة المحسنة
       createHeightMapFromCanvas(canvas);
@@ -1775,7 +1775,7 @@
       const imgData = tctx.getImageData(0, 0, w, h).data;
 
       // حفظ بيانات الارتفاع للاستخدام لاحقاً في توليد G-code
-      heightMap极速 = {
+      heightMap = {
         data: new Uint8Array(imgData),
         width: w,
         height: h
@@ -1854,7 +1854,7 @@
         b = Math.floor(255 * Math.min(1, 3*value-2));
         b = Math.max(b,0);
       } else if(map === 'cool'){
-        r = Math.floor极速255 * value);
+        r = Math.floor(255 * value);
         g = Math.floor(255 * (1-value));
         b = 255;
       } else if(map === 'gray'){
