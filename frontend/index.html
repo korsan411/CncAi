@@ -1377,17 +1377,25 @@
     const heatmapWeightValue = document.getElementById('heatmapWeightValue');
     const edgesWeightValue = document.getElementById('edgesWeightValue');
     const gcodeFilename = document.getElementById('gcodeFilename');
-
-    // إعداد Three.js للمعاينة
-    let scene, camera, renderer, mesh;
-    
-    function initThreeJS() {
-      try {
+// إصلاح دالة initThreeJS
+function initThreeJS() {
+    try {
         scene = new THREE.Scene();
-        scene.background = new THREE.Color(0xf0f0f0);
+        // استخدام لون خلفية متوافق مع الوضع الليلي/النهاري
+        scene.background = new THREE.Color(getComputedStyle(document.body).getPropertyValue('--bg-color') || 0xf0f0f0);
+        
         camera = new THREE.PerspectiveCamera(45, preview3d.offsetWidth / preview3d.offsetHeight, 0.1, 1000);
-        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer = new THREE.WebGLRenderer({ 
+            antialias: true, 
+            alpha: true,
+            preserveDrawingBuffer: true // إضافة هذا السطر
+        });
         renderer.setSize(preview3d.offsetWidth, preview3d.offsetHeight);
+        
+        // تنظيف المحتوى القديم إذا وجد
+        while (preview3d.firstChild) {
+            preview3d.removeChild(preview3d.firstChild);
+        }
         preview3d.appendChild(renderer.domElement);
 
         // إضاءة المشاهد
@@ -1396,53 +1404,192 @@
         
         // دورة الرسوم المتحركة
         function animate() {
-          requestAnimationFrame(animate);
-          if (mesh) mesh.rotation.y += rotationSpeed;
-          renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+            if (mesh) mesh.rotation.y += rotationSpeed;
+            renderer.render(scene, camera);
         }
         animate();
-      } catch (error) {
+    } catch (error) {
         console.error('Error initializing Three.js:', error);
         showNotification('خطأ في تهيئة المحرك ثلاثي الأبعاد', true);
-      }
     }
+}
 
-    // إضاءة المشاهد
-    function setupLights(scene) {
-      const ambientLight = new THREE.AmbientLight(0x404040, 1);
-      scene.add(ambientLight);
-      
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-      directionalLight.position.set(1, 1, 1);
-      scene.add(directionalLight);
-      
-      const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
-      directionalLight2.position.set(-1, -1, -1);
-      scene.add(directionalLight2);
-    }
-
-    let rotationSpeed = 0.01;
-    let currentColormap = 'jet';
-    let heightFactor = 80;
-    let heightMapData = null;
-    let originalImageData = null;
-    let edgesImageData = null;
-    let generatedGcode = '';
-    let analysisData = null;
-    let toolPaths = [];
-    let advancedToolPaths = [];
-    let stageGcodes = {
-      roughing: '',
-      finishing: '',
-      smoothing: ''
+// إصلاح حدث تحميل الصورة
+fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    fileName.textContent = file.name;
+    
+    // إظهار مؤشر التحميل
+    loading3d.style.display = 'flex';
+    
+    const img = new Image();
+    img.onload = () => {
+        // تحديد أبعاد مناسبة للعرض
+        const maxWidth = 800;
+        const maxHeight = 600;
+        let { width, height } = img;
+        
+        // تغيير الحجم إذا كانت الصورة كبيرة جداً
+        if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width = Math.floor(width * ratio);
+            height = Math.floor(height * ratio);
+        }
+        
+        // تعيين أبعاد الـ canvas
+        canvas2d.width = width;
+        canvas2d.height = height;
+        edgesCanvas.width = width;
+        edgesCanvas.height = height;
+        drawingCanvas.width = width;
+        drawingCanvas.height = height;
+        
+        // رسم الصورة مع الحفاظ على نسبة العرض
+        ctx2d.clearRect(0, 0, canvas2d.width, canvas2d.height);
+        ctx2d.drawImage(img, 0, 0, width, height);
+        
+        // حفظ بيانات الصورة الأصلية
+        originalImageData = ctx2d.getImageData(0, 0, canvas2d.width, canvas2d.height);
+        
+        // تهيئة لوحة الرسم
+        initDrawingCanvas();
+        
+        // إنشاء خريطة الارتفاع
+        createHeightMap(img);
+        
+        // إخفاء مؤشر التحميل
+        setTimeout(() => {
+            loading3d.style.display = 'none';
+        }, 500);
+        
+        showNotification('تم تحميل الصورة بنجاح');
     };
+    
+    img.onerror = () => {
+        loading3d.style.display = 'none';
+        showNotification('خطأ في تحميل الصورة', true);
+    };
+    
+    img.src = URL.createObjectURL(file);
+});
 
-    // متغيرات للرسم اليدوي
-    let isDrawing = false;
-    let manualSelectionData = null;
-    let lastX = 0;
-    let lastY = 0;
+// إصلاح دالة createHeightMap
+function createHeightMap(image) {
+    try {
+        const w = Math.min(image.width, 200); // زيادة الدقة قليلاً
+        const h = Math.min(image.height, 200);
+        
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = w; 
+        tempCanvas.height = h;
+        const tctx = tempCanvas.getContext('2d');
+        tctx.drawImage(image, 0, 0, w, h);
+        const imgData = tctx.getImageData(0, 0, w, h).data;
 
+        // حفظ بيانات الارتفاع بشكل صحيح
+        heightMapData = {
+            data: new Uint8Array(imgData),
+            width: w,
+            height: h
+        };
+
+        // إنشاء شبكة 3D
+        const geometry = new THREE.PlaneGeometry(100, 100, w-1, h-1);
+        let min = 255, max = 0;
+        const colors = [];
+        const vertices = [];
+        
+        for (let i = 0; i < geometry.attributes.position.count; i++) {
+            const stride = i * 3;
+            const x = i % w;
+            const y = Math.floor(i / w);
+            const idx = (y * w + x) * 4;
+            
+            if (idx >= imgData.length) continue;
+            
+            const brightness = 0.34 * imgData[idx] + 0.5 * imgData[idx+1] + 0.16 * imgData[idx+2];
+            min = Math.min(min, brightness);
+            max = Math.max(max, brightness);
+            
+            // تحديث ارتفاع الرأس
+            geometry.attributes.position.array[stride + 2] = (brightness / 255) * (heightFactor / 10);
+
+            const norm = (brightness - min) / (max - min || 1);
+            const color = getHeatColor(norm, currentColormap);
+            colors.push(color.r/255, color.g/255, color.b/255);
+        }
+        
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        geometry.computeVertexNormals();
+
+        const material = new THREE.MeshLambertMaterial({ 
+            vertexColors: true, 
+            side: THREE.DoubleSide,
+            wireframe: false
+        });
+        
+        // إزالة النموذج القديم إذا كان موجوداً
+        if (mesh) {
+            scene.remove(mesh);
+            mesh.geometry.dispose();
+            mesh.material.dispose();
+        }
+        
+        mesh = new THREE.Mesh(geometry, material);
+        mesh.rotation.x = -Math.PI / 2; // تدوير لجعلها أفقية
+        scene.add(mesh);
+
+        // رسم خريطة الحرارة
+        drawHeatmap(imgData, w, h, min, max);
+        
+    } catch (error) {
+        console.error('Error creating height map:', error);
+        showNotification('خطأ في إنشاء النموذج ثلاثي الأبعاد', true);
+    }
+}
+
+// إضافة دالة لمعالجة تغيير حجم النافذة
+window.addEventListener('resize', () => {
+    if (renderer && preview3d) {
+        const width = preview3d.offsetWidth;
+        const height = preview3d.offsetHeight;
+        
+        renderer.setSize(width, height);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+    }
+});
+
+// إصلاح دالة getHeatColor - إضافة معالجة للقيم غير الصحيحة
+function getHeatColor(value, map) {
+    // التأكد من أن القيمة بين 0 و1
+    value = Math.max(0, Math.min(1, value));
+    
+    let r=0, g=0, b=0;
+    
+    if(map === 'jet'){ 
+        r = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-3),1),0));
+        g = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-2),1),0));
+        b = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-1),1),0));
+    } else if(map === 'hot'){ 
+        r = Math.floor(255 * Math.min(1, 3*value));
+        g = Math.floor(255 * Math.min(1, 3*value-1));
+        g = Math.max(g,0);
+        b = Math.floor(255 * Math.min(1, 3*value-2));
+        b = Math.max(b,0);
+    } else if(map === 'cool'){
+        r = Math.floor(255 * value);
+        g = Math.floor(255 * (1-value));
+        b = 255;
+    } else if(map === 'gray'){
+        r = g = b = Math.floor(255 * value);
+    }
+    
+    return {r, g, b};
+}
     // ============== تهيئة الصفحة ==============
     window.addEventListener('load', () => {
       // تحديث قيم أوزان Heatmap والحواف
