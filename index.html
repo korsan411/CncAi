@@ -679,6 +679,7 @@
     let currentEdges = [];
     let designBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
     let generatedGCode = '';
+    let originalImage = null;
     
     // إعدادات الماكينة والخامات
     const machineSettings = {
@@ -772,12 +773,35 @@
       
       const img = new Image();
       img.onload = () => {
-        // عرض الصورة الأصلية
-        canvas2d.width = img.width;
-        canvas2d.height = img.height;
-        ctx2d.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
+        // حفظ الصورة الأصلية للمعالجة
+        originalImage = img;
         
-        // إنشاء خريطة الارتفاعات
+        // تحديد أبعاد العرض المناسبة للصورة
+        const maxDisplayWidth = 400; // الحد الأقصى للعرض في العرض
+        const maxDisplayHeight = 400; // الحد الأقصى للارتفاع في العرض
+        
+        let displayWidth = img.width;
+        let displayHeight = img.height;
+        
+        // حساب الأبعاد الجديدة مع الحفاظ على النسبة
+        if (displayWidth > maxDisplayWidth) {
+          displayHeight = (displayHeight * maxDisplayWidth) / displayWidth;
+          displayWidth = maxDisplayWidth;
+        }
+        
+        if (displayHeight > maxDisplayHeight) {
+          displayWidth = (displayWidth * maxDisplayHeight) / displayHeight;
+          displayHeight = maxDisplayHeight;
+        }
+        
+        // ضبط أبعاد الـ canvas للعرض
+        canvas2d.width = displayWidth;
+        canvas2d.height = displayHeight;
+        
+        // رسم الصورة بحجم مناسب للعرض
+        ctx2d.drawImage(img, 0, 0, img.width, img.height, 0, 0, displayWidth, displayHeight);
+        
+        // إنشاء خريطة الارتفاعات باستخدام الصورة الأصلية (بحجمها الكامل)
         createHeightMap(img);
         
         // تمكين أزرار التحكم
@@ -796,19 +820,18 @@
 
     // تحديث معاينة الحواف من الصورة الحالية
     function updateEdgePreviewFromImage() {
-      if (!fileInput.files[0]) return;
+      if (!originalImage) return;
       
-      const img = new Image();
-      img.onload = () => {
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = img.width;
-        tempCanvas.height = img.height;
-        const tctx = tempCanvas.getContext('2d');
-        tctx.drawImage(img, 0, 0, img.width, img.height);
-        const imgData = tctx.getImageData(0, 0, img.width, img.height);
-        updateEdgePreview(imgData);
-      };
-      img.src = URL.createObjectURL(fileInput.files[0]);
+      // إنشاء canvas مؤقت لمعالجة الصورة الأصلية
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = originalImage.width;
+      tempCanvas.height = originalImage.height;
+      const tctx = tempCanvas.getContext('2d');
+      tctx.drawImage(originalImage, 0, 0, originalImage.width, originalImage.height);
+      const imgData = tctx.getImageData(0, 0, originalImage.width, originalImage.height);
+      
+      // تحديث معاينة الحواف
+      updateEdgePreview(imgData);
     }
 
     // كشف الحواف باستخدام خوارزميات مختلفة
@@ -960,9 +983,20 @@
       const edgeData = detectEdges(imageData, method, threshold);
       const edgeImageData = new ImageData(edgeData, imageData.width, imageData.height);
       
-      edgePreview.width = imageData.width;
-      edgePreview.height = imageData.height;
-      ctxEdge.putImageData(edgeImageData, 0, 0);
+      // ضبط أبعاد edgePreview بنفس أبعاد canvas2d (الحجم المعروض)
+      edgePreview.width = canvas2d.width;
+      edgePreview.height = canvas2d.height;
+      
+      // إنشاء canvas مؤقت لرسم الحواف بحجمها الأصلي
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = imageData.width;
+      tempCanvas.height = imageData.height;
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.putImageData(edgeImageData, 0, 0);
+      
+      // رسم الحواف بحجم مناسب للعرض
+      ctxEdge.drawImage(tempCanvas, 0, 0, imageData.width, imageData.height, 
+                        0, 0, edgePreview.width, edgePreview.height);
       
       // استخراج الحواف وتحديد حدود التصميم
       extractEdgesAndBounds(edgeData, imageData.width, imageData.height);
@@ -1009,13 +1043,13 @@
         return;
       }
       
-      const width = canvas2d.width;
-      const height = canvas2d.height;
+      const width = originalImage.width;
+      const height = originalImage.height;
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = width;
       tempCanvas.height = height;
       const tctx = tempCanvas.getContext('2d');
-      tctx.drawImage(canvas2d, 0, 0, width, height);
+      tctx.drawImage(originalImage, 0, 0, width, height);
       const imgData = tctx.getImageData(0, 0, width, height).data;
       
       // الحصول على الإعدادات المتقدمة
@@ -1323,9 +1357,17 @@
 
     // رسم خريطة الألوان
     function drawHeatmap(imgData, w, h, min, max) {
-      heatmap.width = w * 1.5;
-      heatmap.height = h * 1.5;
-      const heatData = ctxHeat.createImageData(w, h);
+      // ضبط أبعاد heatmap بنفس أبعاد العرض
+      heatmap.width = canvas2d.width;
+      heatmap.height = canvas2d.height;
+      
+      // إنشاء canvas مؤقت لرسم البيانات بحجمها الأصلي
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = w;
+      tempCanvas.height = h;
+      const tempCtx = tempCanvas.getContext('2d');
+      const heatData = tempCtx.createImageData(w, h);
+      
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           const idx = (y * w + x) * 4;
@@ -1338,11 +1380,11 @@
           heatData.data[idx+3] = 255;
         }
       }
-      ctxHeat.putImageData(heatData, 0, 0);
-      const temp = document.createElement('canvas');
-      temp.width = w; temp.height = h;
-      temp.getContext('2d').putImageData(heatData, 0, 0);
-      ctxHeat.drawImage(temp, 0, 0, heatmap.width, heatmap.height);
+      
+      tempCtx.putImageData(heatData, 0, 0);
+      
+      // رسم البيانات المؤقتة على heatmap بحجم مناسب للعرض
+      ctxHeat.drawImage(tempCanvas, 0, 0, w, h, 0, 0, heatmap.width, heatmap.height);
     }
 
     // الحصول على اللون المناسب لخريطة الحرارة
@@ -1383,10 +1425,8 @@
       else if (map === 'cool') coolBtn.classList.add('active');
       else if (map === 'gray') grayBtn.classList.add('active');
       
-      if(fileInput.files[0]){
-        const img = new Image();
-        img.onload = () => createHeightMap(img);
-        img.src = URL.createObjectURL(fileInput.files[0]);
+      if(originalImage){
+        createHeightMap(originalImage);
       }
     }
 
