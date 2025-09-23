@@ -799,7 +799,8 @@
         canvas2d.height = displayHeight;
         
         // رسم الصورة بحجم مناسب للعرض
-        ctx2d.drawImage(img, 0, 0, img.width, img.height, 0, 0, displayWidth, displayHeight);
+        ctx2d.clearRect(0, 0, canvas2d.width, canvas2d.height);
+        ctx2d.drawImage(img, 0, 0, displayWidth, displayHeight);
         
         // إنشاء خريطة الارتفاعات باستخدام الصورة الأصلية (بحجمها الكامل)
         createHeightMap(img);
@@ -995,6 +996,7 @@
       tempCtx.putImageData(edgeImageData, 0, 0);
       
       // رسم الحواف بحجم مناسب للعرض
+      ctxEdge.clearRect(0, 0, edgePreview.width, edgePreview.height);
       ctxEdge.drawImage(tempCanvas, 0, 0, imageData.width, imageData.height, 
                         0, 0, edgePreview.width, edgePreview.height);
       
@@ -1384,6 +1386,7 @@
       tempCtx.putImageData(heatData, 0, 0);
       
       // رسم البيانات المؤقتة على heatmap بحجم مناسب للعرض
+      ctxHeat.clearRect(0, 0, heatmap.width, heatmap.height);
       ctxHeat.drawImage(tempCanvas, 0, 0, w, h, 0, 0, heatmap.width, heatmap.height);
     }
 
