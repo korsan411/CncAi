@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>CNC AI Preview</title>
+  <style>
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #fdfdfd;
+      margin: 0;
+      padding: 0;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    header {
+      width: 100%;
+      background: linear-gradient(90deg, #4a90e2, #67b0f5);
+      color: white;
+      padding: 15px;
+      text-align: center;
+      font-size: 22px;
+      font-weight: bold;
+      letter-spacing: 1px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+
+    .file-upload {
+      margin: 20px 0;
+      text-align: center;
+    }
+
+    .file-upload input[type=file] {
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+    }
+
+    .preview-block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 25px;
+      width: 100%;
+      max-width: 700px;
+      padding: 0 10px;
+    }
+
+    .preview-block canvas, 
+    .preview-block #preview3d canvas {
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: white;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+      max-width: 100%;
+      height: auto;
+    }
+
+    .preview-title {
+      margin-top: 8px;
+      font-size: 15px;
+      font-weight: bold;
+      color: #555;
+    }
+
+    .options {
+      margin-top: 10px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .options label {
+      font-size: 14px;
+    }
+
+    .options input[type=range] {
+      vertical-align: middle;
+    }
+
+    .colormap-controls {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 20px 0;
+    }
+
+    .colormap-controls button {
+      padding: 7px 15px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      background: #f0f0f0;
+      font-weight: 500;
+      transition: 0.3s;
+    }
+
+    .colormap-controls button:hover {
+      background: #e0e0e0;
+    }
+
+    .edge-detection-controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 20px 0;
+      width: 100%;
+      max-width: 700px;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background: #f9f9f9;
+    }
+
+    .edge-detection-controls h3 {
+      margin: 0 0 15px 0;
+      color: #4a90e2;
+    }
+
+    .edge-options {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 15px;
+    }
+
+    .edge-options label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 14px;
+    }
+
+    .edge-params {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .edge-params label {
+      font-size: 14px;
+    }
+
+    .gcode-controls {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 20px 0;
+    }
+
+    .gcode-controls button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      background: #4a90e2;
+      color: white;
+      font-weight: 500;
+      transition: 0.3s;
+    }
+
+    .gcode-controls button:hover {
+      background: #3a7bc8;
+    }
+
+    @media (max-width: 600px) {
+      header {
+        font-size: 18px;
+      }
+      .options {
+        flex-direction: column;
+        align-items: center;
+      }
+      .edge-options {
+        flex-direction: column;
+        align-items: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>🛠️ CNC AI Preview</header>
+
+  <!-- زر اختيار الصورة -->
+  <div class="file-upload">
+    <input type="file" id="fileInput" accept="image/*">
+  </div>
+
+  <!-- الصورة الأصلية -->
+  <div class="preview-block">
+    <canvas id="preview2d"></canvas>
+    <div class="preview-title">📷 الصورة الأصلية</div>
+  </div>
+
+  <!-- كشف الحواف -->
+  <div class="preview-block">
+    <canvas id="edgePreview"></canvas>
+    <div class="preview-title">🔍 كشف الحواف</div>
+  </div>
+
+  <!-- معاينة 3D -->
+  <div class="preview-block">
+    <div id="preview3d"></div>
+    <div class="preview-title">🌀 المعاينة ثلاثية الأبعاد</div>
+    <div class="options">
+      <label>🔄 سرعة الدوران:
+        <input type="range" id="rotationSpeed" min="0" max="0.05" step="0.001" value="0.01">
+      </label>
+      <label>🔍 زوم:
+        <input type="range" id="zoomControl" min="50" max="500" step="10" value="200">
+      </label>
+    </div>
+  </div>
+
+  <!-- أزرار الألوان -->
+  <div class="colormap-controls">
+    <button onclick="setColormap('jet')">🌈 Jet</button>
+    <button onclick="setColormap('hot')">🔥 Hot</button>
+    <button onclick="setColormap('cool')">❄️ Cool</button>
+    <button onclick="setColormap('gray')">⚪ Gray</button>
+  </div>
+
+  <!-- Heatmap -->
+  <div class="preview-block">
+    <canvas id="heatmap"></canvas>
+    <div class="preview-title">🌈 خريطة الارتفاعات (Heatmap)</div>
+  </div>
+
+  <!-- عناصر تحكم كشف الحواف -->
+  <div class="edge-detection-controls">
+    <h3>⚙️ إعدادات كشف الحواف</h3>
+    <div class="edge-options">
+      <label>
+        <input type="radio" name="edgeMethod" value="sobel" checked> Sobel
+      </label>
+      <label>
+        <input type="radio" name="edgeMethod" value="canny"> Canny
+      </label>
+      <label>
+        <input type="radio" name="edgeMethod" value="laplacian"> Laplacian
+      </label>
+      <label>
+        <input type="radio" name="edgeMethod" value="prewitt"> Prewitt
+      </label>
+    </div>
+    <div class="edge-params">
+      <label>🔍 حساسية:
+        <input type="range" id="edgeThreshold" min="1" max="100" value="30">
+      </label>
+      <label>📏 سماكة:
+        <input type="range" id="edgeThickness" min="1" max="5" value="1">
+      </label>
+    </div>
+  </div>
+
+  <!-- عناصر تحكم G-code -->
+  <div class="gcode-controls">
+    <button onclick="generateGCode()">🔄 توليد G-code</button>
+    <button onclick="downloadGCode()">💾 تحميل G-code</button>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const canvas2d = document.getElementById('preview2d');
+    const ctx2d = canvas2d.getContext('2d');
+    const heatmap = document.getElementById('heatmap');
+    const ctxHeat = heatmap.getContext('2d');
+    const preview3d = document.getElementById('preview3d');
+    const edgePreview = document.getElementById('edgePreview');
+    const ctxEdge = edgePreview.getContext('2d');
+
+    const rotationSpeedInput = document.getElementById('rotationSpeed');
+    const zoomControl = document.getElementById('zoomControl');
+    const edgeThreshold = document.getElementById('edgeThreshold');
+    const edgeThickness = document.getElementById('edgeThickness');
+
+    // 3D setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, 400/400, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({antialias:true});
+    renderer.setSize(400, 400);
+    preview3d.appendChild(renderer.domElement);
+
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(0, 1, 1).normalize();
+    scene.add(light);
+    camera.position.z = 200;
+
+    let mesh;
+    let rotationSpeed = 0.01;
+    let currentColormap = 'jet';
+    let currentEdges = [];
+    let designBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+
+    // كشف الحواف باستخدام خوارزميات مختلفة
+    function detectEdges(imageData, method, threshold) {
+      const width = imageData.width;
+      const height = imageData.height;
+      const data = imageData.data;
+      const edgeData = new Uint8ClampedArray(width * height * 4);
+      
+      // تحويل الصورة إلى تدرج الرمادي
+      const grayData = new Float32Array(width * height);
+      for (let i = 0; i < data.length; i += 4) {
+        const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+        grayData[i/4] = gray;
+      }
+
+      // تطبيق خوارزمية كشف الحواف المختارة
+      if (method === 'sobel') {
+        applySobel(grayData, edgeData, width, height, threshold);
+      } else if (method === 'canny') {
+        applyCanny(grayData, edgeData, width, height, threshold);
+      } else if (method === 'laplacian') {
+        applyLaplacian(grayData, edgeData, width, height, threshold);
+      } else if (method === 'prewitt') {
+        applyPrewitt(grayData, edgeData, width, height, threshold);
+      }
+      
+      return edgeData;
+    }
+
+    // خوارزمية Sobel
+    function applySobel(grayData, edgeData, width, height, threshold) {
+      const sobelX = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
+      const sobelY = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
+      
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          let gx = 0, gy = 0;
+          
+          for (let ky = -1; ky <= 1; ky++) {
+            for (let kx = -1; kx <= 1; kx++) {
+              const pixel = grayData[(y + ky) * width + (x + kx)];
+              const kernelIndex = (ky + 1) * 3 + (kx + 1);
+              
+              gx += pixel * sobelX[kernelIndex];
+              gy += pixel * sobelY[kernelIndex];
+            }
+          }
+          
+          const magnitude = Math.sqrt(gx * gx + gy * gy);
+          const edgeValue = magnitude > threshold ? 255 : 0;
+          
+          const index = (y * width + x) * 4;
+          edgeData[index] = edgeValue;
+          edgeData[index + 1] = edgeValue;
+          edgeData[index + 2] = edgeValue;
+          edgeData[index + 3] = 255;
+        }
+      }
+    }
+
+    // خوارزمية Canny المبسطة
+    function applyCanny(grayData, edgeData, width, height, threshold) {
+      // تطبيق Gaussian blur أولاً
+      const blurred = new Float32Array(width * height);
+      const gaussian = [1, 2, 1, 2, 4, 2, 1, 2, 1];
+      
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          let sum = 0;
+          for (let ky = -1; ky <= 1; ky++) {
+            for (let kx = -1; kx <= 1; kx++) {
+              const pixel = grayData[(y + ky) * width + (x + kx)];
+              const kernelIndex = (ky + 1) * 3 + (kx + 1);
+              sum += pixel * gaussian[kernelIndex];
+            }
+          }
+          blurred[y * width + x] = sum / 16;
+        }
+      }
+      
+      // ثم تطبيق Sobel
+      applySobel(blurred, edgeData, width, height, threshold);
+    }
+
+    // خوارزمية Laplacian
+    function applyLaplacian(grayData, edgeData, width, height, threshold) {
+      const laplacian = [0, -1, 0, -1, 4, -1, 0, -1, 0];
+      
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          let sum = 0;
+          
+          for (let ky = -1; ky <= 1; ky++) {
+            for (let kx = -1; kx <= 1; kx++) {
+              const pixel = grayData[(y + ky) * width + (x + kx)];
+              const kernelIndex = (ky + 1) * 3 + (kx + 1);
+              sum += pixel * laplacian[kernelIndex];
+            }
+          }
+          
+          const edgeValue = Math.abs(sum) > threshold ? 255 : 0;
+          
+          const index = (y * width + x) * 4;
+          edgeData[index] = edgeValue;
+          edgeData[index + 1] = edgeValue;
+          edgeData[index + 2] = edgeValue;
+          edgeData[index + 3] = 255;
+        }
+      }
+    }
+
+    // خوارزمية Prewitt
+    function applyPrewitt(grayData, edgeData, width, height, threshold) {
+      const prewittX = [-1, 0, 1, -1, 0, 1, -1, 0, 1];
+      const prewittY = [-1, -1, -1, 0, 0, 0, 1, 1, 1];
+      
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          let gx = 0, gy = 0;
+          
+          for (let ky = -1; ky <= 1; ky++) {
+            for (let kx = -1; kx <= 1; kx++) {
+              const pixel = grayData[(y + ky) * width + (x + kx)];
+              const kernelIndex = (ky + 1) * 3 + (kx + 1);
+              
+              gx += pixel * prewittX[kernelIndex];
+              gy += pixel * prewittY[kernelIndex];
+            }
+          }
+          
+          const magnitude = Math.sqrt(gx * gx + gy * gy);
+          const edgeValue = magnitude > threshold ? 255 : 0;
+          
+          const index = (y * width + x) * 4;
+          edgeData[index] = edgeValue;
+          edgeData[index + 1] = edgeValue;
+          edgeData[index + 2] = edgeValue;
+          edgeData[index + 3] = 255;
+        }
+      }
+    }
+
+    // تحديث معاينة الحواف
+    function updateEdgePreview(imageData) {
+      const method = document.querySelector('input[name="edgeMethod"]:checked').value;
+      const threshold = parseInt(edgeThreshold.value);
+      
+      const edgeData = detectEdges(imageData, method, threshold);
+      const edgeImageData = new ImageData(edgeData, imageData.width, imageData.height);
+      
+      edgePreview.width = imageData.width;
+      edgePreview.height = imageData.height;
+      ctxEdge.putImageData(edgeImageData, 0, 0);
+      
+      // استخراج الحواف وتحديد حدود التصميم
+      extractEdgesAndBounds(edgeData, imageData.width, imageData.height);
+    }
+
+    // استخراج الحواف وتحديد حدود التصميم
+    function extractEdgesAndBounds(edgeData, width, height) {
+      currentEdges = [];
+      designBounds.minX = width;
+      designBounds.maxX = 0;
+      designBounds.minY = height;
+      designBounds.maxY = 0;
+      
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const index = (y * width + x) * 4;
+          if (edgeData[index] > 0) {
+            currentEdges.push({x, y});
+            
+            // تحديث حدود التصميم
+            if (x < designBounds.minX) designBounds.minX = x;
+            if (x > designBounds.maxX) designBounds.maxX = x;
+            if (y < designBounds.minY) designBounds.minY = y;
+            if (y > designBounds.maxY) designBounds.maxY = y;
+          }
+        }
+      }
+      
+      // التأكد من أن الحدود صالحة
+      if (designBounds.minX > designBounds.maxX) {
+        designBounds.minX = 0;
+        designBounds.maxX = width - 1;
+      }
+      if (designBounds.minY > designBounds.maxY) {
+        designBounds.minY = 0;
+        designBounds.maxY = height - 1;
+      }
+    }
+
+    // توليد G-code بناءً على حدود التصميم
+    function generateGCode() {
+      if (!currentEdges.length) {
+        alert('يرجى تحميل صورة أولاً وتحديد الحواف');
+        return;
+      }
+      
+      const width = canvas2d.width;
+      const height = canvas2d.height;
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = width;
+      tempCanvas.height = height;
+      const tctx = tempCanvas.getContext('2d');
+      tctx.drawImage(canvas2d, 0, 0, width, height);
+      const imgData = tctx.getImageData(0, 0, width, height).data;
+      
+      let gcode = "; CNC AI Preview G-code\n";
+      gcode += "; Generated from image with edge detection\n";
+      gcode += `; Design bounds: X${designBounds.minX}-${designBounds.maxX}, Y${designBounds.minY}-${designBounds.maxY}\n\n`;
+      
+      // إعدادات أولية
+      gcode += "G21 ; Set units to millimeters\n";
+      gcode += "G90 ; Absolute positioning\n";
+      gcode += "G0 Z5 ; Lift tool\n\n";
+      
+      // البدء من حدود التصميم
+      const startX = designBounds.minX;
+      const startY = designBounds.minY;
+      
+      gcode += `G0 X${startX} Y${startY} ; Move to design start\n`;
+      gcode += "G1 Z0 F100 ; Lower tool\n\n";
+      
+      // إنشاء مسار بناءً على الحواف والارتفاعات
+      const stepSize = 2; // خطوة بين النقاط
+      let lastZ = 0;
+      
+      for (let y = designBounds.minY; y <= designBounds.maxY; y += stepSize) {
+        for (let x = designBounds.minX; x <= designBounds.maxX; x += stepSize) {
+          if (x >= width || y >= height) continue;
+          
+          const idx = (y * width + x) * 4;
+          const brightness = imgData[idx];
+          const z = (255 - brightness) / 50; // تحويل السطوع إلى ارتفاع
+          
+          // التحقق مما إذا كانت النقطة داخل حدود التصميم
+          if (isPointInDesign(x, y)) {
+            if (Math.abs(z - lastZ) > 0.1) {
+              gcode += `G1 Z${z.toFixed(2)} F50 ; Adjust height\n`;
+              lastZ = z;
+            }
+            gcode += `G1 X${x} Y${y} F200 ; Move to point\n`;
+          }
+        }
+      }
+      
+      gcode += "\nG0 Z5 ; Lift tool\n";
+      gcode += "G0 X0 Y0 ; Return to origin\n";
+      gcode += "M30 ; End program\n";
+      
+      // حفظ G-code في متغير عام للتحميل لاحقًا
+      window.generatedGCode = gcode;
+      
+      alert('تم توليد G-code بنجاح! يمكنك الآن تحميله.');
+    }
+
+    // التحقق مما إذا كانت النقطة داخل حدود التصميم
+    function isPointInDesign(x, y) {
+      // في هذا المثال المبسط، نتحقق من وجود حواف قريبة
+      for (let edge of currentEdges) {
+        const distance = Math.sqrt(Math.pow(edge.x - x, 2) + Math.pow(edge.y - y, 2));
+        if (distance < 10) { // إذا كانت النقطة قريبة من حافة
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // تحميل G-code كملف
+    function downloadGCode() {
+      if (!window.generatedGCode) {
+        alert('يرجى توليد G-code أولاً');
+        return;
+      }
+      
+      const blob = new Blob([window.generatedGCode], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'cnc_design.gcode';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // باقي الدوال الموجودة سابقًا
+    function createHeightMap(image) {
+      const w = image.width;
+      const h = image.height;
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = w; 
+      tempCanvas.height = h;
+      const tctx = tempCanvas.getContext('2d');
+      tctx.drawImage(image, 0, 0, w, h);
+      const imgData = tctx.getImageData(0, 0, w, h);
+
+      // تحديث معاينة الحواف
+      updateEdgePreview(imgData);
+
+      // 3D mesh
+      const geometry = new THREE.PlaneGeometry(100, 100, w-1, h-1);
+      let min = 255, max = 0;
+      const colors = [];
+      for (let i = 0; i < geometry.attributes.position.count; i++) {
+        const stride = i * 3;
+        const x = i % w;
+        const y = Math.floor(i / w);
+        const idx = (y * w + x) * 4;
+        const brightness = imgData.data[idx];
+        min = Math.min(min, brightness);
+        max = Math.max(max, brightness);
+        geometry.attributes.position.array[stride + 2] = brightness / 80;
+
+        const norm = brightness / 255;
+        const color = getHeatColor(norm, currentColormap);
+        colors.push(color.r/255, color.g/255, color.b/255);
+      }
+      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geometry.computeVertexNormals();
+
+      const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+      if (mesh) scene.remove(mesh);
+      mesh = new THREE.Mesh(geometry, material);
+      scene.add(mesh);
+
+      drawHeatmap(imgData.data, w, h, min, max);
+    }
+
+    function drawHeatmap(imgData, w, h, min, max) {
+      heatmap.width = w * 1.5;
+      heatmap.height = h * 1.5;
+      const heatData = ctxHeat.createImageData(w, h);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const idx = (y * w + x) * 4;
+          const brightness = imgData[idx];
+          const norm = (brightness - min) / (max - min);
+          const color = getHeatColor(norm, currentColormap);
+          heatData.data[idx] = color.r;
+          heatData.data[idx+1] = color.g;
+          heatData.data[idx+2] = color.b;
+          heatData.data[idx+3] = 255;
+        }
+      }
+      ctxHeat.putImageData(heatData, 0, 0);
+      const temp = document.createElement('canvas');
+      temp.width = w; temp.height = h;
+      temp.getContext('2d').putImageData(heatData, 0, 0);
+      ctxHeat.drawImage(temp, 0, 0, heatmap.width, heatmap.height);
+    }
+
+    function getHeatColor(value, map) {
+      let r=0,g=0,b=0;
+      if(map==='jet'){ 
+        r = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-3),1),0));
+        g = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-2),1),0));
+        b = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-1),1),0));
+      } else if(map==='hot'){ 
+        r = Math.floor(255 * Math.min(1, 3*value));
+        g = Math.floor(255 * Math.min(1, 3*value-1));
+        g = Math.max(g,0);
+        b = Math.floor(255 * Math.min(1, 3*value-2));
+        b = Math.max(b,0);
+      } else if(map==='cool'){
+        r = Math.floor(255 * value);
+        g = Math.floor(255 * (1-value));
+        b = 255;
+      } else if(map==='gray'){
+        r = g = b = Math.floor(255 * value);
+      }
+      return {r,g,b};
+    }
+
+    function setColormap(map) {
+      currentColormap = map;
+      if(fileInput.files[0]){
+        const img = new Image();
+        img.onload = () => createHeightMap(img);
+        img.src = URL.createObjectURL(fileInput.files[0]);
+      }
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      if (mesh) mesh.rotation.y += rotationSpeed;
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const img = new Image();
+      img.onload = () => {
+        canvas2d.width = img.width;
+        canvas2d.height = img.height;
+        ctx2d.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
+        createHeightMap(img);
+      };
+      img.src = URL.createObjectURL(file);
+    });
+
+    rotationSpeedInput.addEventListener('input', () => {
+      rotationSpeed = parseFloat(rotationSpeedInput.value);
+    });
+
+    zoomControl.addEventListener('input', () => {
+      camera.position.z = parseFloat(zoomControl.value);
+    });
+
+    // تحديث معاينة الحواف عند تغيير الإعدادات
+    edgeThreshold.addEventListener('input', () => {
+      if(fileInput.files[0]){
+        const img = new Image();
+        img.onload = () => {
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = img.width;
+          tempCanvas.height = img.height;
+          const tctx = tempCanvas.getContext('2d');
+          tctx.drawImage(img, 0, 0, img.width, img.height);
+          const imgData = tctx.getImageData(0, 0, img.width, img.height);
+          updateEdgePreview(imgData);
+        };
+        img.src = URL.createObjectURL(fileInput.files[0]);
+      }
+    });
+
+    edgeThickness.addEventListener('input', () => {
+      // يمكن استخدام سماكة الحواف في العرض البصري
+      if(fileInput.files[0]){
+        const img = new Image();
+        img.onload = () => {
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = img.width;
+          tempCanvas.height = img.height;
+          const tctx = tempCanvas.getContext('2d');
+          tctx.drawImage(img, 0, 0, img.width, img.height);
+          const imgData = tctx.getImageData(0, 0, img.width, img.height);
+          updateEdgePreview(imgData);
+        };
+        img.src = URL.createObjectURL(fileInput.files[0]);
+      }
+    });
+
+    // تحديث معاينة الحواف عند تغيير الخوارزمية
+    document.querySelectorAll('input[name="edgeMethod"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        if(fileInput.files[0]){
+          const img = new Image();
+          img.onload = () => {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = img.width;
+            tempCanvas.height = img.height;
+            const tctx = tempCanvas.getContext('2d');
+            tctx.drawImage(img, 0, 0, img.width, img.height);
+            const imgData = tctx.getImageData(0, 0, img.width, img.height);
+            updateEdgePreview(imgData);
+          };
+          img.src = URL.createObjectURL(fileInput.files[0]);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
