@@ -750,6 +750,14 @@
       // تحديث خيارات الخامة بناءً على نوع الماكينة
       machineType.addEventListener('change', updateMaterialOptions);
       updateMaterialOptions(); // التهيئة الأولى
+      
+      // تعيين أبعاد افتراضية للـ canvases
+      canvas2d.width = 400;
+      canvas2d.height = 400;
+      edgePreview.width = 400;
+      edgePreview.height = 400;
+      heatmap.width = 400;
+      heatmap.height = 400;
     }
 
     // تحديث خيارات الخامة
@@ -777,8 +785,8 @@
         originalImage = img;
         
         // تحديد أبعاد العرض المناسبة للصورة
-        const maxDisplayWidth = 400; // الحد الأقصى للعرض في العرض
-        const maxDisplayHeight = 400; // الحد الأقصى للارتفاع في العرض
+        const maxDisplayWidth = 400;
+        const maxDisplayHeight = 400;
         
         let displayWidth = img.width;
         let displayHeight = img.height;
@@ -800,7 +808,7 @@
         
         // رسم الصورة بحجم مناسب للعرض
         ctx2d.clearRect(0, 0, canvas2d.width, canvas2d.height);
-        ctx2d.drawImage(img, 0, 0, displayWidth, displayHeight);
+        ctx2d.drawImage(img, 0, 0, img.width, img.height, 0, 0, displayWidth, displayHeight);
         
         // إنشاء خريطة الارتفاعات باستخدام الصورة الأصلية (بحجمها الكامل)
         createHeightMap(img);
