@@ -426,6 +426,33 @@
       flex-wrap: wrap;
     }
 
+    .analysis-methods {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+
+    .method-option {
+      padding: 12px;
+      border: 2px solid var(--border-color);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-align: center;
+      background: var(--button-bg);
+    }
+
+    .method-option:hover {
+      background: var(--button-hover);
+    }
+
+    .method-option.selected {
+      border-color: var(--primary-color);
+      background: var(--primary-color);
+      color: white;
+    }
+
     @media (max-width: 768px) {
       h1 {
         font-size: 1.4rem;
@@ -447,6 +474,10 @@
       
       .action-buttons {
         flex-direction: column;
+      }
+      
+      .analysis-methods {
+        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -538,12 +569,52 @@
             <button class="btn btn-secondary" onclick="setColormap('gray')"><span>⚪</span> Gray</button>
           </div>
         </div>
+
+        <!-- تحليل الحواف -->
+        <div class="preview-block">
+          <h3 class="preview-title">🔍 تحليل الحواف</h3>
+          <div class="preview-content">
+            <canvas id="edgesCanvas"></canvas>
+          </div>
+          <div class="options">
+            <div class="option-group">
+              <label for="edgeThreshold">🔍 عتبة الحواف</label>
+              <input type="range" id="edgeThreshold" min="10" max="200" step="5" value="50">
+            </div>
+            <div class="option-group">
+              <label for="edgeSensitivity">📊 حساسية الحواف</label>
+              <input type="range" id="edgeSensitivity" min="1" max="5" step="0.5" value="2">
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- تاب إعدادات G-code -->
     <div class="tab-content" id="gcode-tab">
       <div class="settings-panel">
+        <div class="settings-group">
+          <h3><span>🔬</span> طريقة تحليل الصورة</h3>
+          <div class="analysis-methods">
+            <div class="method-option" data-method="heatmap+edges" onclick="selectMethod('heatmap+edges')">
+              <h4>Heatmap + الحواف</h4>
+              <p>مزيج من تحليل المرتفعات والحواف</p>
+            </div>
+            <div class="method-option" data-method="heatmap" onclick="selectMethod('heatmap')">
+              <h4>Heatmap فقط</h4>
+              <p>تحليل المرتفعات بناءً على الألوان</p>
+            </div>
+            <div class="method-option" data-method="edges" onclick="selectMethod('edges')">
+              <h4>الحواف فقط</h4>
+              <p>تحليل الحواف والتفاصيل</p>
+            </div>
+            <div class="method-option" data-method="3d" onclick="selectMethod('3d')">
+              <h4>النموذج ثلاثي الأبعاد</h4>
+              <p>تحليل ثلاثي الأبعاد كامل</p>
+            </div>
+          </div>
+        </div>
+
         <div class="settings-group">
           <h3><span>🏭</span> إعدادات الماكينة</h3>
           <div class="form-group">
@@ -594,19 +665,16 @@
         <div class="settings-group">
           <h3><span>🔧</span> إعدادات G-code</h3>
           <div class="form-group">
-            <label for="gcodeType">نوع المخرجات</label>
-            <select id="gcodeType">
-              <option value="heatmap">بناءً على Heatmap</option>
-              <option value="3dmodel">بناءً على النموذج ثلاثي الأبعاد</option>
-            </select>
-          </div>
-          <div class="form-group">
             <label for="gcodePrecision">دقة التوليد</label>
             <select id="gcodePrecision">
               <option value="low">منخفضة (أسرع)</option>
               <option value="medium" selected>متوسطة</option>
               <option value="high">عالية (أبطأ)</option>
             </select>
+          </div>
+          <div class="form-group">
+            <label for="resolution">دقة التحليل (نقاط)</label>
+            <input type="number" id="resolution" min="10" max="200" value="50">
           </div>
         </div>
 
@@ -679,10 +747,14 @@
     const ctx2d = canvas2d.getContext('2d');
     const heatmap = document.getElementById('heatmap');
     const ctxHeat = heatmap.getContext('2d');
+    const edgesCanvas = document.getElementById('edgesCanvas');
+    const ctxEdges = edgesCanvas.getContext('2d');
     const preview3d = document.getElementById('preview3d');
     const rotationSpeedInput = document.getElementById('rotationSpeed');
     const zoomControl = document.getElementById('zoomControl');
     const heightIntensity = document.getElementById('heightIntensity');
+    const edgeThreshold = document.getElementById('edgeThreshold');
+    const edgeSensitivity = document.getElementById('edgeSensitivity');
     const tabs = document.querySelectorAll('.tab');
     const tabContents = document.querySelectorAll('.tab-content');
     const gcodeOutput = document.getElementById('gcodeOutput');
@@ -732,9 +804,20 @@
     let currentColormap = 'jet';
     let heightFactor = 80;
     let heightMapData = null;
+    let edgeData = null;
     let originalImageData = null;
     let simulation = null;
     let isSimulationPlaying = false;
+    let selectedMethod = 'heatmap+edges';
+
+    // اختيار طريقة التحليل
+    function selectMethod(method) {
+      selectedMethod = method;
+      document.querySelectorAll('.method-option').forEach(el => {
+        el.classList.remove('selected');
+      });
+      document.querySelector(`[data-method="${method}"]`).classList.add('selected');
+    }
 
     // تبديل التابات
     tabs.forEach(tab => {
@@ -859,6 +942,44 @@
       }, 100);
     }
 
+    // دالة للكشف عن الحواف باستخدام خوارزمية Sobel
+    function detectEdges(imageData) {
+      const width = imageData.width;
+      const height = imageData.height;
+      const data = imageData.data;
+      
+      // تحويل إلى تدرج رمادي أولاً
+      const grayData = new Uint8ClampedArray(width * height);
+      for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+        grayData[j] = 0.3 * data[i] + 0.59 * data[i+1] + 0.11 * data[i+2];
+      }
+      
+      // تطبيق مرشح Sobel للكشف عن الحواف
+      const sobelData = new Uint8ClampedArray(width * height);
+      const threshold = parseInt(edgeThreshold.value);
+      const sensitivity = parseFloat(edgeSensitivity.value);
+      
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          const idx = y * width + x;
+          
+          // Sobel kernels
+          const gx = 
+            -grayData[(y-1)*width + (x-1)] - 2*grayData[y*width + (x-1)] - grayData[(y+1)*width + (x-1)] +
+            grayData[(y-1)*width + (x+1)] + 2*grayData[y*width + (x+1)] + grayData[(y+1)*width + (x+1)];
+          
+          const gy = 
+            -grayData[(y-1)*width + (x-1)] - 2*grayData[(y-1)*width + x] - grayData[(y-1)*width + (x+1)] +
+            grayData[(y+1)*width + (x-1)] + 2*grayData[(y+1)*width + x] + grayData[(y+1)*width + (x+1)];
+          
+          const magnitude = Math.sqrt(gx*gx + gy*gy) * sensitivity;
+          sobelData[idx] = magnitude > threshold ? 255 : 0;
+        }
+      }
+      
+      return sobelData;
+    }
+
     // دالة لإنشاء خريطة الارتفاع
     function createHeightMap(image) {
       const w = Math.min(image.width, 100);
@@ -869,14 +990,30 @@
       tempCanvas.height = h;
       const tctx = tempCanvas.getContext('2d');
       tctx.drawImage(image, 0, 0, w, h);
-      const imgData = tctx.getImageData(0, 0, w, h).data;
-
+      const imgData = tctx.getImageData(0, 0, w, h);
+      
       // حفظ بيانات الارتفاع للاستخدام لاحقاً في توليد G-code
       heightMapData = {
-        data: new Uint8Array(imgData),
+        data: new Uint8Array(imgData.data),
         width: w,
         height: h
       };
+      
+      // كشف الحواف
+      edgeData = detectEdges(imgData);
+      
+      // عرض الحواف على canvas منفصل
+      edgesCanvas.width = w;
+      edgesCanvas.height = h;
+      const edgeImageData = ctxEdges.createImageData(w, h);
+      for (let i = 0; i < edgeData.length; i++) {
+        const idx = i * 4;
+        edgeImageData.data[idx] = edgeData[i];     // R
+        edgeImageData.data[idx+1] = edgeData[i];   // G
+        edgeImageData.data[idx+2] = edgeData[i];   // B
+        edgeImageData.data[idx+3] = 255;           // A
+      }
+      ctxEdges.putImageData(edgeImageData, 0, 0);
 
       // إنشاء شبكة 3D
       const geometry = new THREE.PlaneGeometry(100, 100, w-1, h-1);
@@ -888,7 +1025,7 @@
         const x = i % w;
         const y = Math.floor(i / w);
         const idx = (y * w + x) * 4;
-        const brightness = 0.34 * imgData[idx] + 0.5 * imgData[idx+1] + 0.16 * imgData[idx+2]; // تحويل إلى grayscale
+        const brightness = 0.34 * imgData.data[idx] + 0.5 * imgData.data[idx+1] + 0.16 * imgData.data[idx+2]; // تحويل إلى grayscale
         min = Math.min(min, brightness);
         max = Math.max(max, brightness);
         geometry.attributes.position.array[stride + 2] = brightness / heightFactor;
@@ -911,7 +1048,7 @@
       mesh = new THREE.Mesh(geometry, material);
       scene.add(mesh);
 
-      drawHeatmap(imgData, w, h, min, max);
+      drawHeatmap(imgData.data, w, h, min, max);
     }
 
     // دالة لرسم خريطة الحرارة
@@ -1023,6 +1160,22 @@
       }
     });
 
+    edgeThreshold.addEventListener('input', () => {
+      if(fileInput.files[0]){
+        const img = new Image();
+        img.onload = () => createHeightMap(img);
+        img.src = URL.createObjectURL(fileInput.files[0]);
+      }
+    });
+
+    edgeSensitivity.addEventListener('input', () => {
+      if(fileInput.files[0]){
+        const img = new Image();
+        img.onload = () => createHeightMap(img);
+        img.src = URL.createObjectURL(fileInput.files[0]);
+      }
+    });
+
     // تبديل الوضع الليلي/النهاري
     const themeToggle = document.getElementById('themeToggle');
     themeToggle.addEventListener('click', () => {
@@ -1057,9 +1210,9 @@
       }, 3000);
     }
 
-    // دالة لتوليد G-code
+    // دالة لتوليد G-code بناءً على طريقة التحليل المختارة
     function generateGcode() {
-      if (!heightMapData) {
+      if (!heightMapData || !edgeData) {
         showNotification('يجب تحميل صورة أولاً', true);
         return;
       }
@@ -1069,18 +1222,19 @@
       const feedRate = document.getElementById('feedRate').value;
       const spindleSpeed = document.getElementById('spindleSpeed').value;
       const cutDepth = document.getElementById('cutDepth').value;
-      const gcodeType = document.getElementById('gcodeType').value;
+      const passDepth = document.getElementById('passDepth').value;
+      const resolution = document.getElementById('resolution').value;
       
       // محاكاة عملية توليد G-code
       gcodeOutput.textContent = "⏳ جاري توليد G-code...";
       
       setTimeout(() => {
-        // G-code أساسي كمثال
         let gcode = `; G-code generated by CNC AI Preview\n`;
         gcode += `; Machine: ${machineType}\n`;
         gcode += `; Material: ${materialType}\n`;
         gcode += `; Feed rate: ${feedRate}\n`;
-        gcode += `; Spindle speed: ${spindleSpeed}\n\n`;
+        gcode += `; Spindle speed: ${spindleSpeed}\n`;
+        gcode += `; Analysis method: ${selectedMethod}\n\n`;
         
         gcode += `G21 ; Set units to millimeters\n`;
         gcode += `G90 ; Absolute positioning\n`;
@@ -1088,19 +1242,9 @@
         gcode += `G0 Z5 ; Lift spindle\n`;
         gcode += `G0 X0 Y0 ; Move to start position\n\n`;
         
-        // محاكاة بعض أوامر الحركة بناءً على بيانات الارتفاع
-        gcode += `; Beginning of cutting path\n`;
-        gcode += `G1 Z-${cutDepth} F${feedRate/2} ; Lower to cutting depth\n`;
-        
-        for (let y = 0; y < heightMapData.height; y += 5) {
-          for (let x = 0; x < heightMapData.width; x += 5) {
-            const idx = (y * heightMapData.width + x) * 4;
-            const brightness = 0.34 * heightMapData.data[idx] + 0.5 * heightMapData.data[idx+1] + 0.16 * heightMapData.data[idx+2];
-            const depth = (brightness / 255) * cutDepth;
-            
-            gcode += `G1 X${x} Y${y} Z-${depth.toFixed(2)} F${feedRate}\n`;
-          }
-        }
+        // توليد G-code بناءً على طريقة التحليل المختارة
+        gcode += generatePathBasedOnMethod(selectedMethod, heightMapData, edgeData, 
+                                          cutDepth, feedRate, resolution);
         
         gcode += `\nG0 Z5 ; Lift spindle\n`;
         gcode += `M5 ; Spindle off\n`;
@@ -1110,6 +1254,103 @@
         gcodeOutput.textContent = gcode;
         showNotification('تم توليد G-code بنجاح');
       }, 1500);
+    }
+
+    // دالة لتوليد المسار بناءً على طريقة التحليل
+    function generatePathBasedOnMethod(method, heightData, edgeData, cutDepth, feedRate, resolution) {
+      let gcode = `; Beginning of cutting path\n`;
+      gcode += `G1 Z-${cutDepth} F${feedRate/2} ; Lower to cutting depth\n`;
+      
+      const w = Math.min(heightData.width, resolution);
+      const h = Math.min(heightData.height, resolution);
+      const stepX = Math.max(1, Math.floor(heightData.width / w));
+      const stepY = Math.max(1, Math.floor(heightData.height / h));
+      
+      if (method === 'heatmap+edges') {
+        // مزيج من Heatmap والحواف
+        gcode += `; Combined heatmap and edges analysis\n`;
+        
+        // أولاً: قطع الحواف
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const idx = (y * stepY) * heightData.width + (x * stepX);
+            const edgeValue = edgeData[idx];
+            
+            if (edgeValue > 128) { // إذا كانت هناك حافة
+              const brightness = 0.34 * heightData.data[idx*4] + 0.5 * heightData.data[idx*4+1] + 0.16 * heightData.data[idx*4+2];
+              const depth = (brightness / 255) * cutDepth;
+              
+              gcode += `G1 X${x*10} Y${y*10} Z-${depth.toFixed(2)} F${feedRate}\n`;
+            }
+          }
+        }
+        
+        // ثانياً: قطع المناطق ذات الارتفاع العالي
+        gcode += `; High elevation areas\n`;
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const idx = (y * stepY) * heightData.width + (x * stepX);
+            const brightness = 0.34 * heightData.data[idx*4] + 0.5 * heightData.data[idx*4+1] + 0.16 * heightData.data[idx*4+2];
+            
+            if (brightness > 200) { // مناطق مرتفعة
+              const depth = (brightness / 255) * cutDepth;
+              gcode += `G1 X${x*10} Y${y*10} Z-${depth.toFixed(2)} F${feedRate}\n`;
+            }
+          }
+        }
+        
+      } else if (method === 'heatmap') {
+        // تحليل Heatmap فقط
+        gcode += `; Heatmap analysis only\n`;
+        
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const idx = (y * stepY) * heightData.width + (x * stepX);
+            const brightness = 0.34 * heightData.data[idx*4] + 0.5 * heightData.data[idx*4+1] + 0.16 * heightData.data[idx*4+2];
+            const depth = (brightness / 255) * cutDepth;
+            
+            gcode += `G1 X${x*10} Y${y*10} Z-${depth.toFixed(2)} F${feedRate}\n`;
+          }
+        }
+        
+      } else if (method === 'edges') {
+        // تحليل الحواف فقط
+        gcode += `; Edges analysis only\n`;
+        
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const idx = (y * stepY) * heightData.width + (x * stepX);
+            const edgeValue = edgeData[idx];
+            
+            if (edgeValue > 128) { // إذا كانت هناك حافة
+              gcode += `G1 X${x*10} Y${y*10} Z-${cutDepth} F${feedRate}\n`;
+            }
+          }
+        }
+        
+      } else if (method === '3d') {
+        // تحليل ثلاثي الأبعاد كامل
+        gcode += `; 3D analysis\n`;
+        
+        // محاكاة مسار ثلاثي الأبعاد متعدد الطبقات
+        const layers = 3;
+        for (let layer = 1; layer <= layers; layer++) {
+          gcode += `; Layer ${layer}\n`;
+          const layerDepth = (cutDepth / layers) * layer;
+          
+          for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+              const idx = (y * stepY) * heightData.width + (x * stepX);
+              const brightness = 0.34 * heightData.data[idx*4] + 0.5 * heightData.data[idx*4+1] + 0.16 * heightData.data[idx*4+2];
+              const depth = Math.min(layerDepth, (brightness / 255) * cutDepth);
+              
+              gcode += `G1 X${x*10} Y${y*10} Z-${depth.toFixed(2)} F${feedRate}\n`;
+            }
+          }
+        }
+      }
+      
+      return gcode;
     }
 
     // دالة لتحميل G-code
@@ -1285,6 +1526,9 @@
         `;
       }
     });
+
+    // تحديد الطريقة الافتراضية
+    selectMethod('heatmap+edges');
   </script>
 </body>
 </html>
