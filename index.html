@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CNC AI Preview - Professional</title>
+  <title>CNC AI Preview - Professional Edition</title>
   <style>
     :root {
       --primary-color: #4a90e2;
@@ -527,7 +527,7 @@
   </style>
 </head>
 <body>
-  <header>🛠️ CNC AI Preview - Professional</header>
+  <header>🛠️ CNC AI Preview - Professional Edition</header>
 
   <div id="loadingOverlay">
     <div class="loading-spinner"></div>
@@ -663,17 +663,23 @@
             <p>اختر نوع المادة التي ستستخدمها للتصنيع</p>
           </div>
           
-          <!-- التحكم في أبعاد الصورة بالسنتيمتر -->
+          <!-- إضافة التحكم بالأبعاد بالسنتيمتر -->
           <div class="advanced-control">
-            <label for="designWidthCm">عرض التصميم (سم):</label>
-            <input type="number" id="designWidthCm" min="1" max="100" step="0.1" value="10">
-            <p>حدد العرض الفعلي للتصميم بالسنتيمتر</p>
+            <label for="designWidth">عرض التصميم (سم):</label>
+            <input type="number" id="designWidth" min="1" max="100" value="10">
+            <p>حدد عرض التصميم النهائي بالسنتيمتر</p>
           </div>
           
           <div class="advanced-control">
-            <label for="designHeightCm">ارتفاع التصميم (سم):</label>
-            <input type="number" id="designHeightCm" min="1" max="100" step="0.1" value="10">
-            <p>حدد الارتفاع الفعلي للتصميم بالسنتيمتر</p>
+            <label for="designHeight">ارتفاع التصميم (سم):</label>
+            <input type="number" id="designHeight" min="1" max="100" value="10">
+            <p>حدد ارتفاع التصميم النهائي بالسنتيمتر</p>
+          </div>
+          
+          <div class="advanced-control">
+            <label for="maxZHeight">أقصى ارتفاع Z (مم):</label>
+            <input type="number" id="maxZHeight" min="0.1" max="20" step="0.1" value="5">
+            <p>حدد أقصى ارتفاع للتضاريس بالمليمتر</p>
           </div>
           
           <div class="advanced-control">
@@ -701,19 +707,15 @@
           </div>
           
           <div class="advanced-control">
-            <label for="maxCutDepth">أقصى عمق قطع (mm):</label>
-            <input type="number" id="maxCutDepth" min="0.5" max="20" step="0.1" value="5">
-            <p>حدد أقصى عمق قطع للنموذج</p>
+            <label for="toolDiameter">قطر الأداة (mm):</label>
+            <input type="number" id="toolDiameter" min="0.1" max="10" step="0.1" value="3">
+            <p>حدد قطر أداة القطع</p>
           </div>
           
           <div class="advanced-control">
-            <label for="resolution">دقة النموذج:</label>
-            <select id="resolution">
-              <option value="low">منخفضة (أسرع)</option>
-              <option value="medium" selected>متوسطة</option>
-              <option value="high">عالية (أبطأ)</option>
-            </select>
-            <p>اختر دقة تحليل النموذج</p>
+            <label for="stepOver">تداخل المسارات (%):</label>
+            <input type="number" id="stepOver" min="10" max="90" value="50">
+            <p>حدد نسبة التداخل بين المسارات</p>
           </div>
         </div>
       </div>
@@ -783,14 +785,15 @@
     // عناصر الإعدادات المتقدمة
     const machineType = document.getElementById('machineType');
     const materialType = document.getElementById('materialType');
-    const designWidthCm = document.getElementById('designWidthCm');
-    const designHeightCm = document.getElementById('designHeightCm');
+    const designWidth = document.getElementById('designWidth');
+    const designHeight = document.getElementById('designHeight');
+    const maxZHeight = document.getElementById('maxZHeight');
     const cuttingSpeed = document.getElementById('cuttingSpeed');
     const spindleSpeed = document.getElementById('spindleSpeed');
     const passDepth = document.getElementById('passDepth');
     const safeHeight = document.getElementById('safeHeight');
-    const maxCutDepth = document.getElementById('maxCutDepth');
-    const resolution = document.getElementById('resolution');
+    const toolDiameter = document.getElementById('toolDiameter');
+    const stepOver = document.getElementById('stepOver');
 
     // إعداد Three.js للمعاينة 3D
     const scene = new THREE.Scene();
@@ -815,6 +818,8 @@
     let imageDataCache = null;
     let currentImageUrl = null;
     let heightMapData = null;
+    let originalImageWidth = 0;
+    let originalImageHeight = 0;
 
     // وظيفة فتح التبويبات
     function openTab(event, tabId) {
@@ -863,6 +868,8 @@
         URL.revokeObjectURL(currentImageUrl);
         currentImageUrl = null;
       }
+      
+      heightMapData = null;
     }
 
     // التحقق من صحة الملفات
@@ -903,12 +910,24 @@
         errors.push('الارتفاع الآمن يجب أن يكون بين 1 و 50 mm');
       }
       
-      if (designWidthCm.value < 1 || designWidthCm.value > 100) {
+      if (designWidth.value < 1 || designWidth.value > 100) {
         errors.push('عرض التصميم يجب أن يكون بين 1 و 100 سم');
       }
       
-      if (designHeightCm.value < 1 || designHeightCm.value > 100) {
+      if (designHeight.value < 1 || designHeight.value > 100) {
         errors.push('ارتفاع التصميم يجب أن يكون بين 1 و 100 سم');
+      }
+      
+      if (maxZHeight.value < 0.1 || maxZHeight.value > 20) {
+        errors.push('أقصى ارتفاع Z يجب أن يكون بين 0.1 و 20 مم');
+      }
+      
+      if (toolDiameter.value < 0.1 || toolDiameter.value > 10) {
+        errors.push('قطر الأداة يجب أن يكون بين 0.1 و 10 مم');
+      }
+      
+      if (stepOver.value < 10 || stepOver.value > 90) {
+        errors.push('نسبة التداخل يجب أن تكون بين 10 و 90%');
       }
       
       return errors;
@@ -956,27 +975,43 @@
       if (machine === 'cnc_router') {
         spindleSpeed.disabled = false;
         passDepth.disabled = false;
+        toolDiameter.disabled = false;
+        stepOver.disabled = false;
         cuttingSpeed.value = 1000;
         spindleSpeed.value = 10000;
         passDepth.value = 2;
+        toolDiameter.value = 3;
+        stepOver.value = 50;
       } else if (machine === 'laser_cutter') {
         spindleSpeed.disabled = true;
         passDepth.disabled = true;
+        toolDiameter.disabled = true;
+        stepOver.disabled = true;
         cuttingSpeed.value = 2000;
         spindleSpeed.value = 0;
         passDepth.value = 0;
+        toolDiameter.value = 0.1;
+        stepOver.value = 10;
       } else if (machine === '3d_printer') {
         spindleSpeed.disabled = true;
         passDepth.disabled = false;
+        toolDiameter.disabled = false;
+        stepOver.disabled = false;
         cuttingSpeed.value = 1500;
         spindleSpeed.value = 0;
         passDepth.value = 0.2;
+        toolDiameter.value = 0.4;
+        stepOver.value = 30;
       } else if (machine === 'plasma_cutter') {
         spindleSpeed.disabled = true;
         passDepth.disabled = false;
+        toolDiameter.disabled = false;
+        stepOver.disabled = false;
         cuttingSpeed.value = 3000;
         spindleSpeed.value = 0;
         passDepth.value = 5;
+        toolDiameter.value = 1;
+        stepOver.value = 80;
       }
     }
 
@@ -1036,6 +1071,7 @@
       if (!mesh) return;
       
       const positions = mesh.geometry.attributes.position.array;
+      const originalZ = [];
       
       // حفظ القيم الأصلية إذا لم تكن محفوظة مسبقًا
       if (!mesh.geometry.userData.originalZ) {
@@ -1072,6 +1108,10 @@
       
       const img = new Image();
       img.onload = () => {
+        // حفظ أبعاد الصورة الأصلية
+        originalImageWidth = img.width;
+        originalImageHeight = img.height;
+        
         // عرض الصورة الأصلية
         canvas2d.width = img.width;
         canvas2d.height = img.height;
@@ -1296,7 +1336,7 @@
       }
     }
 
-    // تحسين مسار الأداة باستخدام خوارزمية أقرب جار
+    // تحسين مسار الأداة باستخدام خوارزمية أقرب الجوار
     function optimizeToolPath(edges) {
       if (edges.length === 0) return [];
       
@@ -1330,67 +1370,53 @@
       return optimizedPath;
     }
 
-    // تحسين المسار باستخدام خوارزمية أكثر تقدمًا (TSP-like)
-    function advancedPathOptimization(edges) {
-      if (edges.length === 0) return [];
+    // إنشاء مسار ثلاثي الأبعاد باستخدام خريطة الارتفاعات
+    function create3DPathFromHeightMap(heightMap, width, height, maxZ, stepSize) {
+      const path = [];
+      const step = Math.max(1, Math.floor(stepSize));
       
-      // استخدام خوارزمية أقرب جار مع تحسينات إضافية
-      let path = optimizeToolPath(edges);
-      
-      // تطبيق تحسين 2-opt لتقليل التقاطعات
-      path = twoOptOptimization(path);
+      for (let y = 0; y < height; y += step) {
+        for (let x = 0; x < width; x += step) {
+          const idx = (y * width + x) * 4;
+          const brightness = heightMap[idx];
+          const z = (255 - brightness) / 255 * maxZ;
+          
+          path.push({
+            x: x,
+            y: y,
+            z: z
+          });
+        }
+      }
       
       return path;
     }
 
-    // خوارزمية 2-opt لتحسين المسار
-    function twoOptOptimization(path) {
-      if (path.length < 4) return path;
+    // دمج مسارات الحواف وخرائط الارتفاعات
+    function mergePaths(edgePath, heightMapPath, width, height) {
+      const mergedPath = [];
       
-      let improved = true;
-      let bestPath = [...path];
-      let bestDistance = calculatePathDistance(path);
-      
-      while (improved) {
-        improved = false;
-        
-        for (let i = 1; i < path.length - 2; i++) {
-          for (let j = i + 1; j < path.length - 1; j++) {
-            if (j - i === 1) continue;
-            
-            const newPath = twoOptSwap(bestPath, i, j);
-            const newDistance = calculatePathDistance(newPath);
-            
-            if (newDistance < bestDistance) {
-              bestPath = newPath;
-              bestDistance = newDistance;
-              improved = true;
-            }
-          }
-        }
+      // إضافة نقاط الحواف أولاً
+      for (const point of edgePath) {
+        mergedPath.push({
+          x: point.x,
+          y: point.y,
+          z: 0, // الحواف تكون على السطح
+          isEdge: true
+        });
       }
       
-      return bestPath;
-    }
-
-    // تطبيق تبديل 2-opt
-    function twoOptSwap(path, i, j) {
-      const newPath = path.slice(0, i);
-      newPath.push(...path.slice(i, j + 1).reverse());
-      newPath.push(...path.slice(j + 1));
-      return newPath;
-    }
-
-    // حساب مسافة المسار الكلية
-    function calculatePathDistance(path) {
-      let distance = 0;
-      for (let i = 0; i < path.length - 1; i++) {
-        distance += Math.sqrt(
-          Math.pow(path[i+1].x - path[i].x, 2) +
-          Math.pow(path[i+1].y - path[i].y, 2)
-        );
+      // إضافة نقاط خريطة الارتفاعات
+      for (const point of heightMapPath) {
+        mergedPath.push({
+          x: point.x,
+          y: point.y,
+          z: point.z,
+          isEdge: false
+        });
       }
-      return distance;
+      
+      return mergedPath;
     }
 
     // تحديث شريط التقدم
@@ -1399,10 +1425,10 @@
       progressText.textContent = message || percent + '%';
     }
 
-    // توليد G-code بناءً على حدود التصميم والإعدادات المتقدمة
+    // توليد G-code محسن باستخدام الحواف وخرائط الارتفاعات
     function generateGCode() {
-      if (!currentEdges.length) {
-        showStatus('يرجى تحميل صورة أولاً وتحديد الحواف', 'error');
+      if (!currentEdges.length || !heightMapData) {
+        showStatus('يرجى تحميل صورة أولاً', 'error');
         return;
       }
       
@@ -1417,36 +1443,29 @@
       progressContainer.style.display = 'block';
       updateProgress(0, 'بدء توليد G-code...');
       
-      const width = canvas2d.width;
-      const height = canvas2d.height;
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = width;
-      tempCanvas.height = height;
-      const tctx = tempCanvas.getContext('2d');
-      tctx.drawImage(canvas2d, 0, 0, width, height);
-      const imageData = tctx.getImageData(0, 0, width, height);
-      const imgData = imageData.data;
-      
       // الحصول على الإعدادات المتقدمة
       const machine = machineType.value;
       const material = materialType.value;
-      const designWidth = parseFloat(designWidthCm.value);
-      const designHeight = parseFloat(designHeightCm.value);
+      const widthCM = parseFloat(designWidth.value);
+      const heightCM = parseFloat(designHeight.value);
+      const maxZ = parseFloat(maxZHeight.value);
       const cutSpeed = parseInt(cuttingSpeed.value);
       const spindleRPM = parseInt(spindleSpeed.value);
       const depthPerPass = parseFloat(passDepth.value);
       const safeZ = parseInt(safeHeight.value);
-      const maxDepth = parseFloat(maxCutDepth.value);
+      const toolDia = parseFloat(toolDiameter.value);
+      const stepOverPercent = parseInt(stepOver.value);
       
-      // حساب عوامل التحجيم
-      const scaleX = (designWidth * 10) / (designBounds.maxX - designBounds.minX); // تحويل سم إلى مم
-      const scaleY = (designHeight * 10) / (designBounds.maxY - designBounds.minY);
+      // حساب عوامل التحجيم من البكسل إلى السنتيمتر
+      const scaleX = widthCM / originalImageWidth;
+      const scaleY = heightCM / originalImageHeight;
       
-      let gcode = "; CNC AI Preview G-code - Professional Version\n";
+      let gcode = "; CNC AI Preview G-code - Professional Edition\n";
       gcode += "; Generated from image with advanced edge detection and height mapping\n";
       gcode += `; Machine: ${machineType.options[machineType.selectedIndex].text}\n`;
       gcode += `; Material: ${materialType.options[materialType.selectedIndex].text}\n`;
-      gcode += `; Design dimensions: ${designWidth}cm x ${designHeight}cm\n`;
+      gcode += `; Design size: ${widthCM}x${heightCM} cm\n`;
+      gcode += `; Max Z height: ${maxZ} mm\n`;
       gcode += `; Design bounds: X${designBounds.minX}-${designBounds.maxX}, Y${designBounds.minY}-${designBounds.maxY}\n\n`;
       
       // إعدادات أولية حسب نوع الماكينة
@@ -1458,28 +1477,36 @@
         gcode += `S${spindleRPM} M3 ; Start spindle\n`;
       } else if (machine === 'laser_cutter') {
         gcode += "M3 ; Turn on laser\n";
+      } else if (machine === 'plasma_cutter') {
+        gcode += "M3 ; Start plasma arc\n";
       }
       
       gcode += `G0 Z${safeZ} ; Lift tool to safe height\n\n`;
       
-      // تحسين مسار الأداة باستخدام خوارزمية متقدمة
-      updateProgress(10, 'تحسين مسار الأداة...');
-      const optimizedPath = advancedPathOptimization(currentEdges);
+      // تحسين مسار الحواف
+      const optimizedEdgePath = optimizeToolPath(currentEdges);
+      
+      // إنشاء مسار من خريطة الارتفاعات
+      const stepSize = Math.max(1, Math.floor(toolDia * (100 - stepOverPercent) / 100));
+      const heightMapPath = create3DPathFromHeightMap(heightMapData, originalImageWidth, originalImageHeight, maxZ, stepSize);
+      
+      // دمج المسارات
+      const mergedPath = mergePaths(optimizedEdgePath, heightMapPath, originalImageWidth, originalImageHeight);
       
       // البدء من حدود التصميم
-      const startX = (designBounds.minX - designBounds.minX) * scaleX;
-      const startY = (designBounds.minY - designBounds.minY) * scaleY;
+      const startX = designBounds.minX * scaleX;
+      const startY = designBounds.minY * scaleY;
       
       gcode += `G0 X${startX.toFixed(2)} Y${startY.toFixed(2)} ; Move to design start\n`;
       
-      // إنشاء مسار بناءً على الحواف والارتفاعات
-      let lastZ = 0;
-      const totalPoints = optimizedPath.length;
+      // إنشاء مسار بناءً على المسار المدمج
+      let lastZ = safeZ;
+      const totalPoints = mergedPath.length;
       let processedPoints = 0;
       
       // استخدام setTimeout لتقسيم العملية إلى أجزاء لمنع تجميد المتصفح
       const processBatch = () => {
-        const batchSize = Math.min(100, Math.floor(totalPoints / 100)); // عدد النقاط التي تتم معالجتها في كل دفعة
+        const batchSize = 100; // عدد النقاط التي تتم معالجتها في كل دفعة
         
         for (let i = 0; i < batchSize; i++) {
           if (processedPoints >= totalPoints) {
@@ -1488,26 +1515,31 @@
             return;
           }
           
-          const point = optimizedPath[processedPoints];
-          const x = (point.x - designBounds.minX) * scaleX;
-          const y = (point.y - designBounds.minY) * scaleY;
+          const point = mergedPath[processedPoints];
+          const x = point.x * scaleX;
+          const y = point.y * scaleY;
+          const z = point.z;
           
-          if (x >= width * scaleX || y >= height * scaleY) {
+          if (x >= widthCM || y >= heightCM) {
             processedPoints++;
             continue;
           }
           
-          const idx = (point.y * width + point.x) * 4;
-          const brightness = imgData[idx];
-          
-          // حساب الارتفاع بناءً على السطوع مع مراعاة أقصى عمق قطع
-          const normalizedBrightness = (255 - brightness) / 255;
-          const z = normalizedBrightness * maxDepth;
-          
-          if (Math.abs(z - lastZ) > 0.1) {
-            gcode += `G1 Z${z.toFixed(2)} F${cutSpeed/2} ; Adjust height\n`;
-            lastZ = z;
+          // التحكم في الارتفاع بناءً على نوع النقطة
+          if (point.isEdge) {
+            // للحواف: القطع على السطح
+            if (lastZ !== 0) {
+              gcode += `G1 Z0 F${cutSpeed/2} ; Move to surface for edge cutting\n`;
+              lastZ = 0;
+            }
+          } else {
+            // لخريطة الارتفاعات: تعديل الارتفاع حسب القيمة
+            if (Math.abs(z - lastZ) > 0.1) {
+              gcode += `G1 Z${z.toFixed(2)} F${cutSpeed/2} ; Adjust height for 3D contour\n`;
+              lastZ = z;
+            }
           }
+          
           gcode += `G1 X${x.toFixed(2)} Y${y.toFixed(2)} F${cutSpeed} ; Move to point\n`;
           
           processedPoints++;
@@ -1515,7 +1547,7 @@
           // تحديث شريط التقدم كل 10 نقاط
           if (processedPoints % 10 === 0) {
             const progressPercent = Math.floor((processedPoints / totalPoints) * 100);
-            updateProgress(10 + Math.floor(progressPercent * 0.8), `معالجة النقاط: ${processedPoints}/${totalPoints}`);
+            updateProgress(progressPercent, `معالجة النقاط: ${processedPoints}/${totalPoints}`);
           }
         }
         
@@ -1535,6 +1567,8 @@
         gcode += "M5 ; Stop spindle\n";
       } else if (machine === 'laser_cutter') {
         gcode += "M5 ; Turn off laser\n";
+      } else if (machine === 'plasma_cutter') {
+        gcode += "M5 ; Stop plasma arc\n";
       }
       gcode += "G0 X0 Y0 ; Return to origin\n";
       gcode += "M30 ; End program\n";
@@ -1584,6 +1618,7 @@
 
       // تخزين البيانات مؤقتًا لتحسين الأداء
       imageDataCache = imgData;
+      heightMapData = imgData.data;
 
       // تحديث معاينة الحواف
       updateEdgePreview(imgData);
@@ -1593,9 +1628,6 @@
       let min = 255, max = 0;
       const colors = [];
       const originalZ = [];
-      
-      // تخزين بيانات خريطة الارتفاعات
-      heightMapData = new Float32Array(w * h);
       
       for (let i = 0; i < geometry.attributes.position.count; i++) {
         const stride = i * 3;
@@ -1608,9 +1640,6 @@
         const zValue = brightness / 80;
         geometry.attributes.position.array[stride + 2] = zValue;
         originalZ.push(zValue);
-        
-        // تخزين بيانات الارتفاع
-        heightMapData[y * w + x] = zValue;
 
         const norm = brightness / 255;
         const color = getHeatColor(norm, currentColormap);
@@ -1712,19 +1741,24 @@
         settings: {
             machineType: machineType.value,
             materialType: materialType.value,
-            designWidthCm: designWidthCm.value,
-            designHeightCm: designHeightCm.value,
+            designWidth: designWidth.value,
+            designHeight: designHeight.value,
+            maxZHeight: maxZHeight.value,
             cuttingSpeed: cuttingSpeed.value,
             spindleSpeed: spindleSpeed.value,
             passDepth: passDepth.value,
             safeHeight: safeHeight.value,
-            maxCutDepth: maxCutDepth.value,
-            resolution: resolution.value
+            toolDiameter: toolDiameter.value,
+            stepOver: stepOver.value
         },
         edges: currentEdges,
         designBounds: designBounds,
         gcode: generatedGCode,
-        colormap: currentColormap
+        colormap: currentColormap,
+        originalDimensions: {
+            width: originalImageWidth,
+            height: originalImageHeight
+        }
       };
       
       const blob = new Blob([JSON.stringify(projectData)], { type: 'application/json' });
@@ -1751,6 +1785,15 @@
           // تحميل الصورة
           const img = new Image();
           img.onload = () => {
+            // حفظ الأبعاد الأصلية
+            if (projectData.originalDimensions) {
+              originalImageWidth = projectData.originalDimensions.width;
+              originalImageHeight = projectData.originalDimensions.height;
+            } else {
+              originalImageWidth = img.width;
+              originalImageHeight = img.height;
+            }
+            
             canvas2d.width = img.width;
             canvas2d.height = img.height;
             ctx2d.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
@@ -1758,14 +1801,15 @@
             // تطبيق الإعدادات
             machineType.value = projectData.settings.machineType;
             materialType.value = projectData.settings.materialType;
-            designWidthCm.value = projectData.settings.designWidthCm;
-            designHeightCm.value = projectData.settings.designHeightCm;
+            designWidth.value = projectData.settings.designWidth;
+            designHeight.value = projectData.settings.designHeight;
+            maxZHeight.value = projectData.settings.maxZHeight;
             cuttingSpeed.value = projectData.settings.cuttingSpeed;
             spindleSpeed.value = projectData.settings.spindleSpeed;
             passDepth.value = projectData.settings.passDepth;
             safeHeight.value = projectData.settings.safeHeight;
-            maxCutDepth.value = projectData.settings.maxCutDepth;
-            resolution.value = projectData.settings.resolution;
+            toolDiameter.value = projectData.settings.toolDiameter;
+            stepOver.value = projectData.settings.stepOver;
             
             // تحديث الحالة
             currentEdges = projectData.edges;
