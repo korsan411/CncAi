@@ -120,6 +120,8 @@
       background: white;
       max-width: 100%;
       height: auto;
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
     }
 
     .preview-title {
@@ -366,7 +368,8 @@
       color: var(--text-medium);
     }
 
-    .advanced-control select {
+    .advanced-control select, 
+    .advanced-control input[type=number] {
       padding: 10px;
       border: 1px solid var(--border-color);
       border-radius: 6px;
@@ -403,6 +406,7 @@
       color: var(--text-medium);
     }
 
+    /* تحسينات للجوال */
     @media (max-width: 768px) {
       .preview-section {
         flex-direction: column;
@@ -442,10 +446,93 @@
         grid-template-columns: 1fr;
       }
     }
+
+    @media (max-width: 480px) {
+      .container {
+        padding: 0 10px;
+      }
+      
+      .preview-block {
+        min-width: 100%;
+        margin-bottom: 15px;
+      }
+      
+      .control-group {
+        padding: 15px;
+      }
+      
+      .options label, .edge-options label {
+        width: 100%;
+        justify-content: space-between;
+      }
+    }
+
+    /* شاشة التحميل */
+    #loadingOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.8);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      display: none;
+    }
+
+    .loading-spinner {
+      border: 5px solid #f3f3f3;
+      border-top: 5px solid #4a90e2;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+      margin-bottom: 15px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* عناصر تحكم إضافية */
+    .project-controls {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      flex-wrap: wrap;
+      margin: 20px 0;
+    }
+
+    .project-controls button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      background: #f0f0f0;
+      font-weight: 500;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .project-controls button:hover {
+      background: #e0e0e0;
+      transform: translateY(-2px);
+    }
   </style>
 </head>
 <body>
   <header>🛠️ CNC AI Preview</header>
+
+  <div id="loadingOverlay">
+    <div class="loading-spinner"></div>
+    <p id="loadingMessage">جاري المعالجة...</p>
+  </div>
 
   <div class="container">
     <!-- زر اختيار الصورة -->
@@ -458,8 +545,8 @@
 
     <!-- التبويبات -->
     <div class="tabs">
-      <button class="tab active" onclick="openTab('previewTab')">👁️ المعاينة</button>
-      <button class="tab" onclick="openTab('settingsTab')">⚙️ الإعدادات المتقدمة</button>
+      <button class="tab active" onclick="openTab(event, 'previewTab')">👁️ المعاينة</button>
+      <button class="tab" onclick="openTab(event, 'settingsTab')">⚙️ الإعدادات المتقدمة</button>
     </div>
 
     <!-- تبويب المعاينة -->
@@ -601,6 +688,16 @@
           </div>
         </div>
       </div>
+
+      <!-- عناصر تحكم المشروع -->
+      <div class="control-group">
+        <h3>💾 إدارة المشروع</h3>
+        <div class="project-controls">
+          <button id="saveProjectBtn" onclick="saveProject()">💾 حفظ المشروع</button>
+          <button id="loadProjectBtn" onclick="document.getElementById('projectFileInput').click()">📂 فتح مشروع</button>
+          <input type="file" id="projectFileInput" accept=".json" style="display: none">
+        </div>
+      </div>
     </div>
 
     <!-- شريط التقدم -->
@@ -648,6 +745,11 @@
     const progressContainer = document.getElementById('progressContainer');
     const progressBar = document.getElementById('progressBar');
     const progressText = document.getElementById('progressText');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const loadingMessage = document.getElementById('loadingMessage');
+    const saveProjectBtn = document.getElementById('saveProjectBtn');
+    const loadProjectBtn = document.getElementById('loadProjectBtn');
+    const projectFileInput = document.getElementById('projectFileInput');
     
     // عناصر الإعدادات المتقدمة
     const machineType = document.getElementById('machineType');
@@ -677,10 +779,11 @@
     let currentEdges = [];
     let designBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
     let generatedGCode = '';
-    let imageDataCache = null; // تخزين مؤقت لبيانات الصورة لتحسين الأداء
+    let imageDataCache = null;
+    let currentImageUrl = null;
 
     // وظيفة فتح التبويبات
-    function openTab(tabId) {
+    function openTab(event, tabId) {
       // إخفاء جميع محتويات التبويبات
       const tabContents = document.getElementsByClassName('tab-content');
       for (let i = 0; i < tabContents.length; i++) {
@@ -696,6 +799,77 @@
       // إظهار التبويب المحدد وإضافة النشاط إليه
       document.getElementById(tabId).classList.add('active');
       event.currentTarget.classList.add('active');
+    }
+
+    // إظهار وإخفاء شاشة التحميل
+    function showLoading(message = 'جاري المعالجة...') {
+      loadingMessage.textContent = message;
+      loadingOverlay.style.display = 'flex';
+    }
+
+    function hideLoading() {
+      loadingOverlay.style.display = 'none';
+    }
+
+    // تحرير الذاكرة
+    function cleanupMemory() {
+      if (mesh) {
+        scene.remove(mesh);
+        mesh.geometry.dispose();
+        mesh.material.dispose();
+        mesh = null;
+      }
+      
+      // تحرير عناصر DOM المؤقتة
+      const tempCanvases = document.querySelectorAll('canvas.temporary');
+      tempCanvases.forEach(canvas => canvas.remove());
+      
+      // تحرير URLs المؤقتة
+      if (currentImageUrl) {
+        URL.revokeObjectURL(currentImageUrl);
+        currentImageUrl = null;
+      }
+    }
+
+    // التحقق من صحة الملفات
+    function validateFile(file) {
+      // التحقق من نوع الملف
+      if (!file.type.startsWith('image/')) {
+        showStatus('يرجى اختيار ملف صورة فقط', 'error');
+        return false;
+      }
+      
+      // التحقق من حجم الملف (حد أقصى 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        showStatus('حجم الملف كبير جداً. الحد الأقصى هو 10MB', 'error');
+        return false;
+      }
+      
+      return true;
+    }
+
+    // التحقق من صحة الإعدادات
+    function validateSettings() {
+      const errors = [];
+      
+      if (cuttingSpeed.value < 100 || cuttingSpeed.value > 5000) {
+        errors.push('سرعة القطع يجب أن تكون بين 100 و 5000 mm/min');
+      }
+      
+      if (machineType.value === 'cnc_router' && 
+          (spindleSpeed.value < 1000 || spindleSpeed.value > 24000)) {
+        errors.push('سرعة المغزل يجب أن تكون بين 1000 و 24000 RPM');
+      }
+      
+      if (passDepth.value < 0.1 || passDepth.value > 10) {
+        errors.push('عمق التمريرة يجب أن يكون بين 0.1 و 10 mm');
+      }
+      
+      if (safeHeight.value < 1 || safeHeight.value > 50) {
+        errors.push('الارتفاع الآمن يجب أن يكون بين 1 و 50 mm');
+      }
+      
+      return errors;
     }
 
     // تحديث قيم المدخلات
@@ -845,6 +1019,16 @@
       const file = e.target.files[0];
       if (!file) return;
       
+      // التحقق من صحة الملف
+      if (!validateFile(file)) {
+        fileInput.value = '';
+        return;
+      }
+      
+      cleanupMemory();
+      
+      showLoading('جاري تحميل الصورة...');
+      
       const img = new Image();
       img.onload = () => {
         // عرض الصورة الأصلية
@@ -857,21 +1041,21 @@
         
         // تمكين أزرار التحكم
         generateBtn.disabled = false;
+        saveProjectBtn.disabled = false;
         
         // إظهار رسالة نجاح
         showStatus('تم تحميل الصورة بنجاح!', 'success');
         
-        // تحرير الذاكرة المؤقتة
-        if (imageDataCache) {
-          imageDataCache = null;
-        }
+        hideLoading();
       };
       
       img.onerror = () => {
         showStatus('حدث خطأ أثناء تحميل الصورة', 'error');
+        hideLoading();
       };
       
-      img.src = URL.createObjectURL(file);
+      currentImageUrl = URL.createObjectURL(file);
+      img.src = currentImageUrl;
     });
 
     // تحديث معاينة الحواف من البيانات المخزنة مؤقتًا
@@ -1089,6 +1273,40 @@
       }
     }
 
+    // تحسين مسار الأداة
+    function optimizeToolPath(edges) {
+      if (edges.length === 0) return [];
+      
+      const optimizedPath = [];
+      let currentPoint = edges[0];
+      const remainingPoints = [...edges.slice(1)];
+      
+      optimizedPath.push(currentPoint);
+      
+      while (remainingPoints.length > 0) {
+        let nearestIndex = 0;
+        let minDistance = Infinity;
+        
+        for (let i = 0; i < remainingPoints.length; i++) {
+          const distance = Math.sqrt(
+            Math.pow(currentPoint.x - remainingPoints[i].x, 2) +
+            Math.pow(currentPoint.y - remainingPoints[i].y, 2)
+          );
+          
+          if (distance < minDistance) {
+            minDistance = distance;
+            nearestIndex = i;
+          }
+        }
+        
+        optimizedPath.push(remainingPoints[nearestIndex]);
+        currentPoint = remainingPoints[nearestIndex];
+        remainingPoints.splice(nearestIndex, 1);
+      }
+      
+      return optimizedPath;
+    }
+
     // تحديث شريط التقدم
     function updateProgress(percent, message = '') {
       progressBar.style.width = percent + '%';
@@ -1099,6 +1317,13 @@
     function generateGCode() {
       if (!currentEdges.length) {
         showStatus('يرجى تحميل صورة أولاً وتحديد الحواف', 'error');
+        return;
+      }
+      
+      // التحقق من صحة الإعدادات
+      const errors = validateSettings();
+      if (errors.length > 0) {
+        showStatus('يوجد أخطاء في الإعدادات: ' + errors.join(', '), 'error');
         return;
       }
       
@@ -1141,6 +1366,9 @@
       
       gcode += `G0 Z${safeZ} ; Lift tool to safe height\n\n`;
       
+      // تحسين مسار الأداة
+      const optimizedPath = optimizeToolPath(currentEdges);
+      
       // البدء من حدود التصميم
       const startX = designBounds.minX;
       const startY = designBounds.minY;
@@ -1148,15 +1376,13 @@
       gcode += `G0 X${startX} Y${startY} ; Move to design start\n`;
       
       // إنشاء مسار بناءً على الحواف والارتفاعات
-      const stepSize = 2; // خطوة بين النقاط
       let lastZ = 0;
-      const totalPoints = Math.ceil((designBounds.maxY - designBounds.minY) / stepSize) * 
-                         Math.ceil((designBounds.maxX - designBounds.minX) / stepSize);
+      const totalPoints = optimizedPath.length;
       let processedPoints = 0;
       
       // استخدام setTimeout لتقسيم العملية إلى أجزاء لمنع تجميد المتصفح
       const processBatch = () => {
-        const batchSize = 1000; // عدد النقاط التي تتم معالجتها في كل دفعة
+        const batchSize = 100; // عدد النقاط التي تتم معالجتها في كل دفعة
         
         for (let i = 0; i < batchSize; i++) {
           if (processedPoints >= totalPoints) {
@@ -1165,11 +1391,9 @@
             return;
           }
           
-          const yIndex = Math.floor(processedPoints / Math.ceil((designBounds.maxX - designBounds.minX) / stepSize));
-          const xIndex = processedPoints % Math.ceil((designBounds.maxX - designBounds.minX) / stepSize);
-          
-          const y = designBounds.minY + yIndex * stepSize;
-          const x = designBounds.minX + xIndex * stepSize;
+          const point = optimizedPath[processedPoints];
+          const x = point.x;
+          const y = point.y;
           
           if (x >= width || y >= height) {
             processedPoints++;
@@ -1180,19 +1404,16 @@
           const brightness = imgData[idx];
           const z = (255 - brightness) / 50; // تحويل السطوع إلى ارتفاع
           
-          // التحقق مما إذا كانت النقطة داخل حدود التصميم
-          if (isPointInDesign(x, y)) {
-            if (Math.abs(z - lastZ) > 0.1) {
-              gcode += `G1 Z${z.toFixed(2)} F${cutSpeed/2} ; Adjust height\n`;
-              lastZ = z;
-            }
-            gcode += `G1 X${x} Y${y} F${cutSpeed} ; Move to point\n`;
+          if (Math.abs(z - lastZ) > 0.1) {
+            gcode += `G1 Z${z.toFixed(2)} F${cutSpeed/2} ; Adjust height\n`;
+            lastZ = z;
           }
+          gcode += `G1 X${x} Y${y} F${cutSpeed} ; Move to point\n`;
           
           processedPoints++;
           
-          // تحديث شريط التقدم كل 100 نقطة
-          if (processedPoints % 100 === 0) {
+          // تحديث شريط التقدم كل 10 نقاط
+          if (processedPoints % 10 === 0) {
             const progressPercent = Math.floor((processedPoints / totalPoints) * 100);
             updateProgress(progressPercent, `معالجة النقاط: ${processedPoints}/${totalPoints}`);
           }
@@ -1228,18 +1449,6 @@
       }, 1000);
       
       showStatus('تم توليد G-code بنجاح! يمكنك الآن تحميله.', 'success');
-    }
-
-    // التحقق مما إذا كانت النقطة داخل حدود التصميم
-    function isPointInDesign(x, y) {
-      // في هذا المثال المبسط، نتحقق من وجود حواف قريبة
-      for (let edge of currentEdges) {
-        const distance = Math.sqrt(Math.pow(edge.x - x, 2) + Math.pow(edge.y - y, 2));
-        if (distance < 10) { // إذا كانت النقطة قريبة من حافة
-          return true;
-        }
-      }
-      return false;
     }
 
     // تحميل G-code كملف
@@ -1384,6 +1593,90 @@
         img.src = URL.createObjectURL(fileInput.files[0]);
       }
     }
+
+    // حفظ المشروع
+    function saveProject() {
+      if (!fileInput.files[0]) {
+        showStatus('لا يوجد مشروع لحفظه', 'error');
+        return;
+      }
+      
+      const projectData = {
+        imageData: canvas2d.toDataURL(),
+        settings: {
+            machineType: machineType.value,
+            materialType: materialType.value,
+            cuttingSpeed: cuttingSpeed.value,
+            spindleSpeed: spindleSpeed.value,
+            passDepth: passDepth.value,
+            safeHeight: safeHeight.value
+        },
+        edges: currentEdges,
+        designBounds: designBounds,
+        gcode: generatedGCode,
+        colormap: currentColormap
+      };
+      
+      const blob = new Blob([JSON.stringify(projectData)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'cnc_project.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      showStatus('تم حفظ المشروع بنجاح', 'success');
+    }
+
+    // فتح المشروع
+    projectFileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const projectData = JSON.parse(e.target.result);
+          
+          // تحميل الصورة
+          const img = new Image();
+          img.onload = () => {
+            canvas2d.width = img.width;
+            canvas2d.height = img.height;
+            ctx2d.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
+            
+            // تطبيق الإعدادات
+            machineType.value = projectData.settings.machineType;
+            materialType.value = projectData.settings.materialType;
+            cuttingSpeed.value = projectData.settings.cuttingSpeed;
+            spindleSpeed.value = projectData.settings.spindleSpeed;
+            passDepth.value = projectData.settings.passDepth;
+            safeHeight.value = projectData.settings.safeHeight;
+            
+            // تحديث الحالة
+            currentEdges = projectData.edges;
+            designBounds = projectData.designBounds;
+            generatedGCode = projectData.gcode;
+            setColormap(projectData.colormap);
+            
+            // إنشاء خريطة الارتفاعات
+            createHeightMap(img);
+            
+            // تمكين الأزرار
+            generateBtn.disabled = false;
+            downloadBtn.disabled = !projectData.gcode;
+            saveProjectBtn.disabled = false;
+            
+            showStatus('تم تحميل المشروع بنجاح', 'success');
+          };
+          img.src = projectData.imageData;
+        } catch (error) {
+          showStatus('خطأ في تحميل المشروع', 'error');
+          console.error(error);
+        }
+      };
+      reader.readAsText(file);
+    });
 
     // عرض رسالة الحالة
     function showStatus(message, type) {
