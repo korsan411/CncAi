@@ -634,6 +634,39 @@
 
     <!-- تبويب الإعدادات المتقدمة -->
     <div id="settingsTab" class="tab-content">
+      <!-- التحكم في حجم الصورة بالسنتيمتر -->
+      <div class="control-group">
+        <h3>📏 التحكم في حجم الصورة (سم)</h3>
+        <div class="advanced-controls">
+          <div class="advanced-control">
+            <label for="imageWidth">العرض (سم):</label>
+            <input type="number" id="imageWidth" min="1" max="100" value="10">
+            <p>حدد عرض التصميم بالسنتيمتر</p>
+          </div>
+          
+          <div class="advanced-control">
+            <label for="imageHeight">الارتفاع (سم):</label>
+            <input type="number" id="imageHeight" min="1" max="100" value="10">
+            <p>حدد ارتفاع التصميم بالسنتيمتر</p>
+          </div>
+          
+          <div class="advanced-control">
+            <label for="resolution">الدقة (نقطة/سم):</label>
+            <input type="number" id="resolution" min="10" max="200" value="50">
+            <p>عدد النقاط في كل سنتيمتر (تؤثر على دقة النموذج)</p>
+          </div>
+          
+          <div class="advanced-control">
+            <label for="maintainAspectRatio">الحفاظ على النسبة:</label>
+            <select id="maintainAspectRatio">
+              <option value="true">نعم</option>
+              <option value="false">لا</option>
+            </select>
+            <p>الحفاظ على نسبة الأبعاد الأصلية للصورة</p>
+          </div>
+        </div>
+      </div>
+
       <div class="control-group">
         <h3>⚙️ الإعدادات المتقدمة</h3>
         <div class="advanced-controls">
@@ -687,6 +720,24 @@
             <p>حدد الارتفاع الآمن لحركة الأداة بين القطع</p>
           </div>
         </div>
+      </div>
+
+      <!-- اختيار مصدر توليد G-code -->
+      <div class="control-group">
+        <h3>🔧 مصدر توليد G-code</h3>
+        <div class="edge-options">
+          <label>
+            <input type="radio" name="gcodeSource" value="edges" checked> 
+            توليد من الحواف
+          </label>
+          <label>
+            <input type="radio" name="gcodeSource" value="heatmap"> 
+            توليد من خريطة الارتفاعات
+          </label>
+        </div>
+        <p style="text-align: center; margin-top: 10px; font-size: 14px; color: var(--text-light);">
+          اختر مصدر البيانات المستخدم في توليد كود CNC
+        </p>
       </div>
 
       <!-- عناصر تحكم المشروع -->
@@ -751,6 +802,12 @@
     const loadProjectBtn = document.getElementById('loadProjectBtn');
     const projectFileInput = document.getElementById('projectFileInput');
     
+    // عناصر التحكم في حجم الصورة
+    const imageWidth = document.getElementById('imageWidth');
+    const imageHeight = document.getElementById('imageHeight');
+    const resolution = document.getElementById('resolution');
+    const maintainAspectRatio = document.getElementById('maintainAspectRatio');
+    
     // عناصر الإعدادات المتقدمة
     const machineType = document.getElementById('machineType');
     const materialType = document.getElementById('materialType');
@@ -781,6 +838,8 @@
     let generatedGCode = '';
     let imageDataCache = null;
     let currentImageUrl = null;
+    let originalImageData = null;
+    let originalAspectRatio = 1;
 
     // وظيفة فتح التبويبات
     function openTab(event, tabId) {
@@ -811,23 +870,49 @@
       loadingOverlay.style.display = 'none';
     }
 
-    // تحرير الذاكرة
+    // تحرير الذاكرة بشكل شامل
     function cleanupMemory() {
+      // تحرير الذاكرة من Three.js
       if (mesh) {
         scene.remove(mesh);
-        mesh.geometry.dispose();
-        mesh.material.dispose();
+        if (mesh.geometry) {
+          mesh.geometry.dispose();
+        }
+        if (mesh.material) {
+          mesh.material.dispose();
+        }
         mesh = null;
       }
       
       // تحرير عناصر DOM المؤقتة
       const tempCanvases = document.querySelectorAll('canvas.temporary');
-      tempCanvases.forEach(canvas => canvas.remove());
+      tempCanvases.forEach(canvas => {
+        if (canvas.parentNode) {
+          canvas.parentNode.removeChild(canvas);
+        }
+      });
       
       // تحرير URLs المؤقتة
       if (currentImageUrl) {
         URL.revokeObjectURL(currentImageUrl);
         currentImageUrl = null;
+      }
+      
+      // إلغاء أي عمليات غير متزامنة جارية
+      if (window.currentProcessTimeout) {
+        clearTimeout(window.currentProcessTimeout);
+        window.currentProcessTimeout = null;
+      }
+      
+      // تحرير البيانات المؤقتة
+      imageDataCache = null;
+      originalImageData = null;
+      currentEdges = [];
+      generatedGCode = '';
+      
+      // إجبار جمع القمامة في المتصفحات التي تدعم ذلك
+      if (window.gc) {
+        window.gc();
       }
     }
 
@@ -869,6 +954,19 @@
         errors.push('الارتفاع الآمن يجب أن يكون بين 1 و 50 mm');
       }
       
+      // التحقق من إعدادات الحجم
+      if (imageWidth.value < 1 || imageWidth.value > 100) {
+        errors.push('العرض يجب أن يكون بين 1 و 100 سم');
+      }
+      
+      if (imageHeight.value < 1 || imageHeight.value > 100) {
+        errors.push('الارتفاع يجب أن يكون بين 1 و 100 سم');
+      }
+      
+      if (resolution.value < 10 || resolution.value > 200) {
+        errors.push('الدقة يجب أن تكون بين 10 و 200 نقطة/سم');
+      }
+      
       return errors;
     }
 
@@ -905,6 +1003,66 @@
     // تحديث الإعدادات بناءً على نوع الماكينة
     machineType.addEventListener('change', updateMachineSettings);
     materialType.addEventListener('change', updateMaterialSettings);
+
+    // تحديث أبعاد الصورة مع الحفاظ على النسبة
+    imageWidth.addEventListener('input', updateImageDimensions);
+    imageHeight.addEventListener('input', updateImageDimensions);
+    resolution.addEventListener('input', updateImageDimensions);
+    maintainAspectRatio.addEventListener('change', updateImageDimensions);
+
+    // تحديث أبعاد الصورة
+    function updateImageDimensions() {
+      if (!originalImageData) return;
+      
+      const maintainRatio = maintainAspectRatio.value === 'true';
+      
+      if (maintainRatio) {
+        // الحفاظ على نسبة الأبعاد الأصلية
+        if (this.id === 'imageWidth') {
+          imageHeight.value = Math.round(imageWidth.value / originalAspectRatio);
+        } else if (this.id === 'imageHeight') {
+          imageWidth.value = Math.round(imageHeight.value * originalAspectRatio);
+        }
+      }
+      
+      // إعادة معالجة الصورة بالأبعاد الجديدة
+      if (fileInput.files[0]) {
+        processImageWithNewDimensions();
+      }
+    }
+
+    // معالجة الصورة بالأبعاد الجديدة
+    function processImageWithNewDimensions() {
+      showLoading('جاري تعديل أبعاد الصورة...');
+      
+      const img = new Image();
+      img.onload = () => {
+        // حساب الأبعاد الجديدة بناءً على الدقة المطلوبة
+        const targetWidth = Math.round(imageWidth.value * resolution.value);
+        const targetHeight = Math.round(imageHeight.value * resolution.value);
+        
+        // إنشاء canvas مؤقت لتغيير حجم الصورة
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = targetWidth;
+        tempCanvas.height = targetHeight;
+        const tempCtx = tempCanvas.getContext('2d');
+        
+        // رسم الصورة بالأبعاد الجديدة
+        tempCtx.drawImage(img, 0, 0, targetWidth, targetHeight);
+        
+        // عرض الصورة المعدلة
+        canvas2d.width = targetWidth;
+        canvas2d.height = targetHeight;
+        ctx2d.drawImage(tempCanvas, 0, 0, targetWidth, targetHeight);
+        
+        // إنشاء خريطة الارتفاعات بالأبعاد الجديدة
+        createHeightMapFromCanvas(tempCanvas);
+        
+        hideLoading();
+      };
+      
+      img.src = URL.createObjectURL(fileInput.files[0]);
+    }
 
     // تحديث إعدادات الماكينة
     function updateMachineSettings() {
@@ -1031,13 +1189,32 @@
       
       const img = new Image();
       img.onload = () => {
-        // عرض الصورة الأصلية
-        canvas2d.width = img.width;
-        canvas2d.height = img.height;
-        ctx2d.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
+        // حفظ نسبة الأبعاد الأصلية
+        originalAspectRatio = img.width / img.height;
+        
+        // حساب الأبعاد الجديدة بناءً على الإعدادات
+        const targetWidth = Math.round(imageWidth.value * resolution.value);
+        const targetHeight = Math.round(imageHeight.value * resolution.value);
+        
+        // إنشاء canvas مؤقت لتغيير حجم الصورة
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = targetWidth;
+        tempCanvas.height = targetHeight;
+        const tempCtx = tempCanvas.getContext('2d');
+        
+        // رسم الصورة بالأبعاد الجديدة
+        tempCtx.drawImage(img, 0, 0, targetWidth, targetHeight);
+        
+        // حفظ بيانات الصورة الأصلية
+        originalImageData = tempCtx.getImageData(0, 0, targetWidth, targetHeight);
+        
+        // عرض الصورة المعدلة
+        canvas2d.width = targetWidth;
+        canvas2d.height = targetHeight;
+        ctx2d.drawImage(tempCanvas, 0, 0, targetWidth, targetHeight);
         
         // إنشاء خريطة الارتفاعات
-        createHeightMap(img);
+        createHeightMapFromCanvas(tempCanvas);
         
         // تمكين أزرار التحكم
         generateBtn.disabled = false;
@@ -1058,28 +1235,59 @@
       img.src = currentImageUrl;
     });
 
+    // إنشاء خريطة الارتفاعات من canvas
+    function createHeightMapFromCanvas(canvas) {
+      const w = canvas.width;
+      const h = canvas.height;
+      const imgData = canvas.getContext('2d').getImageData(0, 0, w, h);
+
+      // تخزين البيانات مؤقتًا لتحسين الأداء
+      imageDataCache = imgData;
+
+      // تحديث معاينة الحواف
+      updateEdgePreview(imgData);
+
+      // 3D mesh
+      const geometry = new THREE.PlaneGeometry(100, 100, w-1, h-1);
+      let min = 255, max = 0;
+      const colors = [];
+      const originalZ = [];
+      
+      for (let i = 0; i < geometry.attributes.position.count; i++) {
+        const stride = i * 3;
+        const x = i % w;
+        const y = Math.floor(i / w);
+        const idx = (y * w + x) * 4;
+        const brightness = imgData.data[idx];
+        min = Math.min(min, brightness);
+        max = Math.max(max, brightness);
+        const zValue = brightness / 80;
+        geometry.attributes.position.array[stride + 2] = zValue;
+        originalZ.push(zValue);
+
+        const norm = brightness / 255;
+        const color = getHeatColor(norm, currentColormap);
+        colors.push(color.r/255, color.g/255, color.b/255);
+      }
+      
+      // حفظ القيم الأصلية للارتفاع
+      geometry.userData.originalZ = originalZ;
+      
+      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geometry.computeVertexNormals();
+
+      const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+      if (mesh) scene.remove(mesh);
+      mesh = new THREE.Mesh(geometry, material);
+      scene.add(mesh);
+
+      drawHeatmap(imgData.data, w, h, min, max);
+    }
+
     // تحديث معاينة الحواف من البيانات المخزنة مؤقتًا
     function updateEdgePreviewFromCache() {
       if (!imageDataCache) return;
       updateEdgePreview(imageDataCache);
-    }
-
-    // تحديث معاينة الحواف من الصورة الحالية
-    function updateEdgePreviewFromImage() {
-      if (!fileInput.files[0]) return;
-      
-      const img = new Image();
-      img.onload = () => {
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = img.width;
-        tempCanvas.height = img.height;
-        const tctx = tempCanvas.getContext('2d');
-        tctx.drawImage(img, 0, 0, img.width, img.height);
-        const imgData = tctx.getImageData(0, 0, img.width, img.height);
-        imageDataCache = imgData; // تخزين البيانات مؤقتًا
-        updateEdgePreview(imgData);
-      };
-      img.src = URL.createObjectURL(fileInput.files[0]);
     }
 
     // كشف الحواف باستخدام خوارزميات مختلفة
@@ -1315,8 +1523,8 @@
 
     // توليد G-code بناءً على حدود التصميم والإعدادات المتقدمة
     function generateGCode() {
-      if (!currentEdges.length) {
-        showStatus('يرجى تحميل صورة أولاً وتحديد الحواف', 'error');
+      if (!imageDataCache) {
+        showStatus('يرجى تحميل صورة أولاً', 'error');
         return;
       }
       
@@ -1331,14 +1539,9 @@
       progressContainer.style.display = 'block';
       updateProgress(0, 'بدء توليد G-code...');
       
-      const width = canvas2d.width;
-      const height = canvas2d.height;
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = width;
-      tempCanvas.height = height;
-      const tctx = tempCanvas.getContext('2d');
-      tctx.drawImage(canvas2d, 0, 0, width, height);
-      const imgData = tctx.getImageData(0, 0, width, height).data;
+      const width = imageDataCache.width;
+      const height = imageDataCache.height;
+      const imgData = imageDataCache.data;
       
       // الحصول على الإعدادات المتقدمة
       const machine = machineType.value;
@@ -1348,10 +1551,14 @@
       const depthPerPass = parseFloat(passDepth.value);
       const safeZ = parseInt(safeHeight.value);
       
+      // الحصول على مصدر توليد G-code المختار
+      const gcodeSource = document.querySelector('input[name="gcodeSource"]:checked').value;
+      
       let gcode = "; CNC AI Preview G-code\n";
       gcode += "; Generated from image with edge detection\n";
       gcode += `; Machine: ${machineType.options[machineType.selectedIndex].text}\n`;
       gcode += `; Material: ${materialType.options[materialType.selectedIndex].text}\n`;
+      gcode += `; Source: ${gcodeSource === 'edges' ? 'Edges' : 'Heatmap'}\n`;
       gcode += `; Design bounds: X${designBounds.minX}-${designBounds.maxX}, Y${designBounds.minY}-${designBounds.maxY}\n\n`;
       
       // إعدادات أولية حسب نوع الماكينة
@@ -1366,30 +1573,62 @@
       
       gcode += `G0 Z${safeZ} ; Lift tool to safe height\n\n`;
       
-      // تحسين مسار الأداة
-      const optimizedPath = optimizeToolPath(currentEdges);
-      
       // البدء من حدود التصميم
       const startX = designBounds.minX;
       const startY = designBounds.minY;
       
       gcode += `G0 X${startX} Y${startY} ; Move to design start\n`;
       
-      // إنشاء مسار بناءً على الحواف والارتفاعات
-      let lastZ = 0;
-      const totalPoints = optimizedPath.length;
+      let totalPoints, processFunction;
+      
+      if (gcodeSource === 'edges') {
+        // توليد من الحواف
+        const optimizedPath = optimizeToolPath(currentEdges);
+        totalPoints = optimizedPath.length;
+        processFunction = processEdgesBatch(optimizedPath, imgData, width, height, cutSpeed, gcode);
+      } else {
+        // توليد من خريطة الارتفاعات
+        totalPoints = (designBounds.maxX - designBounds.minX + 1) * (designBounds.maxY - designBounds.minY + 1);
+        processFunction = processHeatmapBatch(imgData, width, height, cutSpeed, gcode);
+      }
+      
       let processedPoints = 0;
       
       // استخدام setTimeout لتقسيم العملية إلى أجزاء لمنع تجميد المتصفح
       const processBatch = () => {
         const batchSize = 100; // عدد النقاط التي تتم معالجتها في كل دفعة
         
+        const result = processFunction(batchSize, processedPoints, totalPoints);
+        processedPoints = result.processedPoints;
+        gcode = result.gcode;
+        
+        if (processedPoints >= totalPoints) {
+          // الانتهاء من المعالجة
+          finishGCodeGeneration(gcode, machine, safeZ);
+          return;
+        }
+        
+        // تحديث شريط التقدم كل 10 نقاط
+        if (processedPoints % 10 === 0) {
+          const progressPercent = Math.floor((processedPoints / totalPoints) * 100);
+          updateProgress(progressPercent, `معالجة النقاط: ${processedPoints}/${totalPoints}`);
+        }
+        
+        // استدعاء الدالة مرة أخرى بعد فترة قصيرة
+        window.currentProcessTimeout = setTimeout(processBatch, 10);
+      };
+      
+      // بدء المعالجة
+      processBatch();
+    }
+
+    // معالجة دفعات من الحواف
+    function processEdgesBatch(optimizedPath, imgData, width, height, cutSpeed, gcode) {
+      return function(batchSize, processedPoints, totalPoints) {
+        let lastZ = 0;
+        
         for (let i = 0; i < batchSize; i++) {
-          if (processedPoints >= totalPoints) {
-            // الانتهاء من المعالجة
-            finishGCodeGeneration(gcode, machine, safeZ);
-            return;
-          }
+          if (processedPoints >= totalPoints) break;
           
           const point = optimizedPath[processedPoints];
           const x = point.x;
@@ -1411,20 +1650,54 @@
           gcode += `G1 X${x} Y${y} F${cutSpeed} ; Move to point\n`;
           
           processedPoints++;
-          
-          // تحديث شريط التقدم كل 10 نقاط
-          if (processedPoints % 10 === 0) {
-            const progressPercent = Math.floor((processedPoints / totalPoints) * 100);
-            updateProgress(progressPercent, `معالجة النقاط: ${processedPoints}/${totalPoints}`);
-          }
         }
         
-        // استدعاء الدالة مرة أخرى بعد فترة قصيرة
-        setTimeout(processBatch, 10);
+        return { processedPoints, gcode };
       };
-      
-      // بدء المعالجة
-      processBatch();
+    }
+
+    // معالجة دفعات من خريطة الارتفاعات
+    function processHeatmapBatch(imgData, width, height, cutSpeed, gcode) {
+      return function(batchSize, processedPoints, totalPoints) {
+        let lastZ = 0;
+        let x = designBounds.minX;
+        let y = designBounds.minY;
+        
+        // حساب نقطة البداية بناءً على النقاط المعالجة
+        const pointsPerRow = designBounds.maxX - designBounds.minX + 1;
+        const startRow = Math.floor(processedPoints / pointsPerRow);
+        const startCol = processedPoints % pointsPerRow;
+        
+        x = designBounds.minX + startCol;
+        y = designBounds.minY + startRow;
+        
+        for (let i = 0; i < batchSize; i++) {
+          if (processedPoints >= totalPoints) break;
+          
+          if (x >= width || y >= height) {
+            processedPoints++;
+            x = designBounds.minX + (processedPoints % pointsPerRow);
+            y = designBounds.minY + Math.floor(processedPoints / pointsPerRow);
+            continue;
+          }
+          
+          const idx = (y * width + x) * 4;
+          const brightness = imgData[idx];
+          const z = (255 - brightness) / 50; // تحويل السطوع إلى ارتفاع
+          
+          if (Math.abs(z - lastZ) > 0.1) {
+            gcode += `G1 Z${z.toFixed(2)} F${cutSpeed/2} ; Adjust height\n`;
+            lastZ = z;
+          }
+          gcode += `G1 X${x} Y${y} F${cutSpeed} ; Move to point\n`;
+          
+          processedPoints++;
+          x = designBounds.minX + (processedPoints % pointsPerRow);
+          y = designBounds.minY + Math.floor(processedPoints / pointsPerRow);
+        }
+        
+        return { processedPoints, gcode };
+      };
     }
 
     // الانتهاء من توليد G-code
@@ -1469,60 +1742,6 @@
       URL.revokeObjectURL(url);
       
       showStatus('تم تحميل ملف G-code بنجاح', 'success');
-    }
-
-    // إنشاء خريطة الارتفاعات
-    function createHeightMap(image) {
-      const w = image.width;
-      const h = image.height;
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = w; 
-      tempCanvas.height = h;
-      const tctx = tempCanvas.getContext('2d');
-      tctx.drawImage(image, 0, 0, w, h);
-      const imgData = tctx.getImageData(0, 0, w, h);
-
-      // تخزين البيانات مؤقتًا لتحسين الأداء
-      imageDataCache = imgData;
-
-      // تحديث معاينة الحواف
-      updateEdgePreview(imgData);
-
-      // 3D mesh
-      const geometry = new THREE.PlaneGeometry(100, 100, w-1, h-1);
-      let min = 255, max = 0;
-      const colors = [];
-      const originalZ = [];
-      
-      for (let i = 0; i < geometry.attributes.position.count; i++) {
-        const stride = i * 3;
-        const x = i % w;
-        const y = Math.floor(i / w);
-        const idx = (y * w + x) * 4;
-        const brightness = imgData.data[idx];
-        min = Math.min(min, brightness);
-        max = Math.max(max, brightness);
-        const zValue = brightness / 80;
-        geometry.attributes.position.array[stride + 2] = zValue;
-        originalZ.push(zValue);
-
-        const norm = brightness / 255;
-        const color = getHeatColor(norm, currentColormap);
-        colors.push(color.r/255, color.g/255, color.b/255);
-      }
-      
-      // حفظ القيم الأصلية للارتفاع
-      geometry.userData.originalZ = originalZ;
-      
-      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-      geometry.computeVertexNormals();
-
-      const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
-      if (mesh) scene.remove(mesh);
-      mesh = new THREE.Mesh(geometry, material);
-      scene.add(mesh);
-
-      drawHeatmap(imgData.data, w, h, min, max);
     }
 
     // رسم خريطة الألوان
@@ -1589,7 +1808,7 @@
       
       if(fileInput.files[0]){
         const img = new Image();
-        img.onload = () => createHeightMap(img);
+        img.onload = () => createHeightMapFromCanvas(img);
         img.src = URL.createObjectURL(fileInput.files[0]);
       }
     }
@@ -1609,12 +1828,17 @@
             cuttingSpeed: cuttingSpeed.value,
             spindleSpeed: spindleSpeed.value,
             passDepth: passDepth.value,
-            safeHeight: safeHeight.value
+            safeHeight: safeHeight.value,
+            imageWidth: imageWidth.value,
+            imageHeight: imageHeight.value,
+            resolution: resolution.value,
+            maintainAspectRatio: maintainAspectRatio.value
         },
         edges: currentEdges,
         designBounds: designBounds,
         gcode: generatedGCode,
-        colormap: currentColormap
+        colormap: currentColormap,
+        originalAspectRatio: originalAspectRatio
       };
       
       const blob = new Blob([JSON.stringify(projectData)], { type: 'application/json' });
@@ -1652,15 +1876,20 @@
             spindleSpeed.value = projectData.settings.spindleSpeed;
             passDepth.value = projectData.settings.passDepth;
             safeHeight.value = projectData.settings.safeHeight;
+            imageWidth.value = projectData.settings.imageWidth || 10;
+            imageHeight.value = projectData.settings.imageHeight || 10;
+            resolution.value = projectData.settings.resolution || 50;
+            maintainAspectRatio.value = projectData.settings.maintainAspectRatio || 'true';
             
             // تحديث الحالة
             currentEdges = projectData.edges;
             designBounds = projectData.designBounds;
             generatedGCode = projectData.gcode;
+            originalAspectRatio = projectData.originalAspectRatio || 1;
             setColormap(projectData.colormap);
             
             // إنشاء خريطة الارتفاعات
-            createHeightMap(img);
+            createHeightMapFromCanvas(img);
             
             // تمكين الأزرار
             generateBtn.disabled = false;
