@@ -758,6 +758,9 @@
       edgePreview.height = 400;
       heatmap.width = 400;
       heatmap.height = 400;
+      
+      // تعطيل زر التوليد حتى يتم تحميل صورة
+      generateBtn.disabled = true;
     }
 
     // تحديث خيارات الخامة
@@ -808,7 +811,7 @@
         
         // رسم الصورة بحجم مناسب للعرض
         ctx2d.clearRect(0, 0, canvas2d.width, canvas2d.height);
-        ctx2d.drawImage(img, 0, 0, img.width, img.height, 0, 0, displayWidth, displayHeight);
+        ctx2d.drawImage(img, 0, 0, displayWidth, displayHeight);
         
         // إنشاء خريطة الارتفاعات باستخدام الصورة الأصلية (بحجمها الكامل)
         createHeightMap(img);
