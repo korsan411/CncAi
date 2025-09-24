@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CNC AI Preview - Professional</title>
   <style>
-    /* نفس الأنماط السابقة - لا تحتاج لتعديل */
     :root {
       --primary-color: #4a90e2;
       --primary-light: #67b0f5;
@@ -1037,7 +1036,6 @@
       if (!mesh) return;
       
       const positions = mesh.geometry.attributes.position.array;
-      const originalZ = [];
       
       // حفظ القيم الأصلية إذا لم تكن محفوظة مسبقًا
       if (!mesh.geometry.userData.originalZ) {
