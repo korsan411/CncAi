@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CNC AI Preview - Professional Edition</title>
+  <title>CNC AI Preview - المحسّن</title>
   <style>
     :root {
       --primary-color: #4a90e2;
@@ -120,8 +120,6 @@
       background: white;
       max-width: 100%;
       height: auto;
-      image-rendering: -webkit-optimize-contrast;
-      image-rendering: crisp-edges;
     }
 
     .preview-title {
@@ -368,8 +366,8 @@
       color: var(--text-medium);
     }
 
-    .advanced-control select, 
-    .advanced-control input[type=number] {
+    .advanced-control select,
+    .advanced-control input {
       padding: 10px;
       border: 1px solid var(--border-color);
       border-radius: 6px;
@@ -383,30 +381,40 @@
       color: var(--text-light);
     }
 
-    .progress-container {
+    .progress-bar {
       width: 100%;
-      background-color: #f0f0f0;
-      border-radius: 5px;
-      margin: 15px 0;
+      height: 8px;
+      background: #f0f0f0;
+      border-radius: 4px;
+      margin: 10px 0;
+      overflow: hidden;
       display: none;
     }
 
-    .progress-bar {
+    .progress {
+      height: 100%;
+      background: var(--primary-color);
       width: 0%;
-      height: 20px;
-      background-color: #4a90e2;
-      border-radius: 5px;
-      transition: width 0.3s ease;
+      transition: width 0.3s;
     }
 
-    .progress-text {
-      text-align: center;
-      margin-top: 5px;
+    .dimension-controls {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin: 15px 0;
+    }
+
+    .dimension-controls label {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
       font-size: 14px;
-      color: var(--text-medium);
+      font-weight: 500;
     }
 
-    /* تحسينات للجوال */
     @media (max-width: 768px) {
       .preview-section {
         flex-direction: column;
@@ -445,94 +453,15 @@
       .advanced-controls {
         grid-template-columns: 1fr;
       }
-    }
-
-    @media (max-width: 480px) {
-      .container {
-        padding: 0 10px;
-      }
       
-      .preview-block {
-        min-width: 100%;
-        margin-bottom: 15px;
+      .dimension-controls {
+        flex-direction: column;
       }
-      
-      .control-group {
-        padding: 15px;
-      }
-      
-      .options label, .edge-options label {
-        width: 100%;
-        justify-content: space-between;
-      }
-    }
-
-    /* شاشة التحميل */
-    #loadingOverlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(255, 255, 255, 0.8);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      z-index: 1000;
-      display: none;
-    }
-
-    .loading-spinner {
-      border: 5px solid #f3f3f3;
-      border-top: 5px solid #4a90e2;
-      border-radius: 50%;
-      width: 50px;
-      height: 50px;
-      animation: spin 1s linear infinite;
-      margin-bottom: 15px;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    /* عناصر تحكم إضافية */
-    .project-controls {
-      display: flex;
-      justify-content: center;
-      gap: 15px;
-      flex-wrap: wrap;
-      margin: 20px 0;
-    }
-
-    .project-controls button {
-      padding: 10px 20px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      background: #f0f0f0;
-      font-weight: 500;
-      transition: all 0.3s;
-      display: flex;
-      align-items: center;
-      gap: 5px;
-    }
-
-    .project-controls button:hover {
-      background: #e0e0e0;
-      transform: translateY(-2px);
     }
   </style>
 </head>
 <body>
-  <header>🛠️ CNC AI Preview - Professional Edition</header>
-
-  <div id="loadingOverlay">
-    <div class="loading-spinner"></div>
-    <p id="loadingMessage">جاري المعالجة...</p>
-  </div>
+  <header>🛠️ CNC AI Preview - المحسّن</header>
 
   <div class="container">
     <!-- زر اختيار الصورة -->
@@ -543,14 +472,42 @@
       <input type="file" id="fileInput" accept="image/*">
     </div>
 
+    <!-- التحكم في الأبعاد -->
+    <div class="control-group">
+      <h3>📏 تحديد الأبعاد الفعلية (بالسنتيمتر)</h3>
+      <div class="dimension-controls">
+        <label>
+          العرض (سم):
+          <input type="number" id="widthCm" min="1" max="100" value="10" step="0.1">
+        </label>
+        <label>
+          الارتفاع (سم):
+          <input type="number" id="heightCm" min="1" max="100" value="10" step="0.1">
+        </label>
+        <label>
+          أقصى عمق (مم):
+          <input type="number" id="maxDepth" min="0.1" max="50" value="5" step="0.1">
+        </label>
+        <label>
+          دقة النقاط (مم):
+          <input type="number" id="pointResolution" min="0.1" max="5" value="1" step="0.1">
+        </label>
+      </div>
+    </div>
+
     <!-- التبويبات -->
     <div class="tabs">
-      <button class="tab active" onclick="openTab(event, 'previewTab')">👁️ المعاينة</button>
-      <button class="tab" onclick="openTab(event, 'settingsTab')">⚙️ الإعدادات المتقدمة</button>
+      <button class="tab active" onclick="openTab('previewTab')">👁️ المعاينة</button>
+      <button class="tab" onclick="openTab('settingsTab')">⚙️ الإعدادات المتقدمة</button>
     </div>
 
     <!-- تبويب المعاينة -->
     <div id="previewTab" class="tab-content active">
+      <!-- شريط التقدم -->
+      <div class="progress-bar" id="progressBar">
+        <div class="progress" id="progress"></div>
+      </div>
+
       <!-- معاينات الصور -->
       <div class="preview-section">
         <!-- الصورة الأصلية -->
@@ -576,9 +533,6 @@
           </label>
           <label>🔍 زوم:
             <input type="range" id="zoomControl" min="50" max="500" step="10" value="200">
-          </label>
-          <label>📏 ارتفاع النموذج:
-            <input type="range" id="heightScale" min="0.5" max="3" step="0.1" value="1">
           </label>
         </div>
       </div>
@@ -653,33 +607,12 @@
             <select id="materialType">
               <option value="mdf">خشب MDF</option>
               <option value="plywood">خشب رقائقي (Plywood)</option>
-              <option value="beech">خشب زان</option>
-              <option value="swedish">خشب سويدي</option>
               <option value="acrylic">أكريليك</option>
               <option value="aluminum">ألومنيوم</option>
               <option value="steel">صلب</option>
               <option value="plastic">بلاستيك</option>
             </select>
             <p>اختر نوع المادة التي ستستخدمها للتصنيع</p>
-          </div>
-          
-          <!-- إضافة التحكم بالأبعاد بالسنتيمتر -->
-          <div class="advanced-control">
-            <label for="designWidth">عرض التصميم (سم):</label>
-            <input type="number" id="designWidth" min="1" max="100" value="10">
-            <p>حدد عرض التصميم النهائي بالسنتيمتر</p>
-          </div>
-          
-          <div class="advanced-control">
-            <label for="designHeight">ارتفاع التصميم (سم):</label>
-            <input type="number" id="designHeight" min="1" max="100" value="10">
-            <p>حدد ارتفاع التصميم النهائي بالسنتيمتر</p>
-          </div>
-          
-          <div class="advanced-control">
-            <label for="maxZHeight">أقصى ارتفاع Z (مم):</label>
-            <input type="number" id="maxZHeight" min="0.1" max="20" step="0.1" value="5">
-            <p>حدد أقصى ارتفاع للتضاريس بالمليمتر</p>
           </div>
           
           <div class="advanced-control">
@@ -705,36 +638,8 @@
             <input type="number" id="safeHeight" min="1" max="50" value="5">
             <p>حدد الارتفاع الآمن لحركة الأداة بين القطع</p>
           </div>
-          
-          <div class="advanced-control">
-            <label for="toolDiameter">قطر الأداة (mm):</label>
-            <input type="number" id="toolDiameter" min="0.1" max="10" step="0.1" value="3">
-            <p>حدد قطر أداة القطع</p>
-          </div>
-          
-          <div class="advanced-control">
-            <label for="stepOver">تداخل المسارات (%):</label>
-            <input type="number" id="stepOver" min="10" max="90" value="50">
-            <p>حدد نسبة التداخل بين المسارات</p>
-          </div>
         </div>
       </div>
-
-      <!-- عناصر تحكم المشروع -->
-      <div class="control-group">
-        <h3>💾 إدارة المشروع</h3>
-        <div class="project-controls">
-          <button id="saveProjectBtn" onclick="saveProject()">💾 حفظ المشروع</button>
-          <button id="loadProjectBtn" onclick="document.getElementById('projectFileInput').click()">📂 فتح مشروع</button>
-          <input type="file" id="projectFileInput" accept=".json" style="display: none">
-        </div>
-      </div>
-    </div>
-
-    <!-- شريط التقدم -->
-    <div class="progress-container" id="progressContainer">
-      <div class="progress-bar" id="progressBar"></div>
-      <div class="progress-text" id="progressText">0%</div>
     </div>
 
     <!-- عناصر تحكم G-code -->
@@ -761,7 +666,6 @@
     const ctxEdge = edgePreview.getContext('2d');
     const rotationSpeedInput = document.getElementById('rotationSpeed');
     const zoomControl = document.getElementById('zoomControl');
-    const heightScaleInput = document.getElementById('heightScale');
     const edgeThreshold = document.getElementById('edgeThreshold');
     const edgeThickness = document.getElementById('edgeThickness');
     const thresholdValue = document.getElementById('thresholdValue');
@@ -773,27 +677,22 @@
     const hotBtn = document.getElementById('hotBtn');
     const coolBtn = document.getElementById('coolBtn');
     const grayBtn = document.getElementById('grayBtn');
-    const progressContainer = document.getElementById('progressContainer');
     const progressBar = document.getElementById('progressBar');
-    const progressText = document.getElementById('progressText');
-    const loadingOverlay = document.getElementById('loadingOverlay');
-    const loadingMessage = document.getElementById('loadingMessage');
-    const saveProjectBtn = document.getElementById('saveProjectBtn');
-    const loadProjectBtn = document.getElementById('loadProjectBtn');
-    const projectFileInput = document.getElementById('projectFileInput');
+    const progress = document.getElementById('progress');
+    
+    // عناصر التحكم في الأبعاد
+    const widthCm = document.getElementById('widthCm');
+    const heightCm = document.getElementById('heightCm');
+    const maxDepth = document.getElementById('maxDepth');
+    const pointResolution = document.getElementById('pointResolution');
     
     // عناصر الإعدادات المتقدمة
     const machineType = document.getElementById('machineType');
     const materialType = document.getElementById('materialType');
-    const designWidth = document.getElementById('designWidth');
-    const designHeight = document.getElementById('designHeight');
-    const maxZHeight = document.getElementById('maxZHeight');
     const cuttingSpeed = document.getElementById('cuttingSpeed');
     const spindleSpeed = document.getElementById('spindleSpeed');
     const passDepth = document.getElementById('passDepth');
     const safeHeight = document.getElementById('safeHeight');
-    const toolDiameter = document.getElementById('toolDiameter');
-    const stepOver = document.getElementById('stepOver');
 
     // إعداد Three.js للمعاينة 3D
     const scene = new THREE.Scene();
@@ -810,19 +709,250 @@
     // المتغيرات العامة
     let mesh;
     let rotationSpeed = 0.01;
-    let heightScale = 1;
     let currentColormap = 'jet';
     let currentEdges = [];
     let designBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
     let generatedGCode = '';
-    let imageDataCache = null;
-    let currentImageUrl = null;
-    let heightMapData = null;
-    let originalImageWidth = 0;
-    let originalImageHeight = 0;
+    let imageWorker;
+    let originalImageData = null;
+
+    // إنشاء Web Worker للعمليات الثقيلة
+    function createImageWorker() {
+      if (window.Worker) {
+        const workerCode = `
+          self.onmessage = function(e) {
+            const { type, data, width, height, params } = e.data;
+            
+            if (type === 'detectEdges') {
+              const result = detectEdges(data, width, height, params);
+              self.postMessage({ type: 'edgesDetected', result });
+            } else if (type === 'generateHeightMap') {
+              const result = generateHeightMap(data, width, height, params);
+              self.postMessage({ type: 'heightMapGenerated', result });
+            }
+          };
+          
+          function detectEdges(data, width, height, params) {
+            const { method, threshold } = params;
+            const edgeData = new Uint8ClampedArray(width * height * 4);
+            const grayData = new Float32Array(width * height);
+            
+            // تحويل الصورة إلى تدرج الرمادي
+            for (let i = 0; i < data.length; i += 4) {
+              const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+              grayData[i/4] = gray;
+            }
+            
+            // تطبيق خوارزمية كشف الحواف المختارة
+            if (method === 'sobel') {
+              applySobel(grayData, edgeData, width, height, threshold);
+            } else if (method === 'canny') {
+              applyCanny(grayData, edgeData, width, height, threshold);
+            } else if (method === 'laplacian') {
+              applyLaplacian(grayData, edgeData, width, height, threshold);
+            } else if (method === 'prewitt') {
+              applyPrewitt(grayData, edgeData, width, height, threshold);
+            }
+            
+            return edgeData;
+          }
+          
+          function generateHeightMap(data, width, height, params) {
+            const { colormap } = params;
+            const heightData = new Uint8ClampedArray(width * height * 4);
+            let min = 255, max = 0;
+            
+            // حساب الحد الأدنى والأقصى للسطوع
+            for (let i = 0; i < data.length; i += 4) {
+              const brightness = data[i];
+              if (brightness < min) min = brightness;
+              if (brightness > max) max = brightness;
+            }
+            
+            // إنشاء خريطة الارتفاعات
+            for (let y = 0; y < height; y++) {
+              for (let x = 0; x < width; x++) {
+                const idx = (y * width + x) * 4;
+                const brightness = data[idx];
+                const norm = (brightness - min) / (max - min);
+                const color = getHeatColor(norm, colormap);
+                
+                heightData[idx] = color.r;
+                heightData[idx+1] = color.g;
+                heightData[idx+2] = color.b;
+                heightData[idx+3] = 255;
+              }
+            }
+            
+            return { heightData, min, max };
+          }
+          
+          function getHeatColor(value, map) {
+            let r=0,g=0,b=0;
+            if(map==='jet'){ 
+              r = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-3),1),0));
+              g = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-2),1),0));
+              b = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-1),1),0));
+            } else if(map==='hot'){ 
+              r = Math.floor(255 * Math.min(1, 3*value));
+              g = Math.floor(255 * Math.min(1, 3*value-1));
+              g = Math.max(g,0);
+              b = Math.floor(255 * Math.min(1, 3*value-2));
+              b = Math.max(b,0);
+            } else if(map==='cool'){
+              r = Math.floor(255 * value);
+              g = Math.floor(255 * (1-value));
+              b = 255;
+            } else if(map==='gray'){
+              r = g = b = Math.floor(255 * value);
+            }
+            return {r,g,b};
+          }
+          
+          // خوارزميات كشف الحواف (نفسها كما في الكود الرئيسي)
+          function applySobel(grayData, edgeData, width, height, threshold) {
+            const sobelX = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
+            const sobelY = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
+            
+            for (let y = 1; y < height - 1; y++) {
+              for (let x = 1; x < width - 1; x++) {
+                let gx = 0, gy = 0;
+                
+                for (let ky = -1; ky <= 1; ky++) {
+                  for (let kx = -1; kx <= 1; kx++) {
+                    const pixel = grayData[(y + ky) * width + (x + kx)];
+                    const kernelIndex = (ky + 1) * 3 + (kx + 1);
+                    
+                    gx += pixel * sobelX[kernelIndex];
+                    gy += pixel * sobelY[kernelIndex];
+                  }
+                }
+                
+                const magnitude = Math.sqrt(gx * gx + gy * gy);
+                const edgeValue = magnitude > threshold ? 255 : 0;
+                
+                const index = (y * width + x) * 4;
+                edgeData[index] = edgeValue;
+                edgeData[index + 1] = edgeValue;
+                edgeData[index + 2] = edgeValue;
+                edgeData[index + 3] = 255;
+              }
+            }
+          }
+          
+          function applyCanny(grayData, edgeData, width, height, threshold) {
+            const blurred = new Float32Array(width * height);
+            const gaussian = [1, 2, 1, 2, 4, 2, 1, 2, 1];
+            
+            for (let y = 1; y < height - 1; y++) {
+              for (let x = 1; x < width - 1; x++) {
+                let sum = 0;
+                for (let ky = -1; ky <= 1; ky++) {
+                  for (let kx = -1; kx <= 1; kx++) {
+                    const pixel = grayData[(y + ky) * width + (x + kx)];
+                    const kernelIndex = (ky + 1) * 3 + (kx + 1);
+                    sum += pixel * gaussian[kernelIndex];
+                  }
+                }
+                blurred[y * width + x] = sum / 16;
+              }
+            }
+            
+            applySobel(blurred, edgeData, width, height, threshold);
+          }
+          
+          function applyLaplacian(grayData, edgeData, width, height, threshold) {
+            const laplacian = [0, -1, 0, -1, 4, -1, 0, -1, 0];
+            
+            for (let y = 1; y < height - 1; y++) {
+              for (let x = 1; x < width - 1; x++) {
+                let sum = 0;
+                
+                for (let ky = -1; ky <= 1; ky++) {
+                  for (let kx = -1; kx <= 1; kx++) {
+                    const pixel = grayData[(y + ky) * width + (x + kx)];
+                    const kernelIndex = (ky + 1) * 3 + (kx + 1);
+                    sum += pixel * laplacian[kernelIndex];
+                  }
+                }
+                
+                const edgeValue = Math.abs(sum) > threshold ? 255 : 0;
+                
+                const index = (y * width + x) * 4;
+                edgeData[index] = edgeValue;
+                edgeData[index + 1] = edgeValue;
+                edgeData[index + 2] = edgeValue;
+                edgeData[index + 3] = 255;
+              }
+            }
+          }
+          
+          function applyPrewitt(grayData, edgeData, width, height, threshold) {
+            const prewittX = [-1, 0, 1, -1, 0, 1, -1, 0, 1];
+            const prewittY = [-1, -1, -1, 0, 0, 0, 1, 1, 1];
+            
+            for (let y = 1; y < height - 1; y++) {
+              for (let x = 1; x < width - 1; x++) {
+                let gx = 0, gy = 0;
+                
+                for (let ky = -1; ky <= 1; ky++) {
+                  for (let kx = -1; kx <= 1; kx++) {
+                    const pixel = grayData[(y + ky) * width + (x + kx)];
+                    const kernelIndex = (ky + 1) * 3 + (kx + 1);
+                    
+                    gx += pixel * prewittX[kernelIndex];
+                    gy += pixel * prewittY[kernelIndex];
+                  }
+                }
+                
+                const magnitude = Math.sqrt(gx * gx + gy * gy);
+                const edgeValue = magnitude > threshold ? 255 : 0;
+                
+                const index = (y * width + x) * 4;
+                edgeData[index] = edgeValue;
+                edgeData[index + 1] = edgeValue;
+                edgeData[index + 2] = edgeValue;
+                edgeData[index + 3] = 255;
+              }
+            }
+          }
+        `;
+        
+        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        return new Worker(URL.createObjectURL(blob));
+      }
+      return null;
+    }
+
+    // تهيئة Web Worker
+    imageWorker = createImageWorker();
+    if (imageWorker) {
+      imageWorker.onmessage = function(e) {
+        const { type, result } = e.data;
+        
+        if (type === 'edgesDetected') {
+          // عرض حواف الصورة
+          const edgeImageData = new ImageData(result, edgePreview.width, edgePreview.height);
+          ctxEdge.putImageData(edgeImageData, 0, 0);
+          
+          // استخراج الحواف وتحديد حدود التصميم
+          extractEdgesAndBounds(result, edgePreview.width, edgePreview.height);
+          
+          // إخفاء شريط التقدم
+          progressBar.style.display = 'none';
+        } else if (type === 'heightMapGenerated') {
+          // عرض خريطة الارتفاعات
+          const heatImageData = new ImageData(result.heightData, heatmap.width, heatmap.height);
+          ctxHeat.putImageData(heatImageData, 0, 0);
+          
+          // إنشاء شبكة 3D
+          create3DMesh(result.min, result.max);
+        }
+      };
+    }
 
     // وظيفة فتح التبويبات
-    function openTab(event, tabId) {
+    function openTab(tabId) {
       // إخفاء جميع محتويات التبويبات
       const tabContents = document.getElementsByClassName('tab-content');
       for (let i = 0; i < tabContents.length; i++) {
@@ -840,127 +970,29 @@
       event.currentTarget.classList.add('active');
     }
 
-    // إظهار وإخفاء شاشة التحميل
-    function showLoading(message = 'جاري المعالجة...') {
-      loadingMessage.textContent = message;
-      loadingOverlay.style.display = 'flex';
-    }
-
-    function hideLoading() {
-      loadingOverlay.style.display = 'none';
-    }
-
-    // تحرير الذاكرة
-    function cleanupMemory() {
-      if (mesh) {
-        scene.remove(mesh);
-        mesh.geometry.dispose();
-        mesh.material.dispose();
-        mesh = null;
-      }
-      
-      // تحرير عناصر DOM المؤقتة
-      const tempCanvases = document.querySelectorAll('canvas.temporary');
-      tempCanvases.forEach(canvas => canvas.remove());
-      
-      // تحرير URLs المؤقتة
-      if (currentImageUrl) {
-        URL.revokeObjectURL(currentImageUrl);
-        currentImageUrl = null;
-      }
-      
-      heightMapData = null;
-    }
-
-    // التحقق من صحة الملفات
-    function validateFile(file) {
-      // التحقق من نوع الملف
-      if (!file.type.startsWith('image/')) {
-        showStatus('يرجى اختيار ملف صورة فقط', 'error');
-        return false;
-      }
-      
-      // التحقق من حجم الملف (حد أقصى 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        showStatus('حجم الملف كبير جداً. الحد الأقصى هو 10MB', 'error');
-        return false;
-      }
-      
-      return true;
-    }
-
-    // التحقق من صحة الإعدادات
-    function validateSettings() {
-      const errors = [];
-      
-      if (cuttingSpeed.value < 100 || cuttingSpeed.value > 5000) {
-        errors.push('سرعة القطع يجب أن تكون بين 100 و 5000 mm/min');
-      }
-      
-      if (machineType.value === 'cnc_router' && 
-          (spindleSpeed.value < 1000 || spindleSpeed.value > 24000)) {
-        errors.push('سرعة المغزل يجب أن تكون بين 1000 و 24000 RPM');
-      }
-      
-      if (passDepth.value < 0.1 || passDepth.value > 10) {
-        errors.push('عمق التمريرة يجب أن يكون بين 0.1 و 10 mm');
-      }
-      
-      if (safeHeight.value < 1 || safeHeight.value > 50) {
-        errors.push('الارتفاع الآمن يجب أن يكون بين 1 و 50 mm');
-      }
-      
-      if (designWidth.value < 1 || designWidth.value > 100) {
-        errors.push('عرض التصميم يجب أن يكون بين 1 و 100 سم');
-      }
-      
-      if (designHeight.value < 1 || designHeight.value > 100) {
-        errors.push('ارتفاع التصميم يجب أن يكون بين 1 و 100 سم');
-      }
-      
-      if (maxZHeight.value < 0.1 || maxZHeight.value > 20) {
-        errors.push('أقصى ارتفاع Z يجب أن يكون بين 0.1 و 20 مم');
-      }
-      
-      if (toolDiameter.value < 0.1 || toolDiameter.value > 10) {
-        errors.push('قطر الأداة يجب أن يكون بين 0.1 و 10 مم');
-      }
-      
-      if (stepOver.value < 10 || stepOver.value > 90) {
-        errors.push('نسبة التداخل يجب أن تكون بين 10 و 90%');
-      }
-      
-      return errors;
-    }
-
     // تحديث قيم المدخلات
     edgeThreshold.addEventListener('input', () => {
       thresholdValue.textContent = edgeThreshold.value;
-      updateEdgePreviewFromCache();
+      updateEdgePreviewFromImage();
     });
 
     edgeThickness.addEventListener('input', () => {
       thicknessValue.textContent = edgeThickness.value;
-      updateEdgePreviewFromCache();
+      updateEdgePreviewFromImage();
     });
 
     // تحديث معاينة الحواف عند تغيير الخوارزمية
     document.querySelectorAll('input[name="edgeMethod"]').forEach(radio => {
-      radio.addEventListener('change', updateEdgePreviewFromCache);
+      radio.addEventListener('change', updateEdgePreviewFromImage);
     });
 
-    // تحديث سرعة الدوران والزوم والارتفاع
+    // تحديث سرعة الدوران والزوم
     rotationSpeedInput.addEventListener('input', () => {
       rotationSpeed = parseFloat(rotationSpeedInput.value);
     });
 
     zoomControl.addEventListener('input', () => {
       camera.position.z = parseFloat(zoomControl.value);
-    });
-
-    heightScaleInput.addEventListener('input', () => {
-      heightScale = parseFloat(heightScaleInput.value);
-      update3DHeight();
     });
 
     // تحديث الإعدادات بناءً على نوع الماكينة
@@ -975,43 +1007,27 @@
       if (machine === 'cnc_router') {
         spindleSpeed.disabled = false;
         passDepth.disabled = false;
-        toolDiameter.disabled = false;
-        stepOver.disabled = false;
         cuttingSpeed.value = 1000;
         spindleSpeed.value = 10000;
         passDepth.value = 2;
-        toolDiameter.value = 3;
-        stepOver.value = 50;
       } else if (machine === 'laser_cutter') {
         spindleSpeed.disabled = true;
         passDepth.disabled = true;
-        toolDiameter.disabled = true;
-        stepOver.disabled = true;
         cuttingSpeed.value = 2000;
         spindleSpeed.value = 0;
         passDepth.value = 0;
-        toolDiameter.value = 0.1;
-        stepOver.value = 10;
       } else if (machine === '3d_printer') {
         spindleSpeed.disabled = true;
         passDepth.disabled = false;
-        toolDiameter.disabled = false;
-        stepOver.disabled = false;
         cuttingSpeed.value = 1500;
         spindleSpeed.value = 0;
         passDepth.value = 0.2;
-        toolDiameter.value = 0.4;
-        stepOver.value = 30;
       } else if (machine === 'plasma_cutter') {
         spindleSpeed.disabled = true;
         passDepth.disabled = false;
-        toolDiameter.disabled = false;
-        stepOver.disabled = false;
         cuttingSpeed.value = 3000;
         spindleSpeed.value = 0;
         passDepth.value = 5;
-        toolDiameter.value = 1;
-        stepOver.value = 80;
       }
     }
 
@@ -1030,14 +1046,6 @@
           cuttingSpeed.value = 1200;
           spindleSpeed.value = 12000;
           passDepth.value = 1.5;
-        } else if (material === 'beech') {
-          cuttingSpeed.value = 1100;
-          spindleSpeed.value = 11000;
-          passDepth.value = 1.8;
-        } else if (material === 'swedish') {
-          cuttingSpeed.value = 1300;
-          spindleSpeed.value = 13000;
-          passDepth.value = 2.2;
         } else if (material === 'acrylic') {
           cuttingSpeed.value = 800;
           spindleSpeed.value = 8000;
@@ -1056,7 +1064,7 @@
           passDepth.value = 1.2;
         }
       } else if (machine === 'laser_cutter') {
-        if (material === 'mdf' || material === 'plywood' || material === 'beech' || material === 'swedish') {
+        if (material === 'mdf' || material === 'plywood') {
           cuttingSpeed.value = 2000;
         } else if (material === 'acrylic') {
           cuttingSpeed.value = 1500;
@@ -1066,86 +1074,82 @@
       }
     }
 
-    // تحديث ارتفاع النموذج ثلاثي الأبعاد
-    function update3DHeight() {
-      if (!mesh) return;
-      
-      const positions = mesh.geometry.attributes.position.array;
-      const originalZ = [];
-      
-      // حفظ القيم الأصلية إذا لم تكن محفوظة مسبقًا
-      if (!mesh.geometry.userData.originalZ) {
-        mesh.geometry.userData.originalZ = [];
-        for (let i = 0; i < positions.length; i += 3) {
-          mesh.geometry.userData.originalZ.push(positions[i + 2]);
-        }
-      }
-      
-      // تطبيق عامل القياس على ارتفاع النموذج
-      const originalZValues = mesh.geometry.userData.originalZ;
-      for (let i = 0; i < positions.length; i += 3) {
-        positions[i + 2] = originalZValues[i / 3] * heightScale;
-      }
-      
-      mesh.geometry.attributes.position.needsUpdate = true;
-      mesh.geometry.computeVertexNormals();
-    }
-
     // اختيار ملف الصورة
     fileInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
       
-      // التحقق من صحة الملف
-      if (!validateFile(file)) {
-        fileInput.value = '';
-        return;
-      }
-      
-      cleanupMemory();
-      
-      showLoading('جاري تحميل الصورة...');
-      
       const img = new Image();
       img.onload = () => {
-        // حفظ أبعاد الصورة الأصلية
-        originalImageWidth = img.width;
-        originalImageHeight = img.height;
-        
         // عرض الصورة الأصلية
         canvas2d.width = img.width;
         canvas2d.height = img.height;
         ctx2d.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
+        
+        // حفظ بيانات الصورة الأصلية
+        originalImageData = ctx2d.getImageData(0, 0, canvas2d.width, canvas2d.height);
         
         // إنشاء خريطة الارتفاعات
         createHeightMap(img);
         
         // تمكين أزرار التحكم
         generateBtn.disabled = false;
-        saveProjectBtn.disabled = false;
         
         // إظهار رسالة نجاح
         showStatus('تم تحميل الصورة بنجاح!', 'success');
-        
-        hideLoading();
       };
       
       img.onerror = () => {
         showStatus('حدث خطأ أثناء تحميل الصورة', 'error');
-        hideLoading();
       };
       
-      currentImageUrl = URL.createObjectURL(file);
-      img.src = currentImageUrl;
+      img.src = URL.createObjectURL(file);
     });
 
-    // تحديث معاينة الحواف من البيانات المخزنة مؤقتًا
-    function updateEdgePreviewFromCache() {
-      if (!imageDataCache) return;
-      updateEdgePreview(imageDataCache);
+    // تحديث معاينة الحواف من الصورة الحالية
+    function updateEdgePreviewFromImage() {
+      if (!originalImageData) return;
+      
+      // إظهار شريط التقدم
+      progressBar.style.display = 'block';
+      progress.style.width = '50%';
+      
+      // استخدام Web Worker إذا كان متاحًا
+      if (imageWorker) {
+        const method = document.querySelector('input[name="edgeMethod"]:checked').value;
+        const threshold = parseInt(edgeThreshold.value);
+        
+        imageWorker.postMessage({
+          type: 'detectEdges',
+          data: originalImageData.data,
+          width: originalImageData.width,
+          height: originalImageData.height,
+          params: { method, threshold }
+        });
+      } else {
+        // استخدام الطريقة القديمة إذا لم يكن Web Worker متاحًا
+        updateEdgePreview(originalImageData);
+        progressBar.style.display = 'none';
+      }
     }
 
-    // كشف الحواف باستخدام خوارزميات مختلفة
+    // تحديث معاينة الحواف (بدون Web Worker)
+    function updateEdgePreview(imageData) {
+      const method = document.querySelector('input[name="edgeMethod"]:checked').value;
+      const threshold = parseInt(edgeThreshold.value);
+      
+      const edgeData = detectEdges(imageData, method, threshold);
+      const edgeImageData = new ImageData(edgeData, imageData.width, imageData.height);
+      
+      edgePreview.width = imageData.width;
+      edgePreview.height = imageData.height;
+      ctxEdge.putImageData(edgeImageData, 0, 0);
+      
+      // استخراج الحواف وتحديد حدود التصميم
+      extractEdgesAndBounds(edgeData, imageData.width, imageData.height);
+    }
+
+    // كشف الحواف باستخدام خوارزميات مختلفة (بدون Web Worker)
     function detectEdges(imageData, method, threshold) {
       const width = imageData.width;
       const height = imageData.height;
@@ -1286,22 +1290,6 @@
       }
     }
 
-    // تحديث معاينة الحواف
-    function updateEdgePreview(imageData) {
-      const method = document.querySelector('input[name="edgeMethod"]:checked').value;
-      const threshold = parseInt(edgeThreshold.value);
-      
-      const edgeData = detectEdges(imageData, method, threshold);
-      const edgeImageData = new ImageData(edgeData, imageData.width, imageData.height);
-      
-      edgePreview.width = imageData.width;
-      edgePreview.height = imageData.height;
-      ctxEdge.putImageData(edgeImageData, 0, 0);
-      
-      // استخراج الحواف وتحديد حدود التصميم
-      extractEdgesAndBounds(edgeData, imageData.width, imageData.height);
-    }
-
     // استخراج الحواف وتحديد حدود التصميم
     function extractEdgesAndBounds(edgeData, width, height) {
       currentEdges = [];
@@ -1336,253 +1324,131 @@
       }
     }
 
-    // تحسين مسار الأداة باستخدام خوارزمية أقرب الجوار
-    function optimizeToolPath(edges) {
-      if (edges.length === 0) return [];
-      
-      const optimizedPath = [];
-      let currentPoint = edges[0];
-      const remainingPoints = [...edges.slice(1)];
-      
-      optimizedPath.push(currentPoint);
-      
-      while (remainingPoints.length > 0) {
-        let nearestIndex = 0;
-        let minDistance = Infinity;
-        
-        for (let i = 0; i < remainingPoints.length; i++) {
-          const distance = Math.sqrt(
-            Math.pow(currentPoint.x - remainingPoints[i].x, 2) +
-            Math.pow(currentPoint.y - remainingPoints[i].y, 2)
-          );
-          
-          if (distance < minDistance) {
-            minDistance = distance;
-            nearestIndex = i;
-          }
-        }
-        
-        optimizedPath.push(remainingPoints[nearestIndex]);
-        currentPoint = remainingPoints[nearestIndex];
-        remainingPoints.splice(nearestIndex, 1);
-      }
-      
-      return optimizedPath;
-    }
-
-    // إنشاء مسار ثلاثي الأبعاد باستخدام خريطة الارتفاعات
-    function create3DPathFromHeightMap(heightMap, width, height, maxZ, stepSize) {
-      const path = [];
-      const step = Math.max(1, Math.floor(stepSize));
-      
-      for (let y = 0; y < height; y += step) {
-        for (let x = 0; x < width; x += step) {
-          const idx = (y * width + x) * 4;
-          const brightness = heightMap[idx];
-          const z = (255 - brightness) / 255 * maxZ;
-          
-          path.push({
-            x: x,
-            y: y,
-            z: z
-          });
-        }
-      }
-      
-      return path;
-    }
-
-    // دمج مسارات الحواف وخرائط الارتفاعات
-    function mergePaths(edgePath, heightMapPath, width, height) {
-      const mergedPath = [];
-      
-      // إضافة نقاط الحواف أولاً
-      for (const point of edgePath) {
-        mergedPath.push({
-          x: point.x,
-          y: point.y,
-          z: 0, // الحواف تكون على السطح
-          isEdge: true
-        });
-      }
-      
-      // إضافة نقاط خريطة الارتفاعات
-      for (const point of heightMapPath) {
-        mergedPath.push({
-          x: point.x,
-          y: point.y,
-          z: point.z,
-          isEdge: false
-        });
-      }
-      
-      return mergedPath;
-    }
-
-    // تحديث شريط التقدم
-    function updateProgress(percent, message = '') {
-      progressBar.style.width = percent + '%';
-      progressText.textContent = message || percent + '%';
-    }
-
-    // توليد G-code محسن باستخدام الحواف وخرائط الارتفاعات
+    // توليد G-code بناءً على حدود التصميم والإعدادات المتقدمة
     function generateGCode() {
-      if (!currentEdges.length || !heightMapData) {
-        showStatus('يرجى تحميل صورة أولاً', 'error');
-        return;
-      }
-      
-      // التحقق من صحة الإعدادات
-      const errors = validateSettings();
-      if (errors.length > 0) {
-        showStatus('يوجد أخطاء في الإعدادات: ' + errors.join(', '), 'error');
+      if (!currentEdges.length) {
+        showStatus('يرجى تحميل صورة أولاً وتحديد الحواف', 'error');
         return;
       }
       
       // إظهار شريط التقدم
-      progressContainer.style.display = 'block';
-      updateProgress(0, 'بدء توليد G-code...');
+      progressBar.style.display = 'block';
+      progress.style.width = '0%';
       
-      // الحصول على الإعدادات المتقدمة
-      const machine = machineType.value;
-      const material = materialType.value;
-      const widthCM = parseFloat(designWidth.value);
-      const heightCM = parseFloat(designHeight.value);
-      const maxZ = parseFloat(maxZHeight.value);
-      const cutSpeed = parseInt(cuttingSpeed.value);
-      const spindleRPM = parseInt(spindleSpeed.value);
-      const depthPerPass = parseFloat(passDepth.value);
-      const safeZ = parseInt(safeHeight.value);
-      const toolDia = parseFloat(toolDiameter.value);
-      const stepOverPercent = parseInt(stepOver.value);
-      
-      // حساب عوامل التحجيم من البكسل إلى السنتيمتر
-      const scaleX = widthCM / originalImageWidth;
-      const scaleY = heightCM / originalImageHeight;
-      
-      let gcode = "; CNC AI Preview G-code - Professional Edition\n";
-      gcode += "; Generated from image with advanced edge detection and height mapping\n";
-      gcode += `; Machine: ${machineType.options[machineType.selectedIndex].text}\n`;
-      gcode += `; Material: ${materialType.options[materialType.selectedIndex].text}\n`;
-      gcode += `; Design size: ${widthCM}x${heightCM} cm\n`;
-      gcode += `; Max Z height: ${maxZ} mm\n`;
-      gcode += `; Design bounds: X${designBounds.minX}-${designBounds.maxX}, Y${designBounds.minY}-${designBounds.maxY}\n\n`;
-      
-      // إعدادات أولية حسب نوع الماكينة
-      gcode += "G21 ; Set units to millimeters\n";
-      gcode += "G90 ; Absolute positioning\n";
-      gcode += "G17 ; XY plane selection\n";
-      
-      if (machine === 'cnc_router') {
-        gcode += `S${spindleRPM} M3 ; Start spindle\n`;
-      } else if (machine === 'laser_cutter') {
-        gcode += "M3 ; Turn on laser\n";
-      } else if (machine === 'plasma_cutter') {
-        gcode += "M3 ; Start plasma arc\n";
-      }
-      
-      gcode += `G0 Z${safeZ} ; Lift tool to safe height\n\n`;
-      
-      // تحسين مسار الحواف
-      const optimizedEdgePath = optimizeToolPath(currentEdges);
-      
-      // إنشاء مسار من خريطة الارتفاعات
-      const stepSize = Math.max(1, Math.floor(toolDia * (100 - stepOverPercent) / 100));
-      const heightMapPath = create3DPathFromHeightMap(heightMapData, originalImageWidth, originalImageHeight, maxZ, stepSize);
-      
-      // دمج المسارات
-      const mergedPath = mergePaths(optimizedEdgePath, heightMapPath, originalImageWidth, originalImageHeight);
-      
-      // البدء من حدود التصميم
-      const startX = designBounds.minX * scaleX;
-      const startY = designBounds.minY * scaleY;
-      
-      gcode += `G0 X${startX.toFixed(2)} Y${startY.toFixed(2)} ; Move to design start\n`;
-      
-      // إنشاء مسار بناءً على المسار المدمج
-      let lastZ = safeZ;
-      const totalPoints = mergedPath.length;
-      let processedPoints = 0;
-      
-      // استخدام setTimeout لتقسيم العملية إلى أجزاء لمنع تجميد المتصفح
-      const processBatch = () => {
-        const batchSize = 100; // عدد النقاط التي تتم معالجتها في كل دفعة
+      setTimeout(() => {
+        const width = canvas2d.width;
+        const height = canvas2d.height;
         
-        for (let i = 0; i < batchSize; i++) {
-          if (processedPoints >= totalPoints) {
-            // الانتهاء من المعالجة
-            finishGCodeGeneration(gcode, machine, safeZ);
-            return;
-          }
-          
-          const point = mergedPath[processedPoints];
-          const x = point.x * scaleX;
-          const y = point.y * scaleY;
-          const z = point.z;
-          
-          if (x >= widthCM || y >= heightCM) {
-            processedPoints++;
-            continue;
-          }
-          
-          // التحكم في الارتفاع بناءً على نوع النقطة
-          if (point.isEdge) {
-            // للحواف: القطع على السطح
-            if (lastZ !== 0) {
-              gcode += `G1 Z0 F${cutSpeed/2} ; Move to surface for edge cutting\n`;
-              lastZ = 0;
+        // الحصول على الإعدادات المتقدمة
+        const machine = machineType.value;
+        const material = materialType.value;
+        const cutSpeed = parseInt(cuttingSpeed.value);
+        const spindleRPM = parseInt(spindleSpeed.value);
+        const depthPerPass = parseFloat(passDepth.value);
+        const safeZ = parseInt(safeHeight.value);
+        
+        // الحصول على الأبعاد الفعلية
+        const physicalWidth = parseFloat(widthCm.value); // سم
+        const physicalHeight = parseFloat(heightCm.value); // سم
+        const maxZDepth = parseFloat(maxDepth.value); // مم
+        const resolution = parseFloat(pointResolution.value); // مم
+        
+        // تحويل الأبعاد من سم إلى مم
+        const widthMm = physicalWidth * 10;
+        const heightMm = physicalHeight * 10;
+        
+        // حساب عوامل التحجيم
+        const scaleX = widthMm / width;
+        const scaleY = heightMm / height;
+        
+        let gcode = "; CNC AI Preview G-code\n";
+        gcode += "; Generated from image with edge detection\n";
+        gcode += `; Machine: ${machineType.options[machineType.selectedIndex].text}\n`;
+        gcode += `; Material: ${materialType.options[materialType.selectedIndex].text}\n`;
+        gcode += `; Physical dimensions: ${physicalWidth}cm x ${physicalHeight}cm\n`;
+        gcode += `; Design bounds: X${designBounds.minX}-${designBounds.maxX}, Y${designBounds.minY}-${designBounds.maxY}\n\n`;
+        
+        // إعدادات أولية حسب نوع الماكينة
+        gcode += "G21 ; Set units to millimeters\n";
+        gcode += "G90 ; Absolute positioning\n";
+        
+        if (machine === 'cnc_router') {
+          gcode += `S${spindleRPM} M3 ; Start spindle\n`;
+        } else if (machine === 'laser_cutter') {
+          gcode += "M3 ; Turn on laser\n";
+        }
+        
+        gcode += `G0 Z${safeZ} ; Lift tool to safe height\n\n`;
+        
+        // البدء من حدود التصميم
+        const startX = designBounds.minX * scaleX;
+        const startY = designBounds.minY * scaleY;
+        
+        gcode += `G0 X${startX.toFixed(2)} Y${startY.toFixed(2)} ; Move to design start\n`;
+        
+        // إنشاء مسار بناءً على الحواف والارتفاعات
+        const stepSizePixels = Math.max(1, Math.round(resolution / scaleX));
+        let lastZ = 0;
+        let pointCount = 0;
+        const totalPoints = Math.ceil((designBounds.maxX - designBounds.minX) / stepSizePixels) * 
+                           Math.ceil((designBounds.maxY - designBounds.minY) / stepSizePixels);
+        
+        for (let y = designBounds.minY; y <= designBounds.maxY; y += stepSizePixels) {
+          for (let x = designBounds.minX; x <= designBounds.maxX; x += stepSizePixels) {
+            if (x >= width || y >= height) continue;
+            
+            const idx = (y * width + x) * 4;
+            const brightness = originalImageData.data[idx];
+            const z = ((255 - brightness) / 255) * maxZDepth; // تحويل السطوع إلى ارتفاع
+            
+            // التحقق مما إذا كانت النقطة داخل حدود التصميم
+            if (isPointInDesign(x, y)) {
+              const physicalX = x * scaleX;
+              const physicalY = y * scaleY;
+              
+              if (Math.abs(z - lastZ) > 0.1) {
+                gcode += `G1 Z${z.toFixed(2)} F${cutSpeed/2} ; Adjust height\n`;
+                lastZ = z;
+              }
+              gcode += `G1 X${physicalX.toFixed(2)} Y${physicalY.toFixed(2)} F${cutSpeed} ; Move to point\n`;
             }
-          } else {
-            // لخريطة الارتفاعات: تعديل الارتفاع حسب القيمة
-            if (Math.abs(z - lastZ) > 0.1) {
-              gcode += `G1 Z${z.toFixed(2)} F${cutSpeed/2} ; Adjust height for 3D contour\n`;
-              lastZ = z;
-            }
-          }
-          
-          gcode += `G1 X${x.toFixed(2)} Y${y.toFixed(2)} F${cutSpeed} ; Move to point\n`;
-          
-          processedPoints++;
-          
-          // تحديث شريط التقدم كل 10 نقاط
-          if (processedPoints % 10 === 0) {
-            const progressPercent = Math.floor((processedPoints / totalPoints) * 100);
-            updateProgress(progressPercent, `معالجة النقاط: ${processedPoints}/${totalPoints}`);
+            
+            pointCount++;
+            progress.style.width = `${(pointCount / totalPoints) * 100}%`;
           }
         }
         
-        // استدعاء الدالة مرة أخرى بعد فترة قصيرة
-        setTimeout(processBatch, 10);
-      };
-      
-      // بدء المعالجة
-      processBatch();
+        // إضافة أوامر الإنهاء حسب نوع الماكينة
+        gcode += `\nG0 Z${safeZ} ; Lift tool\n`;
+        if (machine === 'cnc_router') {
+          gcode += "M5 ; Stop spindle\n";
+        } else if (machine === 'laser_cutter') {
+          gcode += "M5 ; Turn off laser\n";
+        }
+        gcode += "G0 X0 Y0 ; Return to origin\n";
+        gcode += "M30 ; End program\n";
+        
+        // حفظ G-code في متغير عام للتحميل لاحقًا
+        generatedGCode = gcode;
+        downloadBtn.disabled = false;
+        
+        // إخفاء شريط التقدم
+        progressBar.style.display = 'none';
+        
+        showStatus('تم توليد G-code بنجاح! يمكنك الآن تحميله.', 'success');
+      }, 100);
     }
 
-    // الانتهاء من توليد G-code
-    function finishGCodeGeneration(gcode, machine, safeZ) {
-      // إضافة أوامر الإنهاء حسب نوع الماكينة
-      gcode += `\nG0 Z${safeZ} ; Lift tool\n`;
-      if (machine === 'cnc_router') {
-        gcode += "M5 ; Stop spindle\n";
-      } else if (machine === 'laser_cutter') {
-        gcode += "M5 ; Turn off laser\n";
-      } else if (machine === 'plasma_cutter') {
-        gcode += "M5 ; Stop plasma arc\n";
+    // التحقق مما إذا كانت النقطة داخل حدود التصميم
+    function isPointInDesign(x, y) {
+      // في هذا المثال المبسط، نتحقق من وجود حواف قريبة
+      for (let edge of currentEdges) {
+        const distance = Math.sqrt(Math.pow(edge.x - x, 2) + Math.pow(edge.y - y, 2));
+        if (distance < 10) { // إذا كانت النقطة قريبة من حافة
+          return true;
+        }
       }
-      gcode += "G0 X0 Y0 ; Return to origin\n";
-      gcode += "M30 ; End program\n";
-      
-      // حفظ G-code في متغير عام للتحميل لاحقًا
-      generatedGCode = gcode;
-      downloadBtn.disabled = false;
-      
-      // إخفاء شريط التقدم
-      setTimeout(() => {
-        progressContainer.style.display = 'none';
-      }, 1000);
-      
-      showStatus('تم توليد G-code بنجاح! يمكنك الآن تحميله.', 'success');
+      return false;
     }
 
     // تحميل G-code كملف
@@ -1616,38 +1482,52 @@
       tctx.drawImage(image, 0, 0, w, h);
       const imgData = tctx.getImageData(0, 0, w, h);
 
-      // تخزين البيانات مؤقتًا لتحسين الأداء
-      imageDataCache = imgData;
-      heightMapData = imgData.data;
-
       // تحديث معاينة الحواف
-      updateEdgePreview(imgData);
+      updateEdgePreviewFromImage();
 
+      // استخدام Web Worker لإنشاء خريطة الارتفاعات
+      if (imageWorker) {
+        progress.style.width = '75%';
+        
+        imageWorker.postMessage({
+          type: 'generateHeightMap',
+          data: imgData.data,
+          width: w,
+          height: h,
+          params: { colormap: currentColormap }
+        });
+      } else {
+        // استخدام الطريقة القديمة إذا لم يكن Web Worker متاحًا
+        drawHeatmap(imgData.data, w, h);
+        create3DMesh(0, 255);
+        progressBar.style.display = 'none';
+      }
+    }
+
+    // إنشاء شبكة 3D
+    function create3DMesh(min, max) {
+      const w = canvas2d.width;
+      const h = canvas2d.height;
+      
       // 3D mesh
       const geometry = new THREE.PlaneGeometry(100, 100, w-1, h-1);
-      let min = 255, max = 0;
       const colors = [];
-      const originalZ = [];
       
       for (let i = 0; i < geometry.attributes.position.count; i++) {
         const stride = i * 3;
         const x = i % w;
         const y = Math.floor(i / w);
         const idx = (y * w + x) * 4;
-        const brightness = imgData.data[idx];
-        min = Math.min(min, brightness);
-        max = Math.max(max, brightness);
-        const zValue = brightness / 80;
-        geometry.attributes.position.array[stride + 2] = zValue;
-        originalZ.push(zValue);
+        const brightness = originalImageData.data[idx];
+        
+        // تحويل السطوع إلى ارتفاع مع الأخذ في الاعتبار الأبعاد الفعلية
+        const maxZDepth = parseFloat(maxDepth.value);
+        geometry.attributes.position.array[stride + 2] = ((brightness - min) / (max - min)) * maxZDepth * 2;
 
-        const norm = brightness / 255;
+        const norm = (brightness - min) / (max - min);
         const color = getHeatColor(norm, currentColormap);
         colors.push(color.r/255, color.g/255, color.b/255);
       }
-      
-      // حفظ القيم الأصلية للارتفاع
-      geometry.userData.originalZ = originalZ;
       
       geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
       geometry.computeVertexNormals();
@@ -1656,15 +1536,24 @@
       if (mesh) scene.remove(mesh);
       mesh = new THREE.Mesh(geometry, material);
       scene.add(mesh);
-
-      drawHeatmap(imgData.data, w, h, min, max);
+      
+      progressBar.style.display = 'none';
     }
 
-    // رسم خريطة الألوان
-    function drawHeatmap(imgData, w, h, min, max) {
+    // رسم خريطة الألوان (بدون Web Worker)
+    function drawHeatmap(imgData, w, h) {
       heatmap.width = w * 1.5;
       heatmap.height = h * 1.5;
       const heatData = ctxHeat.createImageData(w, h);
+      let min = 255, max = 0;
+      
+      // حساب الحد الأدنى والأقصى للسطوع
+      for (let i = 0; i < imgData.length; i += 4) {
+        const brightness = imgData[i];
+        if (brightness < min) min = brightness;
+        if (brightness > max) max = brightness;
+      }
+      
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           const idx = (y * w + x) * 4;
@@ -1722,119 +1611,37 @@
       else if (map === 'cool') coolBtn.classList.add('active');
       else if (map === 'gray') grayBtn.classList.add('active');
       
-      if(fileInput.files[0]){
-        const img = new Image();
-        img.onload = () => createHeightMap(img);
-        img.src = URL.createObjectURL(fileInput.files[0]);
+      if(originalImageData){
+        // إعادة إنشاء خريطة الارتفاعات مع الخريطة اللونية الجديدة
+        createHeightMapFromData();
       }
     }
 
-    // حفظ المشروع
-    function saveProject() {
-      if (!fileInput.files[0]) {
-        showStatus('لا يوجد مشروع لحفظه', 'error');
-        return;
+    // إنشاء خريطة الارتفاعات من البيانات المحفوظة
+    function createHeightMapFromData() {
+      if (!originalImageData) return;
+      
+      const w = originalImageData.width;
+      const h = originalImageData.height;
+      
+      // استخدام Web Worker إذا كان متاحًا
+      if (imageWorker) {
+        progressBar.style.display = 'block';
+        progress.style.width = '50%';
+        
+        imageWorker.postMessage({
+          type: 'generateHeightMap',
+          data: originalImageData.data,
+          width: w,
+          height: h,
+          params: { colormap: currentColormap }
+        });
+      } else {
+        // استخدام الطريقة القديمة
+        drawHeatmap(originalImageData.data, w, h);
+        create3DMesh(0, 255);
       }
-      
-      const projectData = {
-        imageData: canvas2d.toDataURL(),
-        settings: {
-            machineType: machineType.value,
-            materialType: materialType.value,
-            designWidth: designWidth.value,
-            designHeight: designHeight.value,
-            maxZHeight: maxZHeight.value,
-            cuttingSpeed: cuttingSpeed.value,
-            spindleSpeed: spindleSpeed.value,
-            passDepth: passDepth.value,
-            safeHeight: safeHeight.value,
-            toolDiameter: toolDiameter.value,
-            stepOver: stepOver.value
-        },
-        edges: currentEdges,
-        designBounds: designBounds,
-        gcode: generatedGCode,
-        colormap: currentColormap,
-        originalDimensions: {
-            width: originalImageWidth,
-            height: originalImageHeight
-        }
-      };
-      
-      const blob = new Blob([JSON.stringify(projectData)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'cnc_project.json';
-      a.click();
-      URL.revokeObjectURL(url);
-      
-      showStatus('تم حفظ المشروع بنجاح', 'success');
     }
-
-    // فتح المشروع
-    projectFileInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        try {
-          const projectData = JSON.parse(e.target.result);
-          
-          // تحميل الصورة
-          const img = new Image();
-          img.onload = () => {
-            // حفظ الأبعاد الأصلية
-            if (projectData.originalDimensions) {
-              originalImageWidth = projectData.originalDimensions.width;
-              originalImageHeight = projectData.originalDimensions.height;
-            } else {
-              originalImageWidth = img.width;
-              originalImageHeight = img.height;
-            }
-            
-            canvas2d.width = img.width;
-            canvas2d.height = img.height;
-            ctx2d.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
-            
-            // تطبيق الإعدادات
-            machineType.value = projectData.settings.machineType;
-            materialType.value = projectData.settings.materialType;
-            designWidth.value = projectData.settings.designWidth;
-            designHeight.value = projectData.settings.designHeight;
-            maxZHeight.value = projectData.settings.maxZHeight;
-            cuttingSpeed.value = projectData.settings.cuttingSpeed;
-            spindleSpeed.value = projectData.settings.spindleSpeed;
-            passDepth.value = projectData.settings.passDepth;
-            safeHeight.value = projectData.settings.safeHeight;
-            toolDiameter.value = projectData.settings.toolDiameter;
-            stepOver.value = projectData.settings.stepOver;
-            
-            // تحديث الحالة
-            currentEdges = projectData.edges;
-            designBounds = projectData.designBounds;
-            generatedGCode = projectData.gcode;
-            setColormap(projectData.colormap);
-            
-            // إنشاء خريطة الارتفاعات
-            createHeightMap(img);
-            
-            // تمكين الأزرار
-            generateBtn.disabled = false;
-            downloadBtn.disabled = !projectData.gcode;
-            saveProjectBtn.disabled = false;
-            
-            showStatus('تم تحميل المشروع بنجاح', 'success');
-          };
-          img.src = projectData.imageData;
-        } catch (error) {
-          showStatus('خطأ في تحميل المشروع', 'error');
-          console.error(error);
-        }
-      };
-      reader.readAsText(file);
-    });
 
     // عرض رسالة الحالة
     function showStatus(message, type) {
