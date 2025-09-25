@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CNC AI Preview - محسّن</title>
   <style>
+    /* أنماط CSS تبقى كما هي */
     :root {
       --primary-color: #4a90e2;
       --primary-light: #67b0f5;
@@ -766,6 +767,7 @@
     let processingImage = false;
     let heightMapData = null;
     let originalImageData = null;
+    let heightMapGrayData = null; // إضافة: بيانات التدرج الرمادي لخريطة الارتفاعات
 
     // إنشاء Web Worker لمعالجة الصور
     function createImageWorker() {
@@ -1568,21 +1570,15 @@
       }
     }
 
-    // توليد G-code بناءً على حدود التصميم والإعدادات المتقدمة
+    // توليد G-code بناءً على خريطة الارتفاعات والإعدادات المتقدمة
     function generateGCode() {
-      if (!currentEdges.length) {
+      if (!currentEdges.length || !heightMapGrayData) {
         showStatus('يرجى تحميل صورة أولاً وتحديد الحواف', 'error');
         return;
       }
       
       const width = canvas2d.width;
       const height = canvas2d.height;
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = width;
-      tempCanvas.height = height;
-      const tctx = tempCanvas.getContext('2d');
-      tctx.drawImage(canvas2d, 0, 0, width, height);
-      const imgData = tctx.getImageData(0, 0, width, height).data;
       
       // الحصول على الإعدادات المتقدمة
       const machine = machineType.value;
@@ -1643,8 +1639,9 @@
           
           if (x >= width || y >= height) continue;
           
-          const idx = (y * width + x) * 4;
-          const brightness = imgData[idx];
+          // استخدام بيانات خريطة الارتفاعات (التدرج الرمادي) بدلاً من الصورة الأصلية
+          const idx = (y * width + x);
+          const brightness = heightMapGrayData[idx];
           
           // حساب الارتفاع بناءً على الاستراتيجية المختارة
           let z = 0;
@@ -1652,7 +1649,7 @@
             // التركيز على كفاف التصميم
             z = isPointOnEdge(x, y) ? (255 - brightness) / 50 : 0;
           } else if (gcodeStrategy === 'heightmap') {
-            // التركيز على خريطة الارتفاعات
+            // التركيز على خريطة الارتفاعات - استخدام البيانات مباشرة
             z = (255 - brightness) / 50 * (pass + 1) / totalPasses;
           } else if (gcodeStrategy === 'hybrid') {
             // النهج الهجين
@@ -1662,11 +1659,11 @@
           
           // تطبيق تحسينات الذكاء الاصطناعي لخريطة الارتفاعات
           if (useAIHeightMapping) {
-            z = applyAIHeightMapping(z, brightness, x, y, width, height, imgData);
+            z = applyAIHeightMapping(z, brightness, x, y, width, height);
           }
           
-          // التحقق مما إذا كانت النقطة داخل حدود التصميم
-          if (isPointInDesign(x, y)) {
+          // التحقق مما إذا كانت النقطة داخل حدود التصميم بناءً على خريطة الارتفاعات
+          if (isPointInDesign(x, y, width, height)) {
             if (!isCutting) {
               gcode += `G1 Z${z.toFixed(2)} F${cutSpeed/2} ; Start cutting\n`;
               isCutting = true;
@@ -1708,7 +1705,7 @@
     }
 
     // تطبيق تحسينات الذكاء الاصطناعي لخريطة الارتفاعات
-    function applyAIHeightMapping(z, brightness, x, y, width, height, imgData) {
+    function applyAIHeightMapping(z, brightness, x, y, width, height) {
       // خوارزمية متقدمة تأخذ في الاعتبار المناطق المحيطة
       let weightedZ = z;
       const intensity = parseInt(aiIntensity.value) / 10;
@@ -1724,8 +1721,8 @@
           const ny = y + dy;
           
           if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-            const nIdx = (ny * width + nx) * 4;
-            const nBrightness = imgData[nIdx];
+            const nIdx = (ny * width + nx);
+            const nBrightness = heightMapGrayData[nIdx];
             sum += (255 - nBrightness) / 50;
             count++;
           }
@@ -1827,16 +1824,17 @@
       return false;
     }
 
-    // التحقق مما إذا كانت النقطة داخل حدود التصميم
-    function isPointInDesign(x, y) {
-      // في هذا المثال المحسن، نتحقق من وجود حواف قريبة مع تحسين الدقة
-      for (let edge of currentEdges) {
-        const distance = Math.sqrt(Math.pow(edge.x - x, 2) + Math.pow(edge.y - y, 2));
-        if (distance < 5) { // زيادة الدقة من 10 إلى 5 بكسل
-          return true;
-        }
-      }
-      return false;
+    // التحقق مما إذا كانت النقطة داخل حدود التصميم بناءً على خريطة الارتفاعات
+    function isPointInDesign(x, y, width, height) {
+      if (x < 0 || x >= width || y < 0 || y >= height) return false;
+      
+      // استخدام عتبة بناءً على قيمة التدرج الرمادي في خريطة الارتفاعات
+      const idx = y * width + x;
+      const brightness = heightMapGrayData[idx];
+      
+      // اعتبار النقطة داخل التصميم إذا كانت قيمة التدرج الرمادي أقل من عتبة معينة
+      // (كلما كانت القيمة أقل، كان اللون أغمق، وبالتالي يجب أن يكون القطع أعمق)
+      return brightness < 240; // عتبة 240 (من 0-255)
     }
 
     // تحميل G-code كملف
@@ -1884,6 +1882,13 @@
       
       // حفظ بيانات خريطة الارتفاعات للاستخدام لاحقًا
       heightMapData = imgData.data;
+
+      // إنشاء مصفوفة التدرج الرمادي لخريطة الارتفاعات
+      heightMapGrayData = new Uint8ClampedArray(w * h);
+      for (let i = 0; i < imgData.data.length; i += 4) {
+        const gray = 0.299 * imgData.data[i] + 0.587 * imgData.data[i+1] + 0.114 * imgData.data[i+2];
+        heightMapGrayData[i/4] = gray;
+      }
 
       // تحديث معاينة الحواف
       updateEdgePreviewFromImage();
