@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CNC AI Preview - المحسّن</title>
+  <title>CNC AI Preview - محسّن</title>
   <style>
     :root {
       --primary-color: #4a90e2;
@@ -366,7 +366,7 @@
       color: var(--text-medium);
     }
 
-    .advanced-control select,
+    .advanced-control select, 
     .advanced-control input {
       padding: 10px;
       border: 1px solid var(--border-color);
@@ -381,38 +381,35 @@
       color: var(--text-light);
     }
 
+    .performance-options {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      margin-top: 20px;
+    }
+
+    .performance-options label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+    }
+
     .progress-bar {
       width: 100%;
-      height: 8px;
+      height: 6px;
       background: #f0f0f0;
-      border-radius: 4px;
-      margin: 10px 0;
+      border-radius: 3px;
       overflow: hidden;
+      margin-top: 10px;
       display: none;
     }
 
-    .progress {
+    .progress-bar-inner {
       height: 100%;
       background: var(--primary-color);
       width: 0%;
       transition: width 0.3s;
-    }
-
-    .dimension-controls {
-      display: flex;
-      gap: 15px;
-      flex-wrap: wrap;
-      justify-content: center;
-      margin: 15px 0;
-    }
-
-    .dimension-controls label {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 5px;
-      font-size: 14px;
-      font-weight: 500;
     }
 
     @media (max-width: 768px) {
@@ -453,15 +450,11 @@
       .advanced-controls {
         grid-template-columns: 1fr;
       }
-      
-      .dimension-controls {
-        flex-direction: column;
-      }
     }
   </style>
 </head>
 <body>
-  <header>🛠️ CNC AI Preview - المحسّن</header>
+  <header>🛠️ CNC AI Preview - محسّن</header>
 
   <div class="container">
     <!-- زر اختيار الصورة -->
@@ -472,27 +465,9 @@
       <input type="file" id="fileInput" accept="image/*">
     </div>
 
-    <!-- التحكم في الأبعاد -->
-    <div class="control-group">
-      <h3>📏 تحديد الأبعاد الفعلية (بالسنتيمتر)</h3>
-      <div class="dimension-controls">
-        <label>
-          العرض (سم):
-          <input type="number" id="widthCm" min="1" max="100" value="10" step="0.1">
-        </label>
-        <label>
-          الارتفاع (سم):
-          <input type="number" id="heightCm" min="1" max="100" value="10" step="0.1">
-        </label>
-        <label>
-          أقصى عمق (مم):
-          <input type="number" id="maxDepth" min="0.1" max="50" value="5" step="0.1">
-        </label>
-        <label>
-          دقة النقاط (مم):
-          <input type="number" id="pointResolution" min="0.1" max="5" value="1" step="0.1">
-        </label>
-      </div>
+    <!-- شريط التقدم -->
+    <div class="progress-bar" id="progressBar">
+      <div class="progress-bar-inner" id="progressBarInner"></div>
     </div>
 
     <!-- التبويبات -->
@@ -503,11 +478,6 @@
 
     <!-- تبويب المعاينة -->
     <div id="previewTab" class="tab-content active">
-      <!-- شريط التقدم -->
-      <div class="progress-bar" id="progressBar">
-        <div class="progress" id="progress"></div>
-      </div>
-
       <!-- معاينات الصور -->
       <div class="preview-section">
         <!-- الصورة الأصلية -->
@@ -639,6 +609,22 @@
             <p>حدد الارتفاع الآمن لحركة الأداة بين القطع</p>
           </div>
         </div>
+        
+        <div class="performance-options">
+          <h3>⚡ إعدادات الأداء</h3>
+          <label>
+            <input type="checkbox" id="reduceResolution" checked>
+            تقليل دقة الصورة لتحسين الأداء (موصى به للصور الكبيرة)
+          </label>
+          <label>
+            <input type="checkbox" id="useWebWorker" checked>
+            استخدام Web Worker لمعالجة الصور في الخلفية
+          </label>
+          <label>
+            <input type="range" id="qualityLevel" min="1" max="5" value="3">
+            مستوى الجودة: <span id="qualityValue">متوسط</span>
+          </label>
+        </div>
       </div>
     </div>
 
@@ -678,13 +664,11 @@
     const coolBtn = document.getElementById('coolBtn');
     const grayBtn = document.getElementById('grayBtn');
     const progressBar = document.getElementById('progressBar');
-    const progress = document.getElementById('progress');
-    
-    // عناصر التحكم في الأبعاد
-    const widthCm = document.getElementById('widthCm');
-    const heightCm = document.getElementById('heightCm');
-    const maxDepth = document.getElementById('maxDepth');
-    const pointResolution = document.getElementById('pointResolution');
+    const progressBarInner = document.getElementById('progressBarInner');
+    const reduceResolution = document.getElementById('reduceResolution');
+    const useWebWorker = document.getElementById('useWebWorker');
+    const qualityLevel = document.getElementById('qualityLevel');
+    const qualityValue = document.getElementById('qualityValue');
     
     // عناصر الإعدادات المتقدمة
     const machineType = document.getElementById('machineType');
@@ -713,36 +697,53 @@
     let currentEdges = [];
     let designBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
     let generatedGCode = '';
-    let imageWorker;
-    let originalImageData = null;
+    let imageWorker = null;
+    let processingImage = false;
 
-    // إنشاء Web Worker للعمليات الثقيلة
+    // إنشاء Web Worker لمعالجة الصور
     function createImageWorker() {
       if (window.Worker) {
         const workerCode = `
-          self.onmessage = function(e) {
-            const { type, data, width, height, params } = e.data;
+          self.addEventListener('message', function(e) {
+            const { imageData, method, threshold, maxWidth } = e.data;
             
-            if (type === 'detectEdges') {
-              const result = detectEdges(data, width, height, params);
-              self.postMessage({ type: 'edgesDetected', result });
-            } else if (type === 'generateHeightMap') {
-              const result = generateHeightMap(data, width, height, params);
-              self.postMessage({ type: 'heightMapGenerated', result });
+            // تقليل دقة الصورة إذا كانت كبيرة
+            let data = imageData;
+            let width = imageData.width;
+            let height = imageData.height;
+            
+            if (maxWidth > 0 && width > maxWidth) {
+              const scale = maxWidth / width;
+              const newWidth = maxWidth;
+              const newHeight = Math.floor(height * scale);
+              
+              const tempCanvas = new OffscreenCanvas(newWidth, newHeight);
+              const tempCtx = tempCanvas.getContext('2d');
+              const imageBitmap = createImageBitmap(new ImageData(data.data, width, height));
+              
+              tempCtx.drawImage(imageBitmap, 0, 0, newWidth, newHeight);
+              const resizedData = tempCtx.getImageData(0, 0, newWidth, newHeight);
+              
+              data = resizedData;
+              width = newWidth;
+              height = newHeight;
             }
-          };
+            
+            const result = detectEdges(data, method, threshold, width, height);
+            self.postMessage({ edgeData: result, width, height });
+          });
           
-          function detectEdges(data, width, height, params) {
-            const { method, threshold } = params;
+          function detectEdges(imageData, method, threshold, width, height) {
+            const data = imageData.data;
             const edgeData = new Uint8ClampedArray(width * height * 4);
-            const grayData = new Float32Array(width * height);
             
             // تحويل الصورة إلى تدرج الرمادي
+            const grayData = new Float32Array(width * height);
             for (let i = 0; i < data.length; i += 4) {
               const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
               grayData[i/4] = gray;
             }
-            
+
             // تطبيق خوارزمية كشف الحواف المختارة
             if (method === 'sobel') {
               applySobel(grayData, edgeData, width, height, threshold);
@@ -754,62 +755,9 @@
               applyPrewitt(grayData, edgeData, width, height, threshold);
             }
             
-            return edgeData;
+            return { data: edgeData, width, height };
           }
           
-          function generateHeightMap(data, width, height, params) {
-            const { colormap } = params;
-            const heightData = new Uint8ClampedArray(width * height * 4);
-            let min = 255, max = 0;
-            
-            // حساب الحد الأدنى والأقصى للسطوع
-            for (let i = 0; i < data.length; i += 4) {
-              const brightness = data[i];
-              if (brightness < min) min = brightness;
-              if (brightness > max) max = brightness;
-            }
-            
-            // إنشاء خريطة الارتفاعات
-            for (let y = 0; y < height; y++) {
-              for (let x = 0; x < width; x++) {
-                const idx = (y * width + x) * 4;
-                const brightness = data[idx];
-                const norm = (brightness - min) / (max - min);
-                const color = getHeatColor(norm, colormap);
-                
-                heightData[idx] = color.r;
-                heightData[idx+1] = color.g;
-                heightData[idx+2] = color.b;
-                heightData[idx+3] = 255;
-              }
-            }
-            
-            return { heightData, min, max };
-          }
-          
-          function getHeatColor(value, map) {
-            let r=0,g=0,b=0;
-            if(map==='jet'){ 
-              r = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-3),1),0));
-              g = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-2),1),0));
-              b = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-1),1),0));
-            } else if(map==='hot'){ 
-              r = Math.floor(255 * Math.min(1, 3*value));
-              g = Math.floor(255 * Math.min(1, 3*value-1));
-              g = Math.max(g,0);
-              b = Math.floor(255 * Math.min(1, 3*value-2));
-              b = Math.max(b,0);
-            } else if(map==='cool'){
-              r = Math.floor(255 * value);
-              g = Math.floor(255 * (1-value));
-              b = 255;
-            } else if(map==='gray'){
-              r = g = b = Math.floor(255 * value);
-            }
-            return {r,g,b};
-          }
-          
-          // خوارزميات كشف الحواف (نفسها كما في الكود الرئيسي)
           function applySobel(grayData, edgeData, width, height, threshold) {
             const sobelX = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
             const sobelY = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
@@ -839,8 +787,9 @@
               }
             }
           }
-          
+
           function applyCanny(grayData, edgeData, width, height, threshold) {
+            // تطبيق Gaussian blur أولاً
             const blurred = new Float32Array(width * height);
             const gaussian = [1, 2, 1, 2, 4, 2, 1, 2, 1];
             
@@ -858,9 +807,10 @@
               }
             }
             
+            // ثم تطبيق Sobel
             applySobel(blurred, edgeData, width, height, threshold);
           }
-          
+
           function applyLaplacian(grayData, edgeData, width, height, threshold) {
             const laplacian = [0, -1, 0, -1, 4, -1, 0, -1, 0];
             
@@ -886,7 +836,7 @@
               }
             }
           }
-          
+
           function applyPrewitt(grayData, edgeData, width, height, threshold) {
             const prewittX = [-1, 0, 1, -1, 0, 1, -1, 0, 1];
             const prewittY = [-1, -1, -1, 0, 0, 0, 1, 1, 1];
@@ -919,36 +869,23 @@
         `;
         
         const blob = new Blob([workerCode], { type: 'application/javascript' });
-        return new Worker(URL.createObjectURL(blob));
-      }
-      return null;
-    }
-
-    // تهيئة Web Worker
-    imageWorker = createImageWorker();
-    if (imageWorker) {
-      imageWorker.onmessage = function(e) {
-        const { type, result } = e.data;
+        const workerUrl = URL.createObjectURL(blob);
+        imageWorker = new Worker(workerUrl);
         
-        if (type === 'edgesDetected') {
-          // عرض حواف الصورة
-          const edgeImageData = new ImageData(result, edgePreview.width, edgePreview.height);
-          ctxEdge.putImageData(edgeImageData, 0, 0);
-          
-          // استخراج الحواف وتحديد حدود التصميم
-          extractEdgesAndBounds(result, edgePreview.width, edgePreview.height);
-          
-          // إخفاء شريط التقدم
+        imageWorker.onmessage = function(e) {
+          const { edgeData, width, height } = e.data;
+          updateEdgePreviewFromWorker(edgeData, width, height);
+          processingImage = false;
           progressBar.style.display = 'none';
-        } else if (type === 'heightMapGenerated') {
-          // عرض خريطة الارتفاعات
-          const heatImageData = new ImageData(result.heightData, heatmap.width, heatmap.height);
-          ctxHeat.putImageData(heatImageData, 0, 0);
-          
-          // إنشاء شبكة 3D
-          create3DMesh(result.min, result.max);
-        }
-      };
+        };
+        
+        imageWorker.onerror = function(e) {
+          console.error('خطأ في Web Worker:', e);
+          processingImage = false;
+          progressBar.style.display = 'none';
+          showStatus('حدث خطأ أثناء معالجة الصورة', 'error');
+        };
+      }
     }
 
     // وظيفة فتح التبويبات
@@ -973,17 +910,25 @@
     // تحديث قيم المدخلات
     edgeThreshold.addEventListener('input', () => {
       thresholdValue.textContent = edgeThreshold.value;
-      updateEdgePreviewFromImage();
+      if (!processingImage) {
+        updateEdgePreviewFromImage();
+      }
     });
 
     edgeThickness.addEventListener('input', () => {
       thicknessValue.textContent = edgeThickness.value;
-      updateEdgePreviewFromImage();
+      if (!processingImage) {
+        updateEdgePreviewFromImage();
+      }
     });
 
     // تحديث معاينة الحواف عند تغيير الخوارزمية
     document.querySelectorAll('input[name="edgeMethod"]').forEach(radio => {
-      radio.addEventListener('change', updateEdgePreviewFromImage);
+      radio.addEventListener('change', () => {
+        if (!processingImage) {
+          updateEdgePreviewFromImage();
+        }
+      });
     });
 
     // تحديث سرعة الدوران والزوم
@@ -993,6 +938,13 @@
 
     zoomControl.addEventListener('input', () => {
       camera.position.z = parseFloat(zoomControl.value);
+    });
+
+    // تحديث مستوى الجودة
+    qualityLevel.addEventListener('input', () => {
+      const level = parseInt(qualityLevel.value);
+      const qualityLabels = ['منخفض جداً', 'منخفض', 'متوسط', 'جيد', 'ممتاز'];
+      qualityValue.textContent = qualityLabels[level - 1];
     });
 
     // تحديث الإعدادات بناءً على نوع الماكينة
@@ -1081,16 +1033,23 @@
       
       const img = new Image();
       img.onload = () => {
-        // عرض الصورة الأصلية
-        canvas2d.width = img.width;
-        canvas2d.height = img.height;
-        ctx2d.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
+        // تقليل دقة الصورة إذا كانت كبيرة
+        let processedWidth = img.width;
+        let processedHeight = img.height;
         
-        // حفظ بيانات الصورة الأصلية
-        originalImageData = ctx2d.getImageData(0, 0, canvas2d.width, canvas2d.height);
+        if (reduceResolution.checked && img.width > 800) {
+          const scale = 800 / img.width;
+          processedWidth = 800;
+          processedHeight = Math.floor(img.height * scale);
+        }
+        
+        // عرض الصورة الأصلية
+        canvas2d.width = processedWidth;
+        canvas2d.height = processedHeight;
+        ctx2d.drawImage(img, 0, 0, processedWidth, processedHeight);
         
         // إنشاء خريطة الارتفاعات
-        createHeightMap(img);
+        createHeightMap(img, processedWidth, processedHeight);
         
         // تمكين أزرار التحكم
         generateBtn.disabled = false;
@@ -1108,32 +1067,84 @@
 
     // تحديث معاينة الحواف من الصورة الحالية
     function updateEdgePreviewFromImage() {
-      if (!originalImageData) return;
+      if (!fileInput.files[0] || processingImage) return;
       
-      // إظهار شريط التقدم
+      processingImage = true;
       progressBar.style.display = 'block';
-      progress.style.width = '50%';
+      progressBarInner.style.width = '0%';
       
-      // استخدام Web Worker إذا كان متاحًا
-      if (imageWorker) {
-        const method = document.querySelector('input[name="edgeMethod"]:checked').value;
-        const threshold = parseInt(edgeThreshold.value);
+      const img = new Image();
+      img.onload = () => {
+        // تقليل دقة الصورة إذا كانت كبيرة
+        let processedWidth = img.width;
+        let processedHeight = img.height;
         
-        imageWorker.postMessage({
-          type: 'detectEdges',
-          data: originalImageData.data,
-          width: originalImageData.width,
-          height: originalImageData.height,
-          params: { method, threshold }
-        });
-      } else {
-        // استخدام الطريقة القديمة إذا لم يكن Web Worker متاحًا
-        updateEdgePreview(originalImageData);
-        progressBar.style.display = 'none';
-      }
+        if (reduceResolution.checked && img.width > 800) {
+          const scale = 800 / img.width;
+          processedWidth = 800;
+          processedHeight = Math.floor(img.height * scale);
+        }
+        
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = processedWidth;
+        tempCanvas.height = processedHeight;
+        const tctx = tempCanvas.getContext('2d');
+        tctx.drawImage(img, 0, 0, processedWidth, processedHeight);
+        const imgData = tctx.getImageData(0, 0, processedWidth, processedHeight);
+        
+        // استخدام Web Worker إذا كان مفعلاً
+        if (useWebWorker.checked && window.Worker) {
+          if (!imageWorker) {
+            createImageWorker();
+          }
+          
+          const method = document.querySelector('input[name="edgeMethod"]:checked').value;
+          const threshold = parseInt(edgeThreshold.value);
+          const quality = parseInt(qualityLevel.value);
+          const maxWidth = quality < 3 ? 400 : quality < 5 ? 600 : 0; // 0 يعني لا تقليل الدقة
+          
+          imageWorker.postMessage({
+            imageData: imgData,
+            method: method,
+            threshold: threshold,
+            maxWidth: maxWidth
+          });
+          
+          // محاكاة شريط التقدم
+          let progress = 0;
+          const progressInterval = setInterval(() => {
+            progress += 5;
+            progressBarInner.style.width = Math.min(progress, 90) + '%';
+            if (progress >= 90) clearInterval(progressInterval);
+          }, 100);
+        } else {
+          // المعالجة في الموقع الرئيسي
+          updateEdgePreview(imgData);
+          processingImage = false;
+          progressBar.style.display = 'none';
+        }
+      };
+      img.src = URL.createObjectURL(fileInput.files[0]);
     }
 
-    // تحديث معاينة الحواف (بدون Web Worker)
+    // تحديث معاينة الحواف من Web Worker
+    function updateEdgePreviewFromWorker(edgeData, width, height) {
+      const edgeImageData = new ImageData(edgeData.data, width, height);
+      
+      edgePreview.width = width;
+      edgePreview.height = height;
+      ctxEdge.putImageData(edgeImageData, 0, 0);
+      
+      // استخراج الحواف وتحديد حدود التصميم
+      extractEdgesAndBounds(edgeData.data, width, height);
+      
+      progressBarInner.style.width = '100%';
+      setTimeout(() => {
+        progressBar.style.display = 'none';
+      }, 500);
+    }
+
+    // تحديث معاينة الحواف
     function updateEdgePreview(imageData) {
       const method = document.querySelector('input[name="edgeMethod"]:checked').value;
       const threshold = parseInt(edgeThreshold.value);
@@ -1149,7 +1160,7 @@
       extractEdgesAndBounds(edgeData, imageData.width, imageData.height);
     }
 
-    // كشف الحواف باستخدام خوارزميات مختلفة (بدون Web Worker)
+    // كشف الحواف باستخدام خوارزميات مختلفة
     function detectEdges(imageData, method, threshold) {
       const width = imageData.width;
       const height = imageData.height;
@@ -1331,112 +1342,114 @@
         return;
       }
       
-      // إظهار شريط التقدم
-      progressBar.style.display = 'block';
-      progress.style.width = '0%';
+      const width = canvas2d.width;
+      const height = canvas2d.height;
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = width;
+      tempCanvas.height = height;
+      const tctx = tempCanvas.getContext('2d');
+      tctx.drawImage(canvas2d, 0, 0, width, height);
+      const imgData = tctx.getImageData(0, 0, width, height).data;
       
-      setTimeout(() => {
-        const width = canvas2d.width;
-        const height = canvas2d.height;
+      // الحصول على الإعدادات المتقدمة
+      const machine = machineType.value;
+      const material = materialType.value;
+      const cutSpeed = parseInt(cuttingSpeed.value);
+      const spindleRPM = parseInt(spindleSpeed.value);
+      const depthPerPass = parseFloat(passDepth.value);
+      const safeZ = parseInt(safeHeight.value);
+      
+      let gcode = "; CNC AI Preview G-code\n";
+      gcode += "; Generated from image with edge detection\n";
+      gcode += `; Machine: ${machineType.options[machineType.selectedIndex].text}\n`;
+      gcode += `; Material: ${materialType.options[materialType.selectedIndex].text}\n`;
+      gcode += `; Design bounds: X${designBounds.minX}-${designBounds.maxX}, Y${designBounds.minY}-${designBounds.maxY}\n\n`;
+      
+      // إعدادات أولية حسب نوع الماكينة
+      gcode += "G21 ; Set units to millimeters\n";
+      gcode += "G90 ; Absolute positioning\n";
+      
+      if (machine === 'cnc_router') {
+        gcode += `S${spindleRPM} M3 ; Start spindle\n`;
+      } else if (machine === 'laser_cutter') {
+        gcode += "M3 ; Turn on laser\n";
+      }
+      
+      gcode += `G0 Z${safeZ} ; Lift tool to safe height\n\n`;
+      
+      // تحسين المسار باستخدام خوارزمية أقصر مسار
+      const optimizedPath = optimizePath(currentEdges, designBounds);
+      
+      // البدء من حدود التصميم
+      const startX = optimizedPath[0].x;
+      const startY = optimizedPath[0].y;
+      
+      gcode += `G0 X${startX} Y${startY} ; Move to design start\n`;
+      
+      // إنشاء مسار بناءً على الحواف والارتفاعات
+      let lastZ = 0;
+      let isCutting = false;
+      
+      for (let i = 0; i < optimizedPath.length; i++) {
+        const point = optimizedPath[i];
+        const x = point.x;
+        const y = point.y;
         
-        // الحصول على الإعدادات المتقدمة
-        const machine = machineType.value;
-        const material = materialType.value;
-        const cutSpeed = parseInt(cuttingSpeed.value);
-        const spindleRPM = parseInt(spindleSpeed.value);
-        const depthPerPass = parseFloat(passDepth.value);
-        const safeZ = parseInt(safeHeight.value);
+        if (x >= width || y >= height) continue;
         
-        // الحصول على الأبعاد الفعلية
-        const physicalWidth = parseFloat(widthCm.value); // سم
-        const physicalHeight = parseFloat(heightCm.value); // سم
-        const maxZDepth = parseFloat(maxDepth.value); // مم
-        const resolution = parseFloat(pointResolution.value); // مم
+        const idx = (y * width + x) * 4;
+        const brightness = imgData[idx];
+        const z = (255 - brightness) / 50; // تحويل السطوع إلى ارتفاع
         
-        // تحويل الأبعاد من سم إلى مم
-        const widthMm = physicalWidth * 10;
-        const heightMm = physicalHeight * 10;
-        
-        // حساب عوامل التحجيم
-        const scaleX = widthMm / width;
-        const scaleY = heightMm / height;
-        
-        let gcode = "; CNC AI Preview G-code\n";
-        gcode += "; Generated from image with edge detection\n";
-        gcode += `; Machine: ${machineType.options[machineType.selectedIndex].text}\n`;
-        gcode += `; Material: ${materialType.options[materialType.selectedIndex].text}\n`;
-        gcode += `; Physical dimensions: ${physicalWidth}cm x ${physicalHeight}cm\n`;
-        gcode += `; Design bounds: X${designBounds.minX}-${designBounds.maxX}, Y${designBounds.minY}-${designBounds.maxY}\n\n`;
-        
-        // إعدادات أولية حسب نوع الماكينة
-        gcode += "G21 ; Set units to millimeters\n";
-        gcode += "G90 ; Absolute positioning\n";
-        
-        if (machine === 'cnc_router') {
-          gcode += `S${spindleRPM} M3 ; Start spindle\n`;
-        } else if (machine === 'laser_cutter') {
-          gcode += "M3 ; Turn on laser\n";
-        }
-        
-        gcode += `G0 Z${safeZ} ; Lift tool to safe height\n\n`;
-        
-        // البدء من حدود التصميم
-        const startX = designBounds.minX * scaleX;
-        const startY = designBounds.minY * scaleY;
-        
-        gcode += `G0 X${startX.toFixed(2)} Y${startY.toFixed(2)} ; Move to design start\n`;
-        
-        // إنشاء مسار بناءً على الحواف والارتفاعات
-        const stepSizePixels = Math.max(1, Math.round(resolution / scaleX));
-        let lastZ = 0;
-        let pointCount = 0;
-        const totalPoints = Math.ceil((designBounds.maxX - designBounds.minX) / stepSizePixels) * 
-                           Math.ceil((designBounds.maxY - designBounds.minY) / stepSizePixels);
-        
-        for (let y = designBounds.minY; y <= designBounds.maxY; y += stepSizePixels) {
-          for (let x = designBounds.minX; x <= designBounds.maxX; x += stepSizePixels) {
-            if (x >= width || y >= height) continue;
-            
-            const idx = (y * width + x) * 4;
-            const brightness = originalImageData.data[idx];
-            const z = ((255 - brightness) / 255) * maxZDepth; // تحويل السطوع إلى ارتفاع
-            
-            // التحقق مما إذا كانت النقطة داخل حدود التصميم
-            if (isPointInDesign(x, y)) {
-              const physicalX = x * scaleX;
-              const physicalY = y * scaleY;
-              
-              if (Math.abs(z - lastZ) > 0.1) {
-                gcode += `G1 Z${z.toFixed(2)} F${cutSpeed/2} ; Adjust height\n`;
-                lastZ = z;
-              }
-              gcode += `G1 X${physicalX.toFixed(2)} Y${physicalY.toFixed(2)} F${cutSpeed} ; Move to point\n`;
-            }
-            
-            pointCount++;
-            progress.style.width = `${(pointCount / totalPoints) * 100}%`;
+        // التحقق مما إذا كانت النقطة داخل حدود التصميم
+        if (isPointInDesign(x, y)) {
+          if (!isCutting) {
+            gcode += `G1 Z${z.toFixed(2)} F${cutSpeed/2} ; Start cutting\n`;
+            isCutting = true;
           }
+          
+          if (Math.abs(z - lastZ) > 0.1) {
+            gcode += `G1 Z${z.toFixed(2)} F${cutSpeed/2} ; Adjust height\n`;
+            lastZ = z;
+          }
+          gcode += `G1 X${x} Y${y} F${cutSpeed} ; Move to point\n`;
+        } else if (isCutting) {
+          gcode += `G0 Z${safeZ} ; Lift tool\n`;
+          isCutting = false;
         }
-        
-        // إضافة أوامر الإنهاء حسب نوع الماكينة
-        gcode += `\nG0 Z${safeZ} ; Lift tool\n`;
-        if (machine === 'cnc_router') {
-          gcode += "M5 ; Stop spindle\n";
-        } else if (machine === 'laser_cutter') {
-          gcode += "M5 ; Turn off laser\n";
-        }
-        gcode += "G0 X0 Y0 ; Return to origin\n";
-        gcode += "M30 ; End program\n";
-        
-        // حفظ G-code في متغير عام للتحميل لاحقًا
-        generatedGCode = gcode;
-        downloadBtn.disabled = false;
-        
-        // إخفاء شريط التقدم
-        progressBar.style.display = 'none';
-        
-        showStatus('تم توليد G-code بنجاح! يمكنك الآن تحميله.', 'success');
-      }, 100);
+      }
+      
+      // إضافة أوامر الإنهاء حسب نوع الماكينة
+      gcode += `\nG0 Z${safeZ} ; Lift tool\n`;
+      if (machine === 'cnc_router') {
+        gcode += "M5 ; Stop spindle\n";
+      } else if (machine === 'laser_cutter') {
+        gcode += "M5 ; Turn off laser\n";
+      }
+      gcode += "G0 X0 Y0 ; Return to origin\n";
+      gcode += "M30 ; End program\n";
+      
+      // حفظ G-code في متغير عام للتحميل لاحقًا
+      generatedGCode = gcode;
+      downloadBtn.disabled = false;
+      
+      showStatus('تم توليد G-code بنجاح! يمكنك الآن تحميله.', 'success');
+    }
+
+    // تحسين المسار باستخدام خوارزمية أقصر مسار مبسطة
+    function optimizePath(edges, bounds) {
+      if (edges.length === 0) return [];
+      
+      // استخدام خوارزمية مبسطة لتقليل المسافة
+      const sortedEdges = [...edges];
+      
+      // ترتيب النقاط بناءً على موقعها (من اليسار إلى اليمين ومن الأعلى إلى الأسفل)
+      sortedEdges.sort((a, b) => {
+        if (a.y !== b.y) return a.y - b.y;
+        return a.x - b.x;
+      });
+      
+      return sortedEdges;
     }
 
     // التحقق مما إذا كانت النقطة داخل حدود التصميم
@@ -1472,9 +1485,9 @@
     }
 
     // إنشاء خريطة الارتفاعات
-    function createHeightMap(image) {
-      const w = image.width;
-      const h = image.height;
+    function createHeightMap(image, targetWidth, targetHeight) {
+      const w = targetWidth;
+      const h = targetHeight;
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = w; 
       tempCanvas.height = h;
@@ -1483,50 +1496,38 @@
       const imgData = tctx.getImageData(0, 0, w, h);
 
       // تحديث معاينة الحواف
-      updateEdgePreviewFromImage();
+      updateEdgePreview(imgData);
 
-      // استخدام Web Worker لإنشاء خريطة الارتفاعات
-      if (imageWorker) {
-        progress.style.width = '75%';
-        
-        imageWorker.postMessage({
-          type: 'generateHeightMap',
-          data: imgData.data,
-          width: w,
-          height: h,
-          params: { colormap: currentColormap }
-        });
-      } else {
-        // استخدام الطريقة القديمة إذا لم يكن Web Worker متاحًا
-        drawHeatmap(imgData.data, w, h);
-        create3DMesh(0, 255);
-        progressBar.style.display = 'none';
-      }
-    }
-
-    // إنشاء شبكة 3D
-    function create3DMesh(min, max) {
-      const w = canvas2d.width;
-      const h = canvas2d.height;
+      // 3D mesh - تقليل عدد القمم لتحسين الأداء
+      const quality = parseInt(qualityLevel.value);
+      const segments = Math.max(10, Math.min(50, quality * 10)); // من 10 إلى 50 قطعة حسب الجودة
       
-      // 3D mesh
-      const geometry = new THREE.PlaneGeometry(100, 100, w-1, h-1);
+      const geometry = new THREE.PlaneGeometry(100, 100, segments, segments);
+      let min = 255, max = 0;
       const colors = [];
+      
+      // استخدام عينات أقل لتحسين الأداء
+      const sampleStep = Math.max(1, Math.floor(w / segments));
       
       for (let i = 0; i < geometry.attributes.position.count; i++) {
         const stride = i * 3;
-        const x = i % w;
-        const y = Math.floor(i / w);
-        const idx = (y * w + x) * 4;
-        const brightness = originalImageData.data[idx];
+        const segX = i % (segments + 1);
+        const segY = Math.floor(i / (segments + 1));
         
-        // تحويل السطوع إلى ارتفاع مع الأخذ في الاعتبار الأبعاد الفعلية
-        const maxZDepth = parseFloat(maxDepth.value);
-        geometry.attributes.position.array[stride + 2] = ((brightness - min) / (max - min)) * maxZDepth * 2;
+        const x = Math.floor(segX * (w / segments));
+        const y = Math.floor(segY * (h / segments));
+        
+        if (x < w && y < h) {
+          const idx = (y * w + x) * 4;
+          const brightness = imgData.data[idx];
+          min = Math.min(min, brightness);
+          max = Math.max(max, brightness);
+          geometry.attributes.position.array[stride + 2] = brightness / 80;
 
-        const norm = (brightness - min) / (max - min);
-        const color = getHeatColor(norm, currentColormap);
-        colors.push(color.r/255, color.g/255, color.b/255);
+          const norm = brightness / 255;
+          const color = getHeatColor(norm, currentColormap);
+          colors.push(color.r/255, color.g/255, color.b/255);
+        }
       }
       
       geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
@@ -1536,24 +1537,15 @@
       if (mesh) scene.remove(mesh);
       mesh = new THREE.Mesh(geometry, material);
       scene.add(mesh);
-      
-      progressBar.style.display = 'none';
+
+      drawHeatmap(imgData.data, w, h, min, max);
     }
 
-    // رسم خريطة الألوان (بدون Web Worker)
-    function drawHeatmap(imgData, w, h) {
-      heatmap.width = w * 1.5;
-      heatmap.height = h * 1.5;
+    // رسم خريطة الألوان
+    function drawHeatmap(imgData, w, h, min, max) {
+      heatmap.width = w;
+      heatmap.height = h;
       const heatData = ctxHeat.createImageData(w, h);
-      let min = 255, max = 0;
-      
-      // حساب الحد الأدنى والأقصى للسطوع
-      for (let i = 0; i < imgData.length; i += 4) {
-        const brightness = imgData[i];
-        if (brightness < min) min = brightness;
-        if (brightness > max) max = brightness;
-      }
-      
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           const idx = (y * w + x) * 4;
@@ -1567,10 +1559,6 @@
         }
       }
       ctxHeat.putImageData(heatData, 0, 0);
-      const temp = document.createElement('canvas');
-      temp.width = w; temp.height = h;
-      temp.getContext('2d').putImageData(heatData, 0, 0);
-      ctxHeat.drawImage(temp, 0, 0, heatmap.width, heatmap.height);
     }
 
     // الحصول على اللون المناسب لخريطة الحرارة
@@ -1611,35 +1599,21 @@
       else if (map === 'cool') coolBtn.classList.add('active');
       else if (map === 'gray') grayBtn.classList.add('active');
       
-      if(originalImageData){
-        // إعادة إنشاء خريطة الارتفاعات مع الخريطة اللونية الجديدة
-        createHeightMapFromData();
-      }
-    }
-
-    // إنشاء خريطة الارتفاعات من البيانات المحفوظة
-    function createHeightMapFromData() {
-      if (!originalImageData) return;
-      
-      const w = originalImageData.width;
-      const h = originalImageData.height;
-      
-      // استخدام Web Worker إذا كان متاحًا
-      if (imageWorker) {
-        progressBar.style.display = 'block';
-        progress.style.width = '50%';
-        
-        imageWorker.postMessage({
-          type: 'generateHeightMap',
-          data: originalImageData.data,
-          width: w,
-          height: h,
-          params: { colormap: currentColormap }
-        });
-      } else {
-        // استخدام الطريقة القديمة
-        drawHeatmap(originalImageData.data, w, h);
-        create3DMesh(0, 255);
+      if(fileInput.files[0]){
+        const img = new Image();
+        img.onload = () => {
+          let processedWidth = img.width;
+          let processedHeight = img.height;
+          
+          if (reduceResolution.checked && img.width > 800) {
+            const scale = 800 / img.width;
+            processedWidth = 800;
+            processedHeight = Math.floor(img.height * scale);
+          }
+          
+          createHeightMap(img, processedWidth, processedHeight);
+        };
+        img.src = URL.createObjectURL(fileInput.files[0]);
       }
     }
 
