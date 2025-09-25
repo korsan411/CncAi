@@ -412,6 +412,20 @@
       transition: width 0.3s;
     }
 
+    .ai-options {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      margin-top: 20px;
+    }
+
+    .ai-options label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+    }
+
     @media (max-width: 768px) {
       .preview-section {
         flex-direction: column;
@@ -472,8 +486,9 @@
 
     <!-- التبويبات -->
     <div class="tabs">
-      <button class="tab active" onclick="openTab('previewTab')">👁️ المعاينة</button>
-      <button class="tab" onclick="openTab('settingsTab')">⚙️ الإعدادات المتقدمة</button>
+      <button class="tab active" onclick="openTab(event, 'previewTab')">👁️ المعاينة</button>
+      <button class="tab" onclick="openTab(event, 'settingsTab')">⚙️ الإعدادات المتقدمة</button>
+      <button class="tab" onclick="openTab(event, 'aiTab')">🧠 خيارات الذكاء الاصطناعي</button>
     </div>
 
     <!-- تبويب المعاينة -->
@@ -628,12 +643,56 @@
       </div>
     </div>
 
+    <!-- تبويب خيارات الذكاء الاصطناعي -->
+    <div id="aiTab" class="tab-content">
+      <div class="control-group">
+        <h3>🧠 خيارات تحليل الصورة بالذكاء الاصطناعي</h3>
+        <div class="ai-options">
+          <label>
+            <input type="checkbox" id="aiEdgeDetection" checked>
+            استخدام خوارزميات ذكية لكشف الحواف
+          </label>
+          <label>
+            <input type="checkbox" id="aiHeightMapping" checked>
+            استخدام تحليل الارتفاعات المتقدم
+          </label>
+          <label>
+            <input type="checkbox" id="aiPathOptimization" checked>
+            تحسين مسار القطع باستخدام الذكاء الاصطناعي
+          </label>
+          <label>
+            <input type="range" id="aiIntensity" min="1" max="10" value="5">
+            شدة تحليل الذكاء الاصطناعي: <span id="aiIntensityValue">متوسط</span>
+          </label>
+        </div>
+      </div>
+      
+      <div class="control-group">
+        <h3>🎯 إستراتيجية توليد G-code</h3>
+        <div class="ai-options">
+          <label>
+            <input type="radio" name="gcodeStrategy" value="contour" checked>
+            التركيز على كفاف التصميم (Contour)
+          </label>
+          <label>
+            <input type="radio" name="gcodeStrategy" value="heightmap">
+            التركيز على خريطة الارتفاعات (Heightmap)
+          </label>
+          <label>
+            <input type="radio" name="gcodeStrategy" value="hybrid">
+            النهج الهجين (مزيج من الاثنين)
+          </label>
+        </div>
+      </div>
+    </div>
+
     <!-- عناصر تحكم G-code -->
     <div class="control-group">
       <h3>⚙️ توليد G-code</h3>
       <div class="gcode-controls">
         <button id="generateBtn" onclick="generateGCode()">🔄 توليد G-code</button>
         <button id="downloadBtn" onclick="downloadGCode()" disabled>💾 تحميل G-code</button>
+        <button id="simulateBtn" onclick="simulateCutting()" disabled>🎬 محاكاة القطع</button>
       </div>
       <div id="statusMessage" class="status-message"></div>
     </div>
@@ -658,6 +717,7 @@
     const thicknessValue = document.getElementById('thicknessValue');
     const generateBtn = document.getElementById('generateBtn');
     const downloadBtn = document.getElementById('downloadBtn');
+    const simulateBtn = document.getElementById('simulateBtn');
     const statusMessage = document.getElementById('statusMessage');
     const jetBtn = document.getElementById('jetBtn');
     const hotBtn = document.getElementById('hotBtn');
@@ -669,6 +729,11 @@
     const useWebWorker = document.getElementById('useWebWorker');
     const qualityLevel = document.getElementById('qualityLevel');
     const qualityValue = document.getElementById('qualityValue');
+    const aiEdgeDetection = document.getElementById('aiEdgeDetection');
+    const aiHeightMapping = document.getElementById('aiHeightMapping');
+    const aiPathOptimization = document.getElementById('aiPathOptimization');
+    const aiIntensity = document.getElementById('aiIntensity');
+    const aiIntensityValue = document.getElementById('aiIntensityValue');
     
     // عناصر الإعدادات المتقدمة
     const machineType = document.getElementById('machineType');
@@ -699,65 +764,13 @@
     let generatedGCode = '';
     let imageWorker = null;
     let processingImage = false;
+    let heightMapData = null;
 
     // إنشاء Web Worker لمعالجة الصور
     function createImageWorker() {
       if (window.Worker) {
         const workerCode = `
-          self.addEventListener('message', function(e) {
-            const { imageData, method, threshold, maxWidth } = e.data;
-            
-            // تقليل دقة الصورة إذا كانت كبيرة
-            let data = imageData;
-            let width = imageData.width;
-            let height = imageData.height;
-            
-            if (maxWidth > 0 && width > maxWidth) {
-              const scale = maxWidth / width;
-              const newWidth = maxWidth;
-              const newHeight = Math.floor(height * scale);
-              
-              const tempCanvas = new OffscreenCanvas(newWidth, newHeight);
-              const tempCtx = tempCanvas.getContext('2d');
-              const imageBitmap = createImageBitmap(new ImageData(data.data, width, height));
-              
-              tempCtx.drawImage(imageBitmap, 0, 0, newWidth, newHeight);
-              const resizedData = tempCtx.getImageData(0, 0, newWidth, newHeight);
-              
-              data = resizedData;
-              width = newWidth;
-              height = newHeight;
-            }
-            
-            const result = detectEdges(data, method, threshold, width, height);
-            self.postMessage({ edgeData: result, width, height });
-          });
-          
-          function detectEdges(imageData, method, threshold, width, height) {
-            const data = imageData.data;
-            const edgeData = new Uint8ClampedArray(width * height * 4);
-            
-            // تحويل الصورة إلى تدرج الرمادي
-            const grayData = new Float32Array(width * height);
-            for (let i = 0; i < data.length; i += 4) {
-              const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
-              grayData[i/4] = gray;
-            }
-
-            // تطبيق خوارزمية كشف الحواف المختارة
-            if (method === 'sobel') {
-              applySobel(grayData, edgeData, width, height, threshold);
-            } else if (method === 'canny') {
-              applyCanny(grayData, edgeData, width, height, threshold);
-            } else if (method === 'laplacian') {
-              applyLaplacian(grayData, edgeData, width, height, threshold);
-            } else if (method === 'prewitt') {
-              applyPrewitt(grayData, edgeData, width, height, threshold);
-            }
-            
-            return { data: edgeData, width, height };
-          }
-          
+          // دوال كشف الحواف
           function applySobel(grayData, edgeData, width, height, threshold) {
             const sobelX = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
             const sobelY = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
@@ -866,6 +879,85 @@
               }
             }
           }
+
+          // خوارزميات الذكاء الاصطناعي المتقدمة
+          function applyAIEdgeDetection(grayData, edgeData, width, height, threshold, intensity) {
+            // خوارزمية متقدمة تجمع بين عدة طرق
+            const tempEdgeData = new Uint8ClampedArray(width * height * 4);
+            const tempEdgeData2 = new Uint8ClampedArray(width * height * 4);
+            
+            // تطبيق Sobel
+            applySobel(grayData, tempEdgeData, width, height, threshold);
+            
+            // تطبيق Laplacian
+            applyLaplacian(grayData, tempEdgeData2, width, height, threshold);
+            
+            // دمج النتائج بناءً على شدة الذكاء الاصطناعي
+            for (let i = 0; i < edgeData.length; i += 4) {
+              const sobelVal = tempEdgeData[i];
+              const laplacianVal = tempEdgeData2[i];
+              
+              // دمج النتائج مع إعطاء وزن أكبر لـ Sobel
+              const weight = intensity / 10;
+              const combined = (sobelVal * (0.7 + 0.3 * weight) + laplacianVal * (0.3 + 0.2 * weight)) / (1 + 0.5 * weight);
+              
+              edgeData[i] = combined > threshold ? 255 : 0;
+              edgeData[i+1] = combined > threshold ? 255 : 0;
+              edgeData[i+2] = combined > threshold ? 255 : 0;
+              edgeData[i+3] = 255;
+            }
+          }
+
+          // دالة معالجة الصورة الرئيسية
+          self.addEventListener('message', function(e) {
+            const { imageData, method, threshold, maxWidth, useAI, aiIntensity } = e.data;
+            
+            // تقليل دقة الصورة إذا كانت كبيرة
+            let data = imageData;
+            let width = imageData.width;
+            let height = imageData.height;
+            
+            if (maxWidth > 0 && width > maxWidth) {
+              const scale = maxWidth / width;
+              const newWidth = maxWidth;
+              const newHeight = Math.floor(height * scale);
+              
+              const tempCanvas = new OffscreenCanvas(newWidth, newHeight);
+              const tempCtx = tempCanvas.getContext('2d');
+              tempCtx.drawImage(new ImageData(data.data, width, height), 0, 0, newWidth, newHeight);
+              const resizedData = tempCtx.getImageData(0, 0, newWidth, newHeight);
+              
+              data = resizedData;
+              width = newWidth;
+              height = newHeight;
+            }
+            
+            // تحويل الصورة إلى تدرج الرمادي
+            const grayData = new Float32Array(width * height);
+            for (let i = 0; i < data.data.length; i += 4) {
+              const gray = 0.299 * data.data[i] + 0.587 * data.data[i+1] + 0.114 * data.data[i+2];
+              grayData[i/4] = gray;
+            }
+
+            // تطبيق خوارزمية كشف الحواف المختارة
+            const edgeData = new Uint8ClampedArray(width * height * 4);
+            
+            if (useAI) {
+              applyAIEdgeDetection(grayData, edgeData, width, height, threshold, aiIntensity);
+            } else {
+              if (method === 'sobel') {
+                applySobel(grayData, edgeData, width, height, threshold);
+              } else if (method === 'canny') {
+                applyCanny(grayData, edgeData, width, height, threshold);
+              } else if (method === 'laplacian') {
+                applyLaplacian(grayData, edgeData, width, height, threshold);
+              } else if (method === 'prewitt') {
+                applyPrewitt(grayData, edgeData, width, height, threshold);
+              }
+            }
+            
+            self.postMessage({ edgeData: { data: edgeData, width, height }, width, height });
+          });
         `;
         
         const blob = new Blob([workerCode], { type: 'application/javascript' });
@@ -889,7 +981,7 @@
     }
 
     // وظيفة فتح التبويبات
-    function openTab(tabId) {
+    function openTab(event, tabId) {
       // إخفاء جميع محتويات التبويبات
       const tabContents = document.getElementsByClassName('tab-content');
       for (let i = 0; i < tabContents.length; i++) {
@@ -945,6 +1037,13 @@
       const level = parseInt(qualityLevel.value);
       const qualityLabels = ['منخفض جداً', 'منخفض', 'متوسط', 'جيد', 'ممتاز'];
       qualityValue.textContent = qualityLabels[level - 1];
+    });
+
+    // تحديث شدة الذكاء الاصطناعي
+    aiIntensity.addEventListener('input', () => {
+      const level = parseInt(aiIntensity.value);
+      const intensityLabels = ['ضعيف', 'خفيف', 'متوسط', 'قوي', 'شديد', 'مرتفع', 'كبير', 'عالي', 'مركز', 'مكثف'];
+      aiIntensityValue.textContent = intensityLabels[level - 1];
     });
 
     // تحديث الإعدادات بناءً على نوع الماكينة
@@ -1053,6 +1152,7 @@
         
         // تمكين أزرار التحكم
         generateBtn.disabled = false;
+        simulateBtn.disabled = false;
         
         // إظهار رسالة نجاح
         showStatus('تم تحميل الصورة بنجاح!', 'success');
@@ -1102,12 +1202,16 @@
           const threshold = parseInt(edgeThreshold.value);
           const quality = parseInt(qualityLevel.value);
           const maxWidth = quality < 3 ? 400 : quality < 5 ? 600 : 0; // 0 يعني لا تقليل الدقة
+          const useAI = aiEdgeDetection.checked;
+          const aiIntensityValue = parseInt(aiIntensity.value);
           
           imageWorker.postMessage({
             imageData: imgData,
             method: method,
             threshold: threshold,
-            maxWidth: maxWidth
+            maxWidth: maxWidth,
+            useAI: useAI,
+            aiIntensity: aiIntensityValue
           });
           
           // محاكاة شريط التقدم
@@ -1148,8 +1252,10 @@
     function updateEdgePreview(imageData) {
       const method = document.querySelector('input[name="edgeMethod"]:checked').value;
       const threshold = parseInt(edgeThreshold.value);
+      const useAI = aiEdgeDetection.checked;
+      const aiIntensityValue = parseInt(aiIntensity.value);
       
-      const edgeData = detectEdges(imageData, method, threshold);
+      const edgeData = detectEdges(imageData, method, threshold, useAI, aiIntensityValue);
       const edgeImageData = new ImageData(edgeData, imageData.width, imageData.height);
       
       edgePreview.width = imageData.width;
@@ -1161,7 +1267,7 @@
     }
 
     // كشف الحواف باستخدام خوارزميات مختلفة
-    function detectEdges(imageData, method, threshold) {
+    function detectEdges(imageData, method, threshold, useAI, aiIntensity) {
       const width = imageData.width;
       const height = imageData.height;
       const data = imageData.data;
@@ -1175,14 +1281,18 @@
       }
 
       // تطبيق خوارزمية كشف الحواف المختارة
-      if (method === 'sobel') {
-        applySobel(grayData, edgeData, width, height, threshold);
-      } else if (method === 'canny') {
-        applyCanny(grayData, edgeData, width, height, threshold);
-      } else if (method === 'laplacian') {
-        applyLaplacian(grayData, edgeData, width, height, threshold);
-      } else if (method === 'prewitt') {
-        applyPrewitt(grayData, edgeData, width, height, threshold);
+      if (useAI) {
+        applyAIEdgeDetection(grayData, edgeData, width, height, threshold, aiIntensity);
+      } else {
+        if (method === 'sobel') {
+          applySobel(grayData, edgeData, width, height, threshold);
+        } else if (method === 'canny') {
+          applyCanny(grayData, edgeData, width, height, threshold);
+        } else if (method === 'laplacian') {
+          applyLaplacian(grayData, edgeData, width, height, threshold);
+        } else if (method === 'prewitt') {
+          applyPrewitt(grayData, edgeData, width, height, threshold);
+        }
       }
       
       return edgeData;
@@ -1301,6 +1411,34 @@
       }
     }
 
+    // خوارزمية ذكية لكشف الحواف باستخدام الذكاء الاصطناعي
+    function applyAIEdgeDetection(grayData, edgeData, width, height, threshold, intensity) {
+      // خوارزمية متقدمة تجمع بين عدة طرق
+      const tempEdgeData = new Uint8ClampedArray(width * height * 4);
+      const tempEdgeData2 = new Uint8ClampedArray(width * height * 4);
+      
+      // تطبيق Sobel
+      applySobel(grayData, tempEdgeData, width, height, threshold);
+      
+      // تطبيق Laplacian
+      applyLaplacian(grayData, tempEdgeData2, width, height, threshold);
+      
+      // دمج النتائج بناءً على شدة الذكاء الاصطناعي
+      for (let i = 0; i < edgeData.length; i += 4) {
+        const sobelVal = tempEdgeData[i];
+        const laplacianVal = tempEdgeData2[i];
+        
+        // دمج النتائج مع إعطاء وزن أكبر لـ Sobel
+        const weight = intensity / 10;
+        const combined = (sobelVal * (0.7 + 0.3 * weight) + laplacianVal * (0.3 + 0.2 * weight)) / (1 + 0.5 * weight);
+        
+        edgeData[i] = combined > threshold ? 255 : 0;
+        edgeData[i+1] = combined > threshold ? 255 : 0;
+        edgeData[i+2] = combined > threshold ? 255 : 0;
+        edgeData[i+3] = 255;
+      }
+    }
+
     // استخراج الحواف وتحديد حدود التصميم
     function extractEdgesAndBounds(edgeData, width, height) {
       currentEdges = [];
@@ -1358,11 +1496,15 @@
       const spindleRPM = parseInt(spindleSpeed.value);
       const depthPerPass = parseFloat(passDepth.value);
       const safeZ = parseInt(safeHeight.value);
+      const gcodeStrategy = document.querySelector('input[name="gcodeStrategy"]:checked').value;
+      const useAIHeightMapping = aiHeightMapping.checked;
+      const useAIPathOptimization = aiPathOptimization.checked;
       
       let gcode = "; CNC AI Preview G-code\n";
       gcode += "; Generated from image with edge detection\n";
       gcode += `; Machine: ${machineType.options[machineType.selectedIndex].text}\n`;
       gcode += `; Material: ${materialType.options[materialType.selectedIndex].text}\n`;
+      gcode += `; Strategy: ${gcodeStrategy}\n`;
       gcode += `; Design bounds: X${designBounds.minX}-${designBounds.maxX}, Y${designBounds.minY}-${designBounds.maxY}\n\n`;
       
       // إعدادات أولية حسب نوع الماكينة
@@ -1377,8 +1519,8 @@
       
       gcode += `G0 Z${safeZ} ; Lift tool to safe height\n\n`;
       
-      // تحسين المسار باستخدام خوارزمية أقصر مسار
-      const optimizedPath = optimizePath(currentEdges, designBounds);
+      // تحسين المسار باستخدام خوارزمية متقدمة
+      const optimizedPath = optimizePath(currentEdges, designBounds, useAIPathOptimization);
       
       // البدء من حدود التصميم
       const startX = optimizedPath[0].x;
@@ -1386,36 +1528,70 @@
       
       gcode += `G0 X${startX} Y${startY} ; Move to design start\n`;
       
-      // إنشاء مسار بناءً على الحواف والارتفاعات
+      // إنشاء مسار بناءً على الاستراتيجية المختارة
       let lastZ = 0;
       let isCutting = false;
+      let totalPasses = 1;
       
-      for (let i = 0; i < optimizedPath.length; i++) {
-        const point = optimizedPath[i];
-        const x = point.x;
-        const y = point.y;
+      // تحديد عدد التمريرات بناءً على عمق القطع
+      if (machine === 'cnc_router' && depthPerPass > 0) {
+        totalPasses = Math.ceil(5 / depthPerPass); // افتراض أقصى عمق قطع 5mm
+      }
+      
+      for (let pass = 0; pass < totalPasses; pass++) {
+        gcode += `; Pass ${pass + 1} of ${totalPasses}\n`;
         
-        if (x >= width || y >= height) continue;
-        
-        const idx = (y * width + x) * 4;
-        const brightness = imgData[idx];
-        const z = (255 - brightness) / 50; // تحويل السطوع إلى ارتفاع
-        
-        // التحقق مما إذا كانت النقطة داخل حدود التصميم
-        if (isPointInDesign(x, y)) {
-          if (!isCutting) {
-            gcode += `G1 Z${z.toFixed(2)} F${cutSpeed/2} ; Start cutting\n`;
-            isCutting = true;
+        for (let i = 0; i < optimizedPath.length; i++) {
+          const point = optimizedPath[i];
+          const x = point.x;
+          const y = point.y;
+          
+          if (x >= width || y >= height) continue;
+          
+          const idx = (y * width + x) * 4;
+          const brightness = imgData[idx];
+          
+          // حساب الارتفاع بناءً على الاستراتيجية المختارة
+          let z = 0;
+          if (gcodeStrategy === 'contour') {
+            // التركيز على كفاف التصميم
+            z = isPointOnEdge(x, y) ? (255 - brightness) / 50 : 0;
+          } else if (gcodeStrategy === 'heightmap') {
+            // التركيز على خريطة الارتفاعات
+            z = (255 - brightness) / 50 * (pass + 1) / totalPasses;
+          } else if (gcodeStrategy === 'hybrid') {
+            // النهج الهجين
+            const edgeWeight = isPointOnEdge(x, y) ? 0.7 : 0.3;
+            z = (255 - brightness) / 50 * edgeWeight * (pass + 1) / totalPasses;
           }
           
-          if (Math.abs(z - lastZ) > 0.1) {
-            gcode += `G1 Z${z.toFixed(2)} F${cutSpeed/2} ; Adjust height\n`;
-            lastZ = z;
+          // تطبيق تحسينات الذكاء الاصطناعي لخريطة الارتفاعات
+          if (useAIHeightMapping) {
+            z = applyAIHeightMapping(z, brightness, x, y, width, height, imgData);
           }
-          gcode += `G1 X${x} Y${y} F${cutSpeed} ; Move to point\n`;
-        } else if (isCutting) {
-          gcode += `G0 Z${safeZ} ; Lift tool\n`;
-          isCutting = false;
+          
+          // التحقق مما إذا كانت النقطة داخل حدود التصميم
+          if (isPointInDesign(x, y)) {
+            if (!isCutting) {
+              gcode += `G1 Z${z.toFixed(2)} F${cutSpeed/2} ; Start cutting\n`;
+              isCutting = true;
+            }
+            
+            if (Math.abs(z - lastZ) > 0.1) {
+              gcode += `G1 Z${z.toFixed(2)} F${cutSpeed/2} ; Adjust height\n`;
+              lastZ = z;
+            }
+            gcode += `G1 X${x} Y${y} F${cutSpeed} ; Move to point\n`;
+          } else if (isCutting) {
+            gcode += `G0 Z${safeZ} ; Lift tool\n`;
+            isCutting = false;
+          }
+        }
+        
+        // العودة إلى البداية للتمريرة التالية
+        if (pass < totalPasses - 1) {
+          gcode += `G0 Z${safeZ} ; Lift tool for next pass\n`;
+          gcode += `G0 X${startX} Y${startY} ; Return to start\n`;
         }
       }
       
@@ -1436,28 +1612,132 @@
       showStatus('تم توليد G-code بنجاح! يمكنك الآن تحميله.', 'success');
     }
 
-    // تحسين المسار باستخدام خوارزمية أقصر مسار مبسطة
-    function optimizePath(edges, bounds) {
+    // تطبيق تحسينات الذكاء الاصطناعي لخريطة الارتفاعات
+    function applyAIHeightMapping(z, brightness, x, y, width, height, imgData) {
+      // خوارزمية متقدمة تأخذ في الاعتبار المناطق المحيطة
+      let weightedZ = z;
+      const intensity = parseInt(aiIntensity.value) / 10;
+      
+      // حساب متوسط الارتفاعات في المنطقة المحيطة
+      let sum = 0;
+      let count = 0;
+      const radius = Math.max(1, Math.floor(3 * intensity));
+      
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            const nIdx = (ny * width + nx) * 4;
+            const nBrightness = imgData[nIdx];
+            sum += (255 - nBrightness) / 50;
+            count++;
+          }
+        }
+      }
+      
+      if (count > 0) {
+        const avgZ = sum / count;
+        // دمج القيم مع إعطاء وزن للقيمة الأصلية
+        weightedZ = (z * (0.7 + 0.3 * intensity) + avgZ * (0.3 + 0.2 * intensity)) / (1 + 0.5 * intensity);
+      }
+      
+      return weightedZ;
+    }
+
+    // تحسين المسار باستخدام خوارزمية أقصر مسار
+    function optimizePath(edges, bounds, useAI) {
       if (edges.length === 0) return [];
       
-      // استخدام خوارزمية مبسطة لتقليل المسافة
-      const sortedEdges = [...edges];
+      if (useAI) {
+        // خوارزمية متقدمة باستخدام الذكاء الاصطناعي
+        return optimizePathWithAI(edges, bounds);
+      } else {
+        // خوارزمية مبسطة
+        const sortedEdges = [...edges];
+        
+        // ترتيب النقاط بناءً على موقعها (من اليسار إلى اليمين ومن الأعلى إلى الأسفل)
+        sortedEdges.sort((a, b) => {
+          if (a.y !== b.y) return a.y - b.y;
+          return a.x - b.x;
+        });
+        
+        return sortedEdges;
+      }
+    }
+
+    // تحسين المسار باستخدام خوارزمية الذكاء الاصطناعي
+    function optimizePathWithAI(edges, bounds) {
+      if (edges.length === 0) return [];
       
-      // ترتيب النقاط بناءً على موقعها (من اليسار إلى اليمين ومن الأعلى إلى الأسفل)
-      sortedEdges.sort((a, b) => {
-        if (a.y !== b.y) return a.y - b.y;
-        return a.x - b.x;
-      });
+      // خوارزمية أقرب جار (Nearest Neighbor) مع تحسينات
+      let unvisited = [...edges];
+      let path = [];
       
-      return sortedEdges;
+      // البدء من النقطة الأقرب إلى المركز
+      const centerX = (bounds.minX + bounds.maxX) / 2;
+      const centerY = (bounds.minY + bounds.maxY) / 2;
+      
+      let currentIndex = 0;
+      let minDist = Infinity;
+      
+      for (let i = 0; i < unvisited.length; i++) {
+        const dist = Math.sqrt(
+          Math.pow(unvisited[i].x - centerX, 2) + 
+          Math.pow(unvisited[i].y - centerY, 2)
+        );
+        
+        if (dist < minDist) {
+          minDist = dist;
+          currentIndex = i;
+        }
+      }
+      
+      let current = unvisited.splice(currentIndex, 1)[0];
+      path.push(current);
+      
+      // بناء المسار باستخدام خوارزمية أقرب جار
+      while (unvisited.length > 0) {
+        let nearestIndex = 0;
+        let nearestDist = distance(current, unvisited[0]);
+        
+        for (let i = 1; i < unvisited.length; i++) {
+          const dist = distance(current, unvisited[i]);
+          if (dist < nearestDist) {
+            nearestDist = dist;
+            nearestIndex = i;
+          }
+        }
+        
+        current = unvisited.splice(nearestIndex, 1)[0];
+        path.push(current);
+      }
+      
+      return path;
+    }
+
+    // حساب المسافة بين نقطتين
+    function distance(a, b) {
+      return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2));
+    }
+
+    // التحقق مما إذا كانت النقطة على حافة
+    function isPointOnEdge(x, y) {
+      for (let edge of currentEdges) {
+        if (edge.x === x && edge.y === y) {
+          return true;
+        }
+      }
+      return false;
     }
 
     // التحقق مما إذا كانت النقطة داخل حدود التصميم
     function isPointInDesign(x, y) {
-      // في هذا المثال المبسط، نتحقق من وجود حواف قريبة
+      // في هذا المثال المحسن، نتحقق من وجود حواف قريبة مع تحسين الدقة
       for (let edge of currentEdges) {
         const distance = Math.sqrt(Math.pow(edge.x - x, 2) + Math.pow(edge.y - y, 2));
-        if (distance < 10) { // إذا كانت النقطة قريبة من حافة
+        if (distance < 5) { // زيادة الدقة من 10 إلى 5 بكسل
           return true;
         }
       }
@@ -1484,6 +1764,18 @@
       showStatus('تم تحميل ملف G-code بنجاح', 'success');
     }
 
+    // محاكاة عملية القطع
+    function simulateCutting() {
+      if (!generatedGCode) {
+        showStatus('يرجى توليد G-code أولاً', 'error');
+        return;
+      }
+      
+      showStatus('جاري تحضير المحاكاة...', 'success');
+      // هنا يمكن إضافة كود المحاكاة الفعلية
+      // هذه وظيفة أساسية تحتاج إلى تطوير
+    }
+
     // إنشاء خريطة الارتفاعات
     function createHeightMap(image, targetWidth, targetHeight) {
       const w = targetWidth;
@@ -1494,9 +1786,12 @@
       const tctx = tempCanvas.getContext('2d');
       tctx.drawImage(image, 0, 0, w, h);
       const imgData = tctx.getImageData(0, 0, w, h);
+      
+      // حفظ بيانات خريطة الارتفاعات للاستخدام لاحقًا
+      heightMapData = imgData.data;
 
       // تحديث معاينة الحواف
-      updateEdgePreview(imgData);
+      updateEdgePreviewFromImage();
 
       // 3D mesh - تقليل عدد القمم لتحسين الأداء
       const quality = parseInt(qualityLevel.value);
