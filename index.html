@@ -568,6 +568,7 @@
                 <option value="contour">مسح كفافي (Contour)</option>
                 <option value="adaptive">مسح متكيف (Adaptive)</option>
                 <option value="spiral">مسح حلزوني (Spiral)</option>
+                <option value="edge_following">تتبع الحواف</option>
               </select>
             </label>
             
@@ -789,6 +790,7 @@
     let currentImageData = null;
     let resizeRatio = 1;
     let heightMapData = null;
+    let edgeMapData = null;
 
     // وظيفة فتح التبويبات
     function openTab(tabId) {
@@ -1065,7 +1067,6 @@
       // إنشاء Worker إذا لم يكن موجودًا
       if (!window.edgeDetectionWorker) {
         const workerCode = `
-          // كود Worker يبقى كما هو
           self.onmessage = function(e) {
             const { imageData, method, threshold, quality } = e.data;
             const edgeData = detectEdgesInWorker(imageData, method, threshold, quality);
@@ -1073,8 +1074,56 @@
           };
           
           function detectEdgesInWorker(imageData, method, threshold, quality) {
-            // تنفيذ خوارزميات كشف الحواف
-            // ... (نفس الكود السابق)
+            const width = imageData.width;
+            const height = imageData.height;
+            const data = imageData.data;
+            const result = new Uint8ClampedArray(width * height * 4);
+            
+            // تطبيق خوارزمية كشف الحواف المطلوبة
+            if (method === 'sobel') {
+              // تطبيق مرشح Sobel
+              for (let y = 1; y < height - 1; y++) {
+                for (let x = 1; x < width - 1; x++) {
+                  const idx = (y * width + x) * 4;
+                  
+                  // حساب التدرج في الاتجاه الأفقي (Gx)
+                  let gx = 0;
+                  gx += -1 * data[((y-1)*width + (x-1))*4];
+                  gx += 0 * data[((y-1)*width + x)*4];
+                  gx += 1 * data[((y-1)*width + (x+1))*4];
+                  gx += -2 * data[(y*width + (x-1))*4];
+                  gx += 0 * data[(y*width + x)*4];
+                  gx += 2 * data[(y*width + (x+1))*4];
+                  gx += -1 * data[((y+1)*width + (x-1))*4];
+                  gx += 0 * data[((y+1)*width + x)*4];
+                  gx += 1 * data[((y+1)*width + (x+1))*4];
+                  
+                  // حساب التدرج في الاتجاه العمودي (Gy)
+                  let gy = 0;
+                  gy += -1 * data[((y-1)*width + (x-1))*4];
+                  gy += -2 * data[((y-1)*width + x)*4];
+                  gy += -1 * data[((y-1)*width + (x+1))*4];
+                  gy += 0 * data[(y*width + (x-1))*4];
+                  gy += 0 * data[(y*width + x)*4];
+                  gy += 0 * data[(y*width + (x+1))*4];
+                  gy += 1 * data[((y+1)*width + (x-1))*4];
+                  gy += 2 * data[((y+1)*width + x)*4];
+                  gy += 1 * data[((y+1)*width + (x+1))*4];
+                  
+                  // حساب مقدار التدرج
+                  const magnitude = Math.sqrt(gx*gx + gy*gy);
+                  const edgeValue = magnitude > threshold ? 255 : 0;
+                  
+                  result[idx] = edgeValue;
+                  result[idx+1] = edgeValue;
+                  result[idx+2] = edgeValue;
+                  result[idx+3] = 255;
+                }
+              }
+            }
+            // يمكن إضافة خوارزميات أخرى هنا
+            
+            return result;
           }
         `;
         
@@ -1109,10 +1158,296 @@
       });
     }
 
-    // كشف الحواف باستخدام خوارزميات مختلفة (نسخة محسنة)
+    // كشف الحواف باستخدام خوارزميات مختلفة
     function detectEdges(imageData, method, threshold) {
-      // تنفيذ خوارزميات كشف الحواف
-      // ... (نفس الكود السابق)
+      const width = imageData.width;
+      const height = imageData.height;
+      const data = imageData.data;
+      const result = new Uint8ClampedArray(width * height * 4);
+      
+      // تطبيق خوارزمية كشف الحواف المطلوبة
+      if (method === 'sobel') {
+        // تطبيق مرشح Sobel
+        for (let y = 1; y < height - 1; y++) {
+          for (let x = 1; x < width - 1; x++) {
+            const idx = (y * width + x) * 4;
+            
+            // حساب التدرج في الاتجاه الأفقي (Gx)
+            let gx = 0;
+            gx += -1 * data[((y-1)*width + (x-1))*4];
+            gx += 0 * data[((y-1)*width + x)*4];
+            gx += 1 * data[((y-1)*width + (x+1))*4];
+            gx += -2 * data[(y*width + (x-1))*4];
+            gx += 0 * data[(y*width + x)*4];
+            gx += 2 * data[(y*width + (x+1))*4];
+            gx += -1 * data[((y+1)*width + (x-1))*4];
+            gx += 0 * data[((y+1)*width + x)*4];
+            gx += 1 * data[((y+1)*width + (x+1))*4];
+            
+            // حساب التدرج في الاتجاه العمودي (Gy)
+            let gy = 0;
+            gy += -1 * data[((y-1)*width + (x-1))*4];
+            gy += -2 * data[((y-1)*width + x)*4];
+            gy += -1 * data[((y-1)*width + (x+1))*4];
+            gy += 0 * data[(y*width + (x-1))*4];
+            gy += 0 * data[(y*width + x)*4];
+            gy += 0 * data[(y*width + (x+1))*4];
+            gy += 1 * data[((y+1)*width + (x-1))*4];
+            gy += 2 * data[((y+1)*width + x)*4];
+            gy += 1 * data[((y+1)*width + (x+1))*4];
+            
+            // حساب مقدار التدرج
+            const magnitude = Math.sqrt(gx*gx + gy*gy);
+            const edgeValue = magnitude > threshold ? 255 : 0;
+            
+            result[idx] = edgeValue;
+            result[idx+1] = edgeValue;
+            result[idx+2] = edgeValue;
+            result[idx+3] = 255;
+          }
+        }
+      } else if (method === 'canny') {
+        // تطبيق خوارزمية Canny المبسطة
+        // 1. تخفيف الضوضاء باستخدام Gaussian Blur
+        const blurred = applyGaussianBlur(data, width, height);
+        
+        // 2. حساب التدرج باستخدام Sobel
+        const gradients = calculateGradients(blurred, width, height);
+        
+        // 3. تطبيق Non-Maximum Suppression
+        const suppressed = nonMaximumSuppression(gradients, width, height);
+        
+        // 4. تطبيق Hysteresis Thresholding
+        const cannyEdges = hysteresisThresholding(suppressed, width, height, threshold, threshold/2);
+        
+        // نسخ النتائج إلى مصفوفة الإخراج
+        for (let i = 0; i < cannyEdges.length; i++) {
+          const value = cannyEdges[i] ? 255 : 0;
+          result[i*4] = value;
+          result[i*4+1] = value;
+          result[i*4+2] = value;
+          result[i*4+3] = 255;
+        }
+      } else if (method === 'laplacian') {
+        // تطبيق مرشح Laplacian
+        for (let y = 1; y < height - 1; y++) {
+          for (let x = 1; x < width - 1; x++) {
+            const idx = (y * width + x) * 4;
+            
+            let laplacian = 0;
+            laplacian += -1 * data[((y-1)*width + x)*4];
+            laplacian += -1 * data[(y*width + (x-1))*4];
+            laplacian += 4 * data[(y*width + x)*4];
+            laplacian += -1 * data[(y*width + (x+1))*4];
+            laplacian += -1 * data[((y+1)*width + x)*4];
+            
+            const edgeValue = Math.abs(laplacian) > threshold ? 255 : 0;
+            
+            result[idx] = edgeValue;
+            result[idx+1] = edgeValue;
+            result[idx+2] = edgeValue;
+            result[idx+3] = 255;
+          }
+        }
+      } else if (method === 'prewitt') {
+        // تطبيق مرشح Prewitt
+        for (let y = 1; y < height - 1; y++) {
+          for (let x = 1; x < width - 1; x++) {
+            const idx = (y * width + x) * 4;
+            
+            // حساب التدرج في الاتجاه الأفقي (Gx)
+            let gx = 0;
+            gx += -1 * data[((y-1)*width + (x-1))*4];
+            gx += 0 * data[((y-1)*width + x)*4];
+            gx += 1 * data[((y-1)*width + (x+1))*4];
+            gx += -1 * data[(y*width + (x-1))*4];
+            gx += 0 * data[(y*width + x)*4];
+            gx += 1 * data[(y*width + (x+1))*4];
+            gx += -1 * data[((y+1)*width + (x-1))*4];
+            gx += 0 * data[((y+1)*width + x)*4];
+            gx += 1 * data[((y+1)*width + (x+1))*4];
+            
+            // حساب التدرج في الاتجاه العمودي (Gy)
+            let gy = 0;
+            gy += -1 * data[((y-1)*width + (x-1))*4];
+            gy += -1 * data[((y-1)*width + x)*4];
+            gy += -1 * data[((y-1)*width + (x+1))*4];
+            gy += 0 * data[(y*width + (x-1))*4];
+            gy += 0 * data[(y*width + x)*4];
+            gy += 0 * data[(y*width + (x+1))*4];
+            gy += 1 * data[((y+1)*width + (x-1))*4];
+            gy += 1 * data[((y+1)*width + x)*4];
+            gy += 1 * data[((y+1)*width + (x+1))*4];
+            
+            // حساب مقدار التدرج
+            const magnitude = Math.sqrt(gx*gx + gy*gy);
+            const edgeValue = magnitude > threshold ? 255 : 0;
+            
+            result[idx] = edgeValue;
+            result[idx+1] = edgeValue;
+            result[idx+2] = edgeValue;
+            result[idx+3] = 255;
+          }
+        }
+      }
+      
+      return result;
+    }
+
+    // تطبيق Gaussian Blur
+    function applyGaussianBlur(data, width, height) {
+      const kernel = [1, 2, 1, 2, 4, 2, 1, 2, 1];
+      const kernelSize = 3;
+      const kernelSum = 16;
+      const result = new Float32Array(width * height);
+      
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          let sum = 0;
+          for (let ky = -1; ky <= 1; ky++) {
+            for (let kx = -1; kx <= 1; kx++) {
+              const idx = ((y + ky) * width + (x + kx)) * 4;
+              const kernelIdx = (ky + 1) * kernelSize + (kx + 1);
+              sum += data[idx] * kernel[kernelIdx];
+            }
+          }
+          result[y * width + x] = sum / kernelSum;
+        }
+      }
+      
+      return result;
+    }
+
+    // حساب التدرجات
+    function calculateGradients(data, width, height) {
+      const gradients = {
+        magnitude: new Float32Array(width * height),
+        direction: new Float32Array(width * height)
+      };
+      
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          // حساب التدرج باستخدام Sobel
+          let gx = 0;
+          gx += -1 * data[(y-1)*width + (x-1)];
+          gx += 0 * data[(y-1)*width + x];
+          gx += 1 * data[(y-1)*width + (x+1)];
+          gx += -2 * data[y*width + (x-1)];
+          gx += 0 * data[y*width + x];
+          gx += 2 * data[y*width + (x+1)];
+          gx += -1 * data[(y+1)*width + (x-1)];
+          gx += 0 * data[(y+1)*width + x];
+          gx += 1 * data[(y+1)*width + (x+1)];
+          
+          let gy = 0;
+          gy += -1 * data[(y-1)*width + (x-1)];
+          gy += -2 * data[(y-1)*width + x];
+          gy += -1 * data[(y-1)*width + (x+1)];
+          gy += 0 * data[y*width + (x-1)];
+          gy += 0 * data[y*width + x];
+          gy += 0 * data[y*width + (x+1)];
+          gy += 1 * data[(y+1)*width + (x-1)];
+          gy += 2 * data[(y+1)*width + x];
+          gy += 1 * data[(y+1)*width + (x+1)];
+          
+          gradients.magnitude[y * width + x] = Math.sqrt(gx*gx + gy*gy);
+          gradients.direction[y * width + x] = Math.atan2(gy, gx);
+        }
+      }
+      
+      return gradients;
+    }
+
+    // تطبيق Non-Maximum Suppression
+    function nonMaximumSuppression(gradients, width, height) {
+      const suppressed = new Float32Array(width * height);
+      
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          const idx = y * width + x;
+          const angle = gradients.direction[idx];
+          const mag = gradients.magnitude[idx];
+          
+          // تقريب الزاوية إلى أقرب 45 درجة
+          let roundedAngle = Math.round(angle / (Math.PI/4)) * (Math.PI/4);
+          
+          // تحديد اتجاه الجيران للقمع
+          let dx = 0, dy = 0;
+          if (roundedAngle === 0 || roundedAngle === Math.PI || roundedAngle === -Math.PI) {
+            dx = 1; dy = 0; // أفقي
+          } else if (roundedAngle === Math.PI/4 || roundedAngle === -3*Math.PI/4) {
+            dx = 1; dy = 1; // قطري 45
+          } else if (roundedAngle === Math.PI/2 || roundedAngle === -Math.PI/2) {
+            dx = 0; dy = 1; // عمودي
+          } else if (roundedAngle === 3*Math.PI/4 || roundedAngle === -Math.PI/4) {
+            dx = 1; dy = -1; // قطري 135
+          }
+          
+          // مقارنة مع الجيران في اتجاه التدرج
+          const mag1 = gradients.magnitude[(y+dy)*width + (x+dx)];
+          const mag2 = gradients.magnitude[(y-dy)*width + (x-dx)];
+          
+          if (mag >= mag1 && mag >= mag2) {
+            suppressed[idx] = mag;
+          } else {
+            suppressed[idx] = 0;
+          }
+        }
+      }
+      
+      return suppressed;
+    }
+
+    // تطبيق Hysteresis Thresholding
+    function hysteresisThresholding(suppressed, width, height, highThreshold, lowThreshold) {
+      const edges = new Array(width * height).fill(false);
+      const visited = new Array(width * height).fill(false);
+      
+      // العتبة العالية
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          const idx = y * width + x;
+          if (suppressed[idx] >= highThreshold && !visited[idx]) {
+            followEdge(x, y, suppressed, edges, visited, width, height, lowThreshold);
+          }
+        }
+      }
+      
+      return edges;
+    }
+
+    // تتبع الحواف باستخدام العتبة المنخفضة
+    function followEdge(x, y, suppressed, edges, visited, width, height, lowThreshold) {
+      const stack = [{x, y}];
+      
+      while (stack.length > 0) {
+        const {x: cx, y: cy} = stack.pop();
+        const idx = cy * width + cx;
+        
+        if (visited[idx]) continue;
+        visited[idx] = true;
+        
+        if (suppressed[idx] >= lowThreshold) {
+          edges[idx] = true;
+          
+          // فحص الجيران الثمانية
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              
+              const nx = cx + dx;
+              const ny = cy + dy;
+              
+              if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                const nidx = ny * width + nx;
+                if (!visited[nidx] && suppressed[nidx] >= lowThreshold) {
+                  stack.push({x: nx, y: ny});
+                }
+              }
+            }
+          }
+        }
+      }
     }
 
     // تحديث معاينة الحواف
@@ -1131,9 +1466,51 @@
       extractEdgesAndBounds(edgeData, imageData.width, imageData.height);
     }
 
-    // استخراج الحواف وتحديد حدود التصميم (محسنة)
+    // استخراج الحواف وتحديد حدود التصميم
     function extractEdgesAndBounds(edgeData, width, height) {
-      // ... (نفس الكود السابق)
+      currentEdges = [];
+      let minX = width, maxX = 0, minY = height, maxY = 0;
+      
+      // إنشاء خريطة الحواف
+      edgeMapData = new Uint8Array(width * height);
+      
+      for (let i = 0; i < edgeData.length; i += 4) {
+        const x = (i/4) % width;
+        const y = Math.floor((i/4) / width);
+        
+        if (edgeData[i] > 128) { // إذا كانت قيمة الحافة عالية
+          edgeMapData[y * width + x] = 255;
+          currentEdges.push({x, y});
+          
+          // تحديث حدود التصميم
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        } else {
+          edgeMapData[y * width + x] = 0;
+        }
+      }
+      
+      // إذا لم يتم العثور على حواف، استخدم الصورة بأكملها
+      if (minX >= maxX || minY >= maxY) {
+        minX = 0;
+        maxX = width;
+        minY = 0;
+        maxY = height;
+      }
+      
+      designBounds = {
+        minX: minX,
+        maxX: maxX,
+        minY: minY,
+        maxY: maxY
+      };
+      
+      // تحديث معاينة تحليل الارتفاعات إذا كانت مفتوحة
+      if (document.getElementById('heightAnalysisTab').classList.contains('active')) {
+        updateHeightAnalysisPreview();
+      }
     }
 
     // تحديث معاينة تحليل الارتفاعات
@@ -1168,6 +1545,16 @@
       
       // رسم مسارات القطع بناءً على طريقة المسح المختارة
       drawScanPaths(ctxHeightAnalysis, width, height);
+      
+      // رسم حدود التصميم
+      ctxHeightAnalysis.strokeStyle = '#ff0000';
+      ctxHeightAnalysis.lineWidth = 2;
+      ctxHeightAnalysis.strokeRect(
+        designBounds.minX, 
+        designBounds.minY, 
+        designBounds.maxX - designBounds.minX, 
+        designBounds.maxY - designBounds.minY
+      );
     }
 
     // رسم مسارات المسح بناءً على الإعدادات
@@ -1187,23 +1574,23 @@
         if (direction === 'x') {
           // مسح أفقي
           const step = Math.max(1, Math.floor(height / resolution));
-          for (let y = 0; y < height; y += step) {
-            ctx.moveTo(0, y);
-            ctx.lineTo(width, y);
+          for (let y = designBounds.minY; y < designBounds.maxY; y += step) {
+            ctx.moveTo(designBounds.minX, y);
+            ctx.lineTo(designBounds.maxX, y);
           }
         } else if (direction === 'y') {
           // مسح عمودي
           const step = Math.max(1, Math.floor(width / resolution));
-          for (let x = 0; x < width; x += step) {
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, height);
+          for (let x = designBounds.minX; x < designBounds.maxX; x += step) {
+            ctx.moveTo(x, designBounds.minY);
+            ctx.lineTo(x, designBounds.maxY);
           }
         } else if (direction === 'diagonal') {
           // مسح قطري
           const step = Math.max(1, Math.floor(Math.sqrt(width * width + height * height) / resolution));
           for (let d = -width; d < height; d += step) {
-            ctx.moveTo(Math.max(0, d), Math.max(0, -d));
-            ctx.lineTo(Math.min(width, d + height), Math.min(height, width + d));
+            ctx.moveTo(Math.max(designBounds.minX, d), Math.max(designBounds.minY, -d));
+            ctx.lineTo(Math.min(designBounds.maxX, d + height), Math.min(designBounds.maxY, width + d));
           }
         }
       } else if (method === 'contour') {
@@ -1219,6 +1606,9 @@
       } else if (method === 'spiral') {
         // مسح حلزوني من المركز
         drawSpiralScan(ctx, width, height, resolution);
+      } else if (method === 'edge_following') {
+        // تتبع الحواف
+        drawEdgeFollowingScan(ctx, width, height);
       }
       
       ctx.stroke();
@@ -1229,11 +1619,11 @@
       // تنفيذ مبسط لرسم خطوط الكنتور
       const step = Math.max(1, Math.floor(width / resolution));
       
-      for (let y = 0; y < height; y += step) {
+      for (let y = designBounds.minY; y < designBounds.maxY; y += step) {
         let inContour = false;
-        let startX = 0;
+        let startX = designBounds.minX;
         
-        for (let x = 0; x < width; x += step) {
+        for (let x = designBounds.minX; x < designBounds.maxX; x += step) {
           const idx = y * width + x;
           const value = heightMapData ? heightMapData[idx] : 0;
           const aboveThreshold = value >= threshold;
@@ -1250,7 +1640,7 @@
         
         if (inContour) {
           ctx.moveTo(startX, y);
-          ctx.lineTo(width, y);
+          ctx.lineTo(designBounds.maxX, y);
         }
       }
     }
@@ -1262,15 +1652,15 @@
       const quality = parseInt(analysisQuality.value);
       const adaptiveStep = Math.max(1, step / quality);
       
-      for (let y = 0; y < height; y += step) {
-        let lastX = 0;
+      for (let y = designBounds.minY; y < designBounds.maxY; y += step) {
+        let lastX = designBounds.minX;
         let lastValue = 0;
         
-        for (let x = 0; x < width; x += adaptiveStep) {
+        for (let x = designBounds.minX; x < designBounds.maxX; x += adaptiveStep) {
           const idx = y * width + x;
           const value = heightMapData ? heightMapData[idx] : 0;
           
-          if (x === 0) {
+          if (x === designBounds.minX) {
             ctx.moveTo(x, y);
             lastX = x;
             lastValue = value;
@@ -1285,15 +1675,18 @@
           }
         }
         
-        ctx.lineTo(width, y);
+        ctx.lineTo(designBounds.maxX, y);
       }
     }
 
     // رسم مسح حلزوني
     function drawSpiralScan(ctx, width, height, resolution) {
-      const centerX = width / 2;
-      const centerY = height / 2;
-      const maxRadius = Math.sqrt(centerX * centerX + centerY * centerY);
+      const centerX = (designBounds.minX + designBounds.maxX) / 2;
+      const centerY = (designBounds.minY + designBounds.maxY) / 2;
+      const maxRadius = Math.sqrt(
+        Math.pow(designBounds.maxX - centerX, 2) + 
+        Math.pow(designBounds.maxY - centerY, 2)
+      );
       const step = maxRadius / resolution;
       
       let radius = 0;
@@ -1308,10 +1701,31 @@
         const x = centerX + radius * Math.cos(angle);
         const y = centerY + radius * Math.sin(angle);
         
-        if (x >= 0 && x < width && y >= 0 && y < height) {
+        if (x >= designBounds.minX && x < designBounds.maxX && y >= designBounds.minY && y < designBounds.maxY) {
           ctx.lineTo(x, y);
         }
       }
+    }
+
+    // رسم مسح تتبع الحواف
+    function drawEdgeFollowingScan(ctx, width, height) {
+      if (!edgeMapData || currentEdges.length === 0) return;
+      
+      ctx.strokeStyle = '#ff0000';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      
+      // رسم الحواف الرئيسية
+      for (let i = 0; i < currentEdges.length; i++) {
+        const point = currentEdges[i];
+        if (i === 0) {
+          ctx.moveTo(point.x, point.y);
+        } else {
+          ctx.lineTo(point.x, point.y);
+        }
+      }
+      
+      ctx.stroke();
     }
 
     // توليد G-code بناءً على خريطة الارتفاعات والإعدادات المتقدمة
@@ -1437,9 +1851,9 @@
         if (direction === 'x') {
           // مسح أفقي
           const step = Math.max(1, Math.floor(height / resolution));
-          for (let y = 0; y < height; y += step) {
+          for (let y = designBounds.minY; y < designBounds.maxY; y += step) {
             const path = [];
-            for (let x = 0; x < width; x++) {
+            for (let x = designBounds.minX; x < designBounds.maxX; x++) {
               const idx = y * width + x;
               const value = heightMapData ? heightMapData[idx] : 0;
               const z = (value / 255) * maxH;
@@ -1455,9 +1869,9 @@
         } else if (direction === 'y') {
           // مسح عمودي
           const step = Math.max(1, Math.floor(width / resolution));
-          for (let x = 0; x < width; x += step) {
+          for (let x = designBounds.minX; x < designBounds.maxX; x += step) {
             const path = [];
-            for (let y = 0; y < height; y++) {
+            for (let y = designBounds.minY; y < designBounds.maxY; y++) {
               const idx = y * width + x;
               const value = heightMapData ? heightMapData[idx] : 0;
               const z = (value / 255) * maxH;
@@ -1479,6 +1893,10 @@
           const contourPaths = generateContourPaths(width, height, threshold, scaleX, scaleY, maxH);
           paths.push(...contourPaths);
         }
+      } else if (method === 'edge_following' && edgeMapData) {
+        // تتبع الحواف
+        const edgePaths = generateEdgeFollowingPaths(width, height, scaleX, scaleY, maxH);
+        paths.push(...edgePaths);
       }
       
       // تطبيق التجانس إذا كان مفعلاً
@@ -1508,8 +1926,8 @@
       const paths = [];
       const visited = new Array(width * height).fill(false);
       
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
+      for (let y = designBounds.minY; y < designBounds.maxY; y++) {
+        for (let x = designBounds.minX; x < designBounds.maxX; x++) {
           const idx = y * width + x;
           
           if (!visited[idx] && heightMapData && heightMapData[idx] >= threshold) {
@@ -1530,6 +1948,84 @@
       }
       
       return paths;
+    }
+
+    // إنشاء مسارات تتبع الحواف
+    function generateEdgeFollowingPaths(width, height, scaleX, scaleY, maxH) {
+      const paths = [];
+      
+      if (!edgeMapData || currentEdges.length === 0) return paths;
+      
+      // تقسيم الحواف إلى مسارات متصلة
+      const visited = new Array(width * height).fill(false);
+      const edgePaths = [];
+      
+      for (const edge of currentEdges) {
+        const idx = edge.y * width + edge.x;
+        if (!visited[idx] && edgeMapData[idx] > 0) {
+          const path = traceEdge(edge.x, edge.y, width, height, visited);
+          if (path.length > 0) {
+            edgePaths.push(path);
+          }
+        }
+      }
+      
+      // تحويل المسارات إلى إحداثيات حقيقية مع الارتفاع
+      for (const edgePath of edgePaths) {
+        const realPath = edgePath.map(p => {
+          const idx = p.y * width + p.x;
+          const value = heightMapData ? heightMapData[idx] : 0;
+          const z = (value / 255) * maxH;
+          
+          return {
+            x: designBounds.minX + p.x * scaleX,
+            y: designBounds.minY + p.y * scaleY,
+            z: z
+          };
+        });
+        
+        paths.push(realPath);
+      }
+      
+      return paths;
+    }
+
+    // تتبع الحواف
+    function traceEdge(startX, startY, width, height, visited) {
+      const path = [];
+      const stack = [{x: startX, y: startY}];
+      
+      while (stack.length > 0) {
+        const {x, y} = stack.pop();
+        const idx = y * width + x;
+        
+        if (visited[idx]) continue;
+        visited[idx] = true;
+        
+        if (edgeMapData[idx] > 0) {
+          path.push({x, y});
+          
+          // فحص الجيران الثمانية
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              
+              const nx = x + dx;
+              const ny = y + dy;
+              
+              if (nx >= designBounds.minX && nx < designBounds.maxX && 
+                  ny >= designBounds.minY && ny < designBounds.maxY) {
+                const nidx = ny * width + nx;
+                if (!visited[nidx] && edgeMapData[nidx] > 0) {
+                  stack.push({x: nx, y: ny});
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      return path;
     }
 
     // تتبع خط الكنتور
@@ -1580,7 +2076,8 @@
         const nx = x + dir.dx;
         const ny = y + dir.dy;
         
-        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+        if (nx >= designBounds.minX && nx < designBounds.maxX && 
+            ny >= designBounds.minY && ny < designBounds.maxY) {
           const nIdx = ny * width + nx;
           
           if (!visited[nIdx] && heightMapData && heightMapData[nIdx] >= threshold) {
@@ -1635,7 +2132,7 @@
       showStatus('تم تحميل ملف G-code بنجاح', 'success');
     }
 
-    // إنشاء خريطة الارتفاعات (محسنة)
+    // إنشاء خريطة الارتفاعات
     function createHeightMap(image) {
       const w = image.width;
       const h = image.height;
@@ -1658,20 +2155,20 @@
 
       // 3D mesh مع تحسين الأداء
       const quality = parseInt(analysisQuality.value);
-      const resolution = Math.max(10, 50 - quality * 8); // تقليل دقة الشبكة بناءً على الجودة
+      const meshResolution = Math.max(10, 50 - quality * 8); // تقليل دقة الشبكة بناءً على الجودة
       
-      const geometry = new THREE.PlaneGeometry(100, 100, resolution, resolution);
+      const geometry = new THREE.PlaneGeometry(100, 100, meshResolution, meshResolution);
       let min = 255, max = 0;
       const colors = [];
       
       // تقليل عدد النقاط المعالجة
-      const xStep = Math.max(1, Math.floor(w / resolution));
-      const yStep = Math.max(1, Math.floor(h / resolution));
+      const xStep = Math.max(1, Math.floor(w / meshResolution));
+      const yStep = Math.max(1, Math.floor(h / meshResolution));
       
       for (let i = 0; i < geometry.attributes.position.count; i++) {
         const stride = i * 3;
-        const gridX = i % (resolution + 1);
-        const gridY = Math.floor(i / (resolution + 1));
+        const gridX = i % (meshResolution + 1);
+        const gridY = Math.floor(i / (meshResolution + 1));
         
         const x = Math.min(w - 1, Math.round(gridX * xStep));
         const y = Math.min(h - 1, Math.round(gridY * yStep));
@@ -1697,7 +2194,7 @@
       drawHeatmap(heightMapData, w, h, min, max);
     }
 
-    // رسم خريطة الألوان (محسنة)
+    // رسم خريطة الألوان
     function drawHeatmap(imgData, w, h, min, max) {
       heatmap.width = w * 1.5;
       heatmap.height = h * 1.5;
