@@ -767,7 +767,7 @@
     let processingImage = false;
     let heightMapData = null;
     let originalImageData = null;
-    let heightMapGrayData = null; // إضافة: بيانات التدرج الرمادي لخريطة الارتفاعات
+    let heightMapGrayData = null;
 
     // إنشاء Web Worker لمعالجة الصور
     function createImageWorker() {
@@ -778,7 +778,6 @@
             const sobelX = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
             const sobelY = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
             
-            // تطبيع القيم أولاً
             let maxMagnitude = 0;
             const magnitudes = new Float32Array(width * height);
             
@@ -802,7 +801,6 @@
               }
             }
             
-            // تطبيق العتبة بعد التطبيع
             const normalizedThreshold = threshold * maxMagnitude / 100;
             
             for (let y = 1; y < height - 1; y++) {
@@ -866,7 +864,6 @@
               }
             }
             
-            // تطبيق العتبة بعد التطبيع
             const normalizedThreshold = threshold * maxResponse / 100;
             
             for (let y = 1; y < height - 1; y++) {
@@ -910,7 +907,6 @@
               }
             }
             
-            // تطبيق العتبة بعد التطبيع
             const normalizedThreshold = threshold * maxMagnitude / 100;
             
             for (let y = 1; y < height - 1; y++) {
@@ -1207,8 +1203,8 @@
         // حفظ بيانات الصورة الأصلية
         originalImageData = ctx2d.getImageData(0, 0, processedWidth, processedHeight);
         
-        // إنشاء خريطة الارتفاعات
-        createHeightMap(img, processedWidth, processedHeight);
+        // إنشاء خريطة الارتفاعات من الحواف
+        createHeightMapFromEdges(img, processedWidth, processedHeight);
         
         // تمكين أزرار التحكم
         generateBtn.disabled = false;
@@ -1285,6 +1281,9 @@
       // استخراج الحواف وتحديد حدود التصميم
       extractEdgesAndBounds(edgeData.data, width, height);
       
+      // إنشاء خريطة الارتفاعات من الحواف
+      createHeightMapFromEdgeData(edgeData.data, width, height);
+      
       progressBarInner.style.width = '100%';
       setTimeout(() => {
         progressBar.style.display = 'none';
@@ -1307,6 +1306,9 @@
       
       // استخراج الحواف وتحديد حدود التصميم
       extractEdgesAndBounds(edgeData, imageData.width, imageData.height);
+      
+      // إنشاء خريطة الارتفاعات من الحواف
+      createHeightMapFromEdgeData(edgeData, imageData.width, imageData.height);
     }
 
     // كشف الحواف باستخدام خوارزميات مختلفة
@@ -1570,6 +1572,137 @@
       }
     }
 
+    // إنشاء خريطة الارتفاعات من الحواف
+    function createHeightMapFromEdges(image, targetWidth, targetHeight) {
+      // أولاً نحدث معاينة الحواف
+      updateEdgePreviewFromImage();
+    }
+
+    // إنشاء خريطة الارتفاعات من بيانات الحواف
+    function createHeightMapFromEdgeData(edgeData, width, height) {
+      // استخدام بيانات الحواف لإنشاء خريطة الارتفاعات
+      const heightMapData = new Uint8ClampedArray(width * height * 4);
+      
+      // إنشاء خريطة الارتفاعات بناءً على الحواف
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const index = (y * width + x) * 4;
+          const edgeIndex = (y * width + x) * 4;
+          
+          // إذا كانت النقطة على حافة، نعطيها قيمة عالية
+          if (edgeData[edgeIndex] > 0) {
+            heightMapData[index] = 255;     // الأحمر
+            heightMapData[index + 1] = 255; // الأخضر
+            heightMapData[index + 2] = 255; // الأزرق
+            heightMapData[index + 3] = 255; // الشفافية
+          } else {
+            // خلفية داكنة
+            heightMapData[index] = 50;
+            heightMapData[index + 1] = 50;
+            heightMapData[index + 2] = 50;
+            heightMapData[index + 3] = 255;
+          }
+        }
+      }
+      
+      // حفظ بيانات خريطة الارتفاعات للاستخدام لاحقًا
+      heightMapGrayData = new Uint8ClampedArray(width * height);
+      for (let i = 0; i < heightMapData.length; i += 4) {
+        heightMapGrayData[i/4] = heightMapData[i]; // استخدام القيمة الحمراء (كلها متساوية)
+      }
+      
+      // رسم الـ heatmap
+      drawHeatmap(heightMapData, width, height, 0, 255);
+      
+      // إنشاء النموذج ثلاثي الأبعاد
+      create3DModelFromHeightMap(heightMapData, width, height);
+    }
+
+    // إنشاء النموذج ثلاثي الأبعاد من خريطة الارتفاعات
+    function create3DModelFromHeightMap(heightMapData, width, height) {
+      // 3D mesh - تقليل عدد القمم لتحسين الأداء
+      const quality = parseInt(qualityLevel.value);
+      const segments = Math.max(10, Math.min(50, quality * 10));
+      
+      const geometry = new THREE.PlaneGeometry(100, 100, segments, segments);
+      const colors = [];
+      
+      // استخدام عينات أقل لتحسين الأداء
+      const sampleStep = Math.max(1, Math.floor(width / segments));
+      
+      for (let i = 0; i < geometry.attributes.position.count; i++) {
+        const stride = i * 3;
+        const segX = i % (segments + 1);
+        const segY = Math.floor(i / (segments + 1));
+        
+        const x = Math.floor(segX * (width / segments));
+        const y = Math.floor(segY * (height / segments));
+        
+        if (x < width && y < height) {
+          const idx = (y * width + x) * 4;
+          const brightness = heightMapData[idx];
+          
+          // تعيين الارتفاع بناءً على قيمة الـ heatmap
+          geometry.attributes.position.array[stride + 2] = brightness / 20;
+
+          const norm = brightness / 255;
+          const color = getHeatColor(norm, currentColormap);
+          colors.push(color.r/255, color.g/255, color.b/255);
+        }
+      }
+      
+      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geometry.computeVertexNormals();
+
+      const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+      if (mesh) scene.remove(mesh);
+      mesh = new THREE.Mesh(geometry, material);
+      scene.add(mesh);
+    }
+
+    // رسم خريطة الألوان
+    function drawHeatmap(imgData, w, h, min, max) {
+      heatmap.width = w;
+      heatmap.height = h;
+      const heatData = ctxHeat.createImageData(w, h);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const idx = (y * w + x) * 4;
+          const brightness = imgData[idx];
+          const norm = (brightness - min) / (max - min);
+          const color = getHeatColor(norm, currentColormap);
+          heatData.data[idx] = color.r;
+          heatData.data[idx+1] = color.g;
+          heatData.data[idx+2] = color.b;
+          heatData.data[idx+3] = 255;
+        }
+      }
+      ctxHeat.putImageData(heatData, 0, 0);
+    }
+
+    // الحصول على اللون المناسب لخريطة الحرارة
+    function getHeatColor(value, map) {
+      let r=0,g=0,b=0;
+      if(map==='jet'){ 
+        r = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-3),1),0));
+        g = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-2),1),0));
+        b = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-1),1),0));
+      } else if(map==='hot'){ 
+        r = Math.floor(255 * Math.min(1, 3*value));
+        g = Math.floor(255 * Math.min(1, 3*value-1));
+        g = Math.max(g,0);
+        b = Math.floor(255 * Math.min(1, 3*value-2));
+        b = Math.max(b,0);
+      } else if(map==='cool'){
+        r = Math.floor(255 * value);
+        g = Math.floor(255 * (1-value));
+        b = 255;
+      } else if(map==='gray'){
+        r = g = b = Math.floor(255 * value);
+      }
+      return {r,g,b};
+    }
+
     // توليد G-code بناءً على خريطة الارتفاعات والإعدادات المتقدمة
     function generateGCode() {
       if (!currentEdges.length || !heightMapGrayData) {
@@ -1626,7 +1759,7 @@
       
       // تحديد عدد التمريرات بناءً على عمق القطع
       if (machine === 'cnc_router' && depthPerPass > 0) {
-        totalPasses = Math.ceil(5 / depthPerPass); // افتراض أقصى عمق قطع 5mm
+        totalPasses = Math.ceil(5 / depthPerPass);
       }
       
       for (let pass = 0; pass < totalPasses; pass++) {
@@ -1639,7 +1772,7 @@
           
           if (x >= width || y >= height) continue;
           
-          // استخدام بيانات خريطة الارتفاعات (التدرج الرمادي) بدلاً من الصورة الأصلية
+          // استخدام بيانات خريطة الارتفاعات (من الحواف)
           const idx = (y * width + x);
           const brightness = heightMapGrayData[idx];
           
@@ -1649,7 +1782,7 @@
             // التركيز على كفاف التصميم
             z = isPointOnEdge(x, y) ? (255 - brightness) / 50 : 0;
           } else if (gcodeStrategy === 'heightmap') {
-            // التركيز على خريطة الارتفاعات - استخدام البيانات مباشرة
+            // التركيز على خريطة الارتفاعات
             z = (255 - brightness) / 50 * (pass + 1) / totalPasses;
           } else if (gcodeStrategy === 'hybrid') {
             // النهج الهجين
@@ -1832,9 +1965,8 @@
       const idx = y * width + x;
       const brightness = heightMapGrayData[idx];
       
-      // اعتبار النقطة داخل التصميم إذا كانت قيمة التدرج الرمادي أقل من عتبة معينة
-      // (كلما كانت القيمة أقل، كان اللون أغمق، وبالتالي يجب أن يكون القطع أعمق)
-      return brightness < 240; // عتبة 240 (من 0-255)
+      // اعتبار النقطة داخل التصميم إذا كانت قيمة التدرج الرمادي أعلى من عتبة معينة
+      return brightness > 100; // عتبة 100 (من 0-255)
     }
 
     // تحميل G-code كملف
@@ -1866,117 +1998,6 @@
       
       showStatus('جاري تحضير المحاكاة...', 'success');
       // هنا يمكن إضافة كود المحاكاة الفعلية
-      // هذه وظيفة أساسية تحتاج إلى تطوير
-    }
-
-    // إنشاء خريطة الارتفاعات
-    function createHeightMap(image, targetWidth, targetHeight) {
-      const w = targetWidth;
-      const h = targetHeight;
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = w; 
-      tempCanvas.height = h;
-      const tctx = tempCanvas.getContext('2d');
-      tctx.drawImage(image, 0, 0, w, h);
-      const imgData = tctx.getImageData(0, 0, w, h);
-      
-      // حفظ بيانات خريطة الارتفاعات للاستخدام لاحقًا
-      heightMapData = imgData.data;
-
-      // إنشاء مصفوفة التدرج الرمادي لخريطة الارتفاعات
-      heightMapGrayData = new Uint8ClampedArray(w * h);
-      for (let i = 0; i < imgData.data.length; i += 4) {
-        const gray = 0.299 * imgData.data[i] + 0.587 * imgData.data[i+1] + 0.114 * imgData.data[i+2];
-        heightMapGrayData[i/4] = gray;
-      }
-
-      // تحديث معاينة الحواف
-      updateEdgePreviewFromImage();
-
-      // 3D mesh - تقليل عدد القمم لتحسين الأداء
-      const quality = parseInt(qualityLevel.value);
-      const segments = Math.max(10, Math.min(50, quality * 10)); // من 10 إلى 50 قطعة حسب الجودة
-      
-      const geometry = new THREE.PlaneGeometry(100, 100, segments, segments);
-      let min = 255, max = 0;
-      const colors = [];
-      
-      // استخدام عينات أقل لتحسين الأداء
-      const sampleStep = Math.max(1, Math.floor(w / segments));
-      
-      for (let i = 0; i < geometry.attributes.position.count; i++) {
-        const stride = i * 3;
-        const segX = i % (segments + 1);
-        const segY = Math.floor(i / (segments + 1));
-        
-        const x = Math.floor(segX * (w / segments));
-        const y = Math.floor(segY * (h / segments));
-        
-        if (x < w && y < h) {
-          const idx = (y * w + x) * 4;
-          const brightness = imgData.data[idx];
-          min = Math.min(min, brightness);
-          max = Math.max(max, brightness);
-          geometry.attributes.position.array[stride + 2] = brightness / 80;
-
-          const norm = brightness / 255;
-          const color = getHeatColor(norm, currentColormap);
-          colors.push(color.r/255, color.g/255, color.b/255);
-        }
-      }
-      
-      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-      geometry.computeVertexNormals();
-
-      const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
-      if (mesh) scene.remove(mesh);
-      mesh = new THREE.Mesh(geometry, material);
-      scene.add(mesh);
-
-      drawHeatmap(imgData.data, w, h, min, max);
-    }
-
-    // رسم خريطة الألوان
-    function drawHeatmap(imgData, w, h, min, max) {
-      heatmap.width = w;
-      heatmap.height = h;
-      const heatData = ctxHeat.createImageData(w, h);
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          const idx = (y * w + x) * 4;
-          const brightness = imgData[idx];
-          const norm = (brightness - min) / (max - min);
-          const color = getHeatColor(norm, currentColormap);
-          heatData.data[idx] = color.r;
-          heatData.data[idx+1] = color.g;
-          heatData.data[idx+2] = color.b;
-          heatData.data[idx+3] = 255;
-        }
-      }
-      ctxHeat.putImageData(heatData, 0, 0);
-    }
-
-    // الحصول على اللون المناسب لخريطة الحرارة
-    function getHeatColor(value, map) {
-      let r=0,g=0,b=0;
-      if(map==='jet'){ 
-        r = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-3),1),0));
-        g = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-2),1),0));
-        b = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-1),1),0));
-      } else if(map==='hot'){ 
-        r = Math.floor(255 * Math.min(1, 3*value));
-        g = Math.floor(255 * Math.min(1, 3*value-1));
-        g = Math.max(g,0);
-        b = Math.floor(255 * Math.min(1, 3*value-2));
-        b = Math.max(b,0);
-      } else if(map==='cool'){
-        r = Math.floor(255 * value);
-        g = Math.floor(255 * (1-value));
-        b = 255;
-      } else if(map==='gray'){
-        r = g = b = Math.floor(255 * value);
-      }
-      return {r,g,b};
     }
 
     // تعيين خريطة الألوان
@@ -1994,21 +2015,24 @@
       else if (map === 'cool') coolBtn.classList.add('active');
       else if (map === 'gray') grayBtn.classList.add('active');
       
-      if(fileInput.files[0]){
-        const img = new Image();
-        img.onload = () => {
-          let processedWidth = img.width;
-          let processedHeight = img.height;
+      // إعادة رسم الـ heatmap إذا كانت هناك بيانات
+      if (heightMapGrayData) {
+        const width = edgePreview.width;
+        const height = edgePreview.height;
+        const tempData = new Uint8ClampedArray(width * height * 4);
+        
+        for (let i = 0; i < tempData.length; i += 4) {
+          const brightness = heightMapGrayData[i/4];
+          const norm = brightness / 255;
+          const color = getHeatColor(norm, currentColormap);
           
-          if (reduceResolution.checked && img.width > 800) {
-            const scale = 800 / img.width;
-            processedWidth = 800;
-            processedHeight = Math.floor(img.height * scale);
-          }
-          
-          createHeightMap(img, processedWidth, processedHeight);
-        };
-        img.src = URL.createObjectURL(fileInput.files[0]);
+          tempData[i] = color.r;
+          tempData[i+1] = color.g;
+          tempData[i+2] = color.b;
+          tempData[i+3] = 255;
+        }
+        
+        drawHeatmap(tempData, width, height, 0, 255);
       }
     }
 
