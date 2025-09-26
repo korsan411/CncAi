@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CNC AI - دمج الحواف مع خريطة الارتفاعات</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f8f8f8;
+      text-align: center;
+      color: #333;
+      margin: 0;
+      padding: 0;
+    }
+
+    header {
+      background: #333;
+      color: white;
+      padding: 15px;
+      font-size: 1.3em;
+    }
+
+    canvas {
+      border: 1px solid #ccc;
+      margin: 10px;
+      max-width: 90%;
+    }
+
+    .controls {
+      margin: 15px 0;
+    }
+
+    button, input[type="file"] {
+      padding: 10px 15px;
+      margin: 5px;
+      border: none;
+      background: #333;
+      color: white;
+      cursor: pointer;
+      border-radius: 5px;
+      font-size: 1em;
+    }
+
+    button:hover {
+      background: #555;
+    }
+
+    label {
+      margin-left: 5px;
+    }
+
+    input[type="range"] {
+      width: 200px;
+    }
+
+    /* منطقة المعاينة 3D */
+    #preview3D {
+      width: 500px;
+      height: 400px;
+      margin: 20px auto;
+      border: 1px solid #ccc;
+      background: #000;
+    }
+  </style>
+</head>
+<body>
+  <header>🛠️ CNC AI - دمج الحواف مع خريطة الارتفاعات</header>
+
+  <div class="controls">
+    <input type="file" id="fileInput" accept="image/*">
+    <button id="generateGcodeBtn">توليد G-code</button>
+    <div>
+      <label for="maxDepth">أقصى عمق (مم):</label>
+      <input type="range" id="maxDepth" min="1" max="10" step="0.5" value="5">
+      <span id="maxDepthValue">5</span> مم
+    </div>
+  </div>
+
+  <div>
+    <h3>الصورة الأصلية</h3>
+    <canvas id="canvasOriginal"></canvas>
+  </div>
+
+  <div>
+    <h3>خريطة الارتفاعات (Heatmap)</h3>
+    <canvas id="canvasHeightmap"></canvas>
+  </div>
+
+  <div>
+    <h3>الحواف الخارجية</h3>
+    <canvas id="canvasEdges"></canvas>
+  </div>
+
+  <div>
+    <h3>معاينة ثلاثية الأبعاد (3D Preview)</h3>
+    <div id="preview3D"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const canvasOriginal = document.getElementById('canvasOriginal');
+    const ctxOriginal = canvasOriginal.getContext('2d');
+
+    const canvasHeightmap = document.getElementById('canvasHeightmap');
+    const ctxHeightmap = canvasHeightmap.getContext('2d');
+
+    const canvasEdges = document.getElementById('canvasEdges');
+    const ctxEdges = canvasEdges.getContext('2d');
+
+    const maxDepthSlider = document.getElementById('maxDepth');
+    const maxDepthValue = document.getElementById('maxDepthValue');
+
+    let width = 0, height = 0;
+    let heightMapData = null;
+    let edgesData = null;
+
+    // تحديث النص عند تغيير قيمة العمق
+    maxDepthSlider.addEventListener('input', () => {
+      maxDepthValue.textContent = maxDepthSlider.value;
+    });
+
+    // رفع صورة ومعالجتها
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const img = new Image();
+        img.onload = () => {
+          width = img.width;
+          height = img.height;
+
+          // رسم الصورة الأصلية
+          canvasOriginal.width = width;
+          canvasOriginal.height = height;
+          ctxOriginal.drawImage(img, 0, 0);
+
+          // إنشاء خريطة الارتفاعات والحواف
+          generateHeightMap();
+          detectEdges();
+          render3DPreview();
+        };
+        img.src = evt.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // إنشاء خريطة ارتفاعات من الصورة
+    function generateHeightMap() {
+      const imgData = ctxOriginal.getImageData(0, 0, width, height);
+      const pixels = imgData.data;
+      heightMapData = new Float32Array(width * height);
+
+      let minVal = 255, maxVal = 0;
+
+      for (let i = 0; i < pixels.length; i += 4) {
+        const brightness = 0.34 * pixels[i] + 0.5 * pixels[i + 1] + 0.16 * pixels[i + 2];
+        heightMapData[i / 4] = brightness;
+        if (brightness < minVal) minVal = brightness;
+        if (brightness > maxVal) maxVal = brightness;
+      }
+
+      // رسم الـ Heatmap
+      canvasHeightmap.width = width;
+      canvasHeightmap.height = height;
+      const heatImg = ctxHeightmap.createImageData(width, height);
+
+      for (let i = 0; i < heightMapData.length; i++) {
+        const norm = (heightMapData[i] - minVal) / (maxVal - minVal || 1);
+        const color = getHeatColor(norm);
+        heatImg.data[i * 4] = color.r;
+        heatImg.data[i * 4 + 1] = color.g;
+        heatImg.data[i * 4 + 2] = color.b;
+        heatImg.data[i * 4 + 3] = 255;
+      }
+
+      ctxHeightmap.putImageData(heatImg, 0, 0);
+    }
+
+    // ألوان Heatmap
+    function getHeatColor(value) {
+      return {
+        r: Math.floor(255 * value),
+        g: Math.floor(255 * (1 - value)),
+        b: 150
+      };
+    }
+
+    // كشف الحواف باستخدام Sobel
+    function detectEdges() {
+      const imgData = ctxOriginal.getImageData(0, 0, width, height);
+      const gray = new Uint8ClampedArray(width * height);
+
+      // تحويل للصورة الرمادية
+      for (let i = 0; i < imgData.data.length; i += 4) {
+        gray[i / 4] = imgData.data[i] * 0.34 + imgData.data[i + 1] * 0.5 + imgData.data[i + 2] * 0.16;
+      }
+
+      edgesData = new Uint8ClampedArray(width * height);
+      const gx = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
+      const gy = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
+
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          let sumX = 0, sumY = 0;
+          for (let ky = -1; ky <= 1; ky++) {
+            for (let kx = -1; kx <= 1; kx++) {
+              const pixel = gray[(y + ky) * width + (x + kx)];
+              const idx = (ky + 1) * 3 + (kx + 1);
+              sumX += pixel * gx[idx];
+              sumY += pixel * gy[idx];
+            }
+          }
+          const magnitude = Math.sqrt(sumX * sumX + sumY * sumY);
+          edgesData[y * width + x] = magnitude > 40 ? 255 : 0; // Threshold = 40
+        }
+      }
+
+      // رسم الحواف
+      canvasEdges.width = width;
+      canvasEdges.height = height;
+      const edgeImg = ctxEdges.createImageData(width, height);
+
+      for (let i = 0; i < edgesData.length; i++) {
+        const val = edgesData[i];
+        edgeImg.data[i * 4] = val;
+        edgeImg.data[i * 4 + 1] = val;
+        edgeImg.data[i * 4 + 2] = val;
+        edgeImg.data[i * 4 + 3] = 255;
+      }
+      ctxEdges.putImageData(edgeImg, 0, 0);
+    }
+
+    // توليد G-code من الحواف والارتفاعات
+    function generateGcode() {
+      if (!heightMapData || !edgesData) {
+        alert("⚠️ يجب رفع صورة أولاً");
+        return;
+      }
+
+      const maxDepth = parseFloat(maxDepthSlider.value);
+      let gcode = [];
+      gcode.push("G21 ; الوحدات بالمليمتر");
+      gcode.push("G90 ; إحداثيات مطلقة");
+      gcode.push("G0 Z5 ; رفع الأداة للأعلى");
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const edgeVal = edgesData[y * width + x];
+          if (edgeVal > 0) {
+            const pixelValue = heightMapData[y * width + x];
+            const norm = 1 - (pixelValue / 255); // تحويل 0→1
+            const z = -(norm * maxDepth);
+            gcode.push(`G0 X${x} Y${y} Z5`);
+            gcode.push(`G1 X${x} Y${y} Z${z.toFixed(2)} F300`);
+            gcode.push("G0 Z5");
+          }
+        }
+      }
+
+      gcode.push("M30 ; نهاية البرنامج");
+
+      // تنزيل ملف G-code
+      const blob = new Blob([gcode.join("\n")], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "cnc_combined.gcode";
+      a.click();
+    }
+
+    document.getElementById('generateGcodeBtn').addEventListener('click', generateGcode);
+
+    // معاينة ثلاثية الأبعاد
+    function render3DPreview() {
+      const container = document.getElementById('preview3D');
+      container.innerHTML = "";
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+      const renderer = new THREE.WebGLRenderer();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      container.appendChild(renderer.domElement);
+
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      camera.position.set(0, -width, width);
+      controls.update();
+
+      const geometry = new THREE.PlaneGeometry(width, height, width - 1, height - 1);
+
+      for (let i = 0; i < geometry.attributes.position.count; i++) {
+        const ix = i % width;
+        const iy = Math.floor(i / width);
+        const pixelValue = heightMapData[iy * width + ix];
+        const norm = 1 - (pixelValue / 255);
+        const z = norm * 10; // ارتفاع افتراضي
+        geometry.attributes.position.setZ(i, z);
+      }
+
+      geometry.computeVertexNormals();
+
+      const material = new THREE.MeshStandardMaterial({ color: 0x8B4513, wireframe: false, side: THREE.DoubleSide });
+      const mesh = new THREE.Mesh(geometry, material);
+      scene.add(mesh);
+
+      const light = new THREE.DirectionalLight(0xffffff, 1);
+      light.position.set(0, 0, 50);
+      scene.add(light);
+
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+    }
+  </script>
+</body>
+</html>
