@@ -146,28 +146,73 @@
       reader.readAsDataURL(file);
     });
 
-    // إنشاء خريطة ارتفاعات
+    // ============ فلتر Gaussian Blur ============
+    function applyGaussianBlur(grayData, width, height) {
+      const kernel = [
+        [1, 4, 7, 4, 1],
+        [4, 16, 26, 16, 4],
+        [7, 26, 41, 26, 7],
+        [4, 16, 26, 16, 4],
+        [1, 4, 7, 4, 1]
+      ];
+      const kernelWeight = 273;
+      const output = new Float32Array(width * height);
+
+      for (let y = 2; y < height - 2; y++) {
+        for (let x = 2; x < width - 2; x++) {
+          let sum = 0;
+          for (let ky = -2; ky <= 2; ky++) {
+            for (let kx = -2; kx <= 2; kx++) {
+              const pixel = grayData[(y + ky) * width + (x + kx)];
+              const weight = kernel[ky + 2][kx + 2];
+              sum += pixel * weight;
+            }
+          }
+          output[y * width + x] = sum / kernelWeight;
+        }
+      }
+      return output;
+    }
+
+    // ============ إنشاء خريطة الارتفاعات ============
     function generateHeightMap() {
       const imgData = ctxOriginal.getImageData(0, 0, width, height);
       const pixels = imgData.data;
-      heightMapData = new Float32Array(width * height);
+      let gray = new Float32Array(width * height);
 
-      let minVal = 255, maxVal = 0;
-
+      // تحويل الصورة إلى Grayscale
       for (let i = 0; i < pixels.length; i += 4) {
-        const brightness = 0.34 * pixels[i] + 0.5 * pixels[i + 1] + 0.16 * pixels[i + 2];
-        heightMapData[i / 4] = brightness;
-        if (brightness < minVal) minVal = brightness;
-        if (brightness > maxVal) maxVal = brightness;
+        const r = pixels[i];
+        const g = pixels[i + 1];
+        const b = pixels[i + 2];
+        gray[i / 4] = 0.299 * r + 0.587 * g + 0.114 * b;
       }
 
+      // تطبيق Gaussian Blur لتنعيم المنحنيات
+      gray = applyGaussianBlur(gray, width, height);
+
+      heightMapData = new Float32Array(width * height);
+      let minVal = Infinity, maxVal = -Infinity;
+
+      // تحديد أقل وأعلى قيم بعد التنعيم
+      for (let i = 0; i < gray.length; i++) {
+        if (gray[i] < minVal) minVal = gray[i];
+        if (gray[i] > maxVal) maxVal = gray[i];
+      }
+
+      // تطبيع القيم بين 0 و 1
+      for (let i = 0; i < gray.length; i++) {
+        heightMapData[i] = (gray[i] - minVal) / (maxVal - minVal || 1);
+      }
+
+      // رسم Heatmap
       canvasHeightmap.width = width;
       canvasHeightmap.height = height;
       const heatImg = ctxHeightmap.createImageData(width, height);
 
       for (let i = 0; i < heightMapData.length; i++) {
-        const norm = (heightMapData[i] - minVal) / (maxVal - minVal || 1);
-        const color = getHeatColor(norm);
+        const norm = heightMapData[i];
+        const color = getHeatmapColor(norm);
         heatImg.data[i * 4] = color.r;
         heatImg.data[i * 4 + 1] = color.g;
         heatImg.data[i * 4 + 2] = color.b;
@@ -177,16 +222,15 @@
       ctxHeightmap.putImageData(heatImg, 0, 0);
     }
 
-    // ألوان Heatmap
-    function getHeatColor(value) {
-      return {
-        r: Math.floor(255 * value),
-        g: Math.floor(255 * (1 - value)),
-        b: 150
-      };
+    // ألوان Heatmap محسنة
+    function getHeatmapColor(value) {
+      const r = Math.floor(255 * Math.pow(value, 1.5));
+      const g = Math.floor(255 * (1 - value) * 0.8);
+      const b = Math.floor(255 * (1 - value * 0.5));
+      return { r, g, b };
     }
 
-    // كشف الحواف باستخدام Sobel
+    // ============ كشف الحواف باستخدام Sobel ============
     function detectEdges() {
       const imgData = ctxOriginal.getImageData(0, 0, width, height);
       const gray = new Uint8ClampedArray(width * height);
@@ -229,7 +273,7 @@
       ctxEdges.putImageData(edgeImg, 0, 0);
     }
 
-    // توليد G-code
+    // ============ توليد G-code ============
     function generateGcode() {
       if (!heightMapData || !edgesData) {
         alert("⚠️ يجب رفع صورة أولاً");
@@ -246,8 +290,7 @@
         for (let x = 0; x < width; x++) {
           const edgeVal = edgesData[y * width + x];
           if (edgeVal > 0) {
-            const pixelValue = heightMapData[y * width + x];
-            const norm = 1 - (pixelValue / 255);
+            const norm = 1 - heightMapData[y * width + x];
             const z = -(norm * maxDepth);
             gcode.push(`G0 X${x} Y${y} Z5`);
             gcode.push(`G1 X${x} Y${y} Z${z.toFixed(2)} F300`);
@@ -268,7 +311,7 @@
 
     document.getElementById('generateGcodeBtn').addEventListener('click', generateGcode);
 
-    // ======== معاينة ثلاثية الأبعاد ========
+    // ============ معاينة ثلاثية الأبعاد ============
     document.getElementById('preview3DBtn').addEventListener('click', () => {
       if (!heightMapData || !edgesData) {
         alert("⚠️ يجب رفع صورة أولاً");
@@ -281,7 +324,6 @@
       const container = document.getElementById('preview3D');
       container.innerHTML = '';
 
-      // مشهد وكاميرا
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 2000);
       camera.position.set(width / 2, -height * 1.5, height * 1.5);
@@ -290,13 +332,11 @@
       renderer.setSize(container.clientWidth, container.clientHeight);
       container.appendChild(renderer.domElement);
 
-      // أدوات تحكم
       const controls = new THREE.OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
       controls.dampingFactor = 0.05;
       controls.zoomSpeed = 1.2;
 
-      // إنشاء الشبكة
       const geometry = new THREE.PlaneGeometry(width, height, width - 1, height - 1);
       const positions = geometry.attributes.position.array;
       const maxDepth = parseFloat(maxDepthSlider.value);
@@ -306,8 +346,7 @@
           const idx = (y * width + x) * 3;
           const edgeVal = edgesData[y * width + x];
           if (edgeVal > 0) {
-            const pixelValue = heightMapData[y * width + x];
-            const norm = 1 - (pixelValue / 255);
+            const norm = 1 - heightMapData[y * width + x];
             positions[idx + 2] = -norm * maxDepth * 5; // مقياس الارتفاع
           } else {
             positions[idx + 2] = 0;
@@ -334,7 +373,6 @@
       scene.add(light);
       scene.add(new THREE.AmbientLight(0x404040));
 
-      // حلقة الرسم
       function animate() {
         requestAnimationFrame(animate);
         controls.update();
