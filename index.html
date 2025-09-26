@@ -791,6 +791,7 @@
     let resizeRatio = 1;
     let heightMapData = null;
     let edgeMapData = null;
+    let enhancedHeightMapData = null;
 
     // وظيفة فتح التبويبات
     function openTab(tabId) {
@@ -1507,15 +1508,72 @@
         maxY: maxY
       };
       
+      // إنشاء خريطة الارتفاعات المعززة بعد استخراج الحواف
+      createEnhancedHeightMap();
+      
       // تحديث معاينة تحليل الارتفاعات إذا كانت مفتوحة
       if (document.getElementById('heightAnalysisTab').classList.contains('active')) {
         updateHeightAnalysisPreview();
       }
     }
 
+    // إنشاء خريطة ارتفاعات معززة بالحواف
+    function createEnhancedHeightMap() {
+      if (!heightMapData || !edgeMapData) return;
+      
+      const width = currentImageData.width;
+      const height = currentImageData.height;
+      enhancedHeightMapData = new Uint8Array(width * height);
+      
+      // نسخ خريطة الارتفاعات الأصلية
+      for (let i = 0; i < heightMapData.length; i++) {
+        enhancedHeightMapData[i] = heightMapData[i];
+      }
+      
+      // تعزيز الحواف في خريطة الارتفاعات
+      const edgeBoost = 80; // مقدار تعزيز الارتفاع عند الحواف
+      const edgeBlurRadius = 2; // نصف قطر تأثير التمويه حول الحواف
+      
+      // تعزيز مباشر للحواف
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const idx = y * width + x;
+          
+          if (edgeMapData[idx] > 128) {
+            // تعزيز مباشر للحافة
+            enhancedHeightMapData[idx] = Math.min(255, enhancedHeightMapData[idx] + edgeBoost);
+            
+            // إضافة تأثير تمويه حول الحواف لجعل الانتقال أكثر سلاسة
+            for (let dy = -edgeBlurRadius; dy <= edgeBlurRadius; dy++) {
+              for (let dx = -edgeBlurRadius; dx <= edgeBlurRadius; dx++) {
+                const nx = x + dx;
+                const ny = y + dy;
+                
+                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                  const nIdx = ny * width + nx;
+                  const distance = Math.sqrt(dx*dx + dy*dy);
+                  const boostFactor = edgeBoost * (1 - distance/(edgeBlurRadius+1));
+                  
+                  if (boostFactor > 0) {
+                    enhancedHeightMapData[nIdx] = Math.min(255, 
+                      Math.max(enhancedHeightMapData[nIdx], 
+                      heightMapData[nIdx] + boostFactor));
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // تحديث العروض البصرية
+      update3DPreview();
+      drawHeatmap(enhancedHeightMapData, width, height, 0, 255);
+    }
+
     // تحديث معاينة تحليل الارتفاعات
     function updateHeightAnalysisPreview() {
-      if (!currentImageData || !heightMapData) return;
+      if (!currentImageData || !enhancedHeightMapData) return;
       
       const width = currentImageData.width;
       const height = currentImageData.height;
@@ -1527,18 +1585,18 @@
       ctxHeightAnalysis.fillStyle = '#f0f0f0';
       ctxHeightAnalysis.fillRect(0, 0, width, height);
       
-      // رسم خريطة الارتفاعات الأساسية
+      // رسم خريطة الارتفاعات المعززة
       const imageData = ctxHeightAnalysis.createImageData(width, height);
       
-      for (let i = 0; i < heightMapData.length; i++) {
+      for (let i = 0; i < enhancedHeightMapData.length; i++) {
         const idx = i * 4;
-        const value = heightMapData[i];
+        const value = enhancedHeightMapData[i];
         const color = getHeatColor(value / 255, currentColormap);
         
         imageData.data[idx] = color.r;
         imageData.data[idx + 1] = color.g;
         imageData.data[idx + 2] = color.b;
-        imageData.data[idx + 3] = 128; // شفافية متوسطة
+        imageData.data[idx + 3] = 200; // شفافية عالية
       }
       
       ctxHeightAnalysis.putImageData(imageData, 0, 0);
@@ -1555,6 +1613,20 @@
         designBounds.maxX - designBounds.minX, 
         designBounds.maxY - designBounds.minY
       );
+      
+      // رسم الحواف المعززة
+      if (edgeMapData) {
+        ctxHeightAnalysis.strokeStyle = '#000000';
+        ctxHeightAnalysis.lineWidth = 1;
+        
+        for (let i = 0; i < edgeMapData.length; i++) {
+          if (edgeMapData[i] > 128) {
+            const x = i % width;
+            const y = Math.floor(i / width);
+            ctxHeightAnalysis.strokeRect(x, y, 1, 1);
+          }
+        }
+      }
     }
 
     // رسم مسارات المسح بناءً على الإعدادات
@@ -1625,7 +1697,7 @@
         
         for (let x = designBounds.minX; x < designBounds.maxX; x += step) {
           const idx = y * width + x;
-          const value = heightMapData ? heightMapData[idx] : 0;
+          const value = enhancedHeightMapData ? enhancedHeightMapData[idx] : 0;
           const aboveThreshold = value >= threshold;
           
           if (aboveThreshold && !inContour) {
@@ -1658,7 +1730,7 @@
         
         for (let x = designBounds.minX; x < designBounds.maxX; x += adaptiveStep) {
           const idx = y * width + x;
-          const value = heightMapData ? heightMapData[idx] : 0;
+          const value = enhancedHeightMapData ? enhancedHeightMapData[idx] : 0;
           
           if (x === designBounds.minX) {
             ctx.moveTo(x, y);
@@ -1730,7 +1802,7 @@
 
     // توليد G-code بناءً على خريطة الارتفاعات والإعدادات المتقدمة
     function generateGCode() {
-      if (!currentImageData || !heightMapData) {
+      if (!currentImageData || !enhancedHeightMapData) {
         showStatus('يرجى تحميل صورة أولاً', 'error');
         return;
       }
@@ -1761,7 +1833,7 @@
         const optimize = optimizeOrder.checked;
         
         let gcode = "; CNC AI Preview G-code - تحليل متقدم للارتفاعات\n";
-        gcode += "; Generated from image with height map analysis\n";
+        gcode += "; Generated from image with enhanced height map (including edges)\n";
         gcode += `; Machine: ${machineType.options[machineType.selectedIndex].text}\n`;
         gcode += `; Material: ${materialType.options[materialType.selectedIndex].text}\n`;
         gcode += `; Scan Method: ${scanMethodVal}, Direction: ${scanDirectionVal}\n`;
@@ -1785,7 +1857,7 @@
         
         gcode += `G0 X${startX} Y${startY} ; Move to design start\n`;
         
-        // إنشاء مسار بناءً على خريطة الارتفاعات وطريقة المسح
+        // إنشاء مسار بناءً على خريطة الارتفاعات المعززة وطريقة المسح
         const paths = generateHeightBasedPaths(
           width, height, scanMethodVal, scanDirectionVal, 
           resolution, maxH, layerH, layerOffsetVal, smooth, optimize
@@ -1840,11 +1912,14 @@
       }, 100);
     }
 
-    // إنشاء مسارات بناءً على خريطة الارتفاعات
+    // إنشاء مسارات بناءً على خريطة الارتفاعات المعززة
     function generateHeightBasedPaths(width, height, method, direction, resolution, maxH, layerH, layerOffset, smooth, optimize) {
       const paths = [];
       const scaleX = (designBounds.maxX - designBounds.minX) / width;
       const scaleY = (designBounds.maxY - designBounds.minY) / height;
+      
+      // استخدام خريطة الارتفاعات المعززة بدلاً من الأصلية
+      const heightData = enhancedHeightMapData || heightMapData;
       
       if (method === 'raster') {
         // مسح خطي
@@ -1855,7 +1930,7 @@
             const path = [];
             for (let x = designBounds.minX; x < designBounds.maxX; x++) {
               const idx = y * width + x;
-              const value = heightMapData ? heightMapData[idx] : 0;
+              const value = heightData ? heightData[idx] : 0;
               const z = (value / 255) * maxH;
               
               path.push({
@@ -1873,7 +1948,7 @@
             const path = [];
             for (let y = designBounds.minY; y < designBounds.maxY; y++) {
               const idx = y * width + x;
-              const value = heightMapData ? heightMapData[idx] : 0;
+              const value = heightData ? heightData[idx] : 0;
               const z = (value / 255) * maxH;
               
               path.push({
@@ -1890,12 +1965,12 @@
         const numLayers = Math.floor(maxH / layerH);
         for (let l = 0; l < numLayers; l++) {
           const threshold = 255 * (l / numLayers);
-          const contourPaths = generateContourPaths(width, height, threshold, scaleX, scaleY, maxH);
+          const contourPaths = generateContourPaths(width, height, threshold, scaleX, scaleY, maxH, heightData);
           paths.push(...contourPaths);
         }
       } else if (method === 'edge_following' && edgeMapData) {
         // تتبع الحواف
-        const edgePaths = generateEdgeFollowingPaths(width, height, scaleX, scaleY, maxH);
+        const edgePaths = generateEdgeFollowingPaths(width, height, scaleX, scaleY, maxH, heightData);
         paths.push(...edgePaths);
       }
       
@@ -1922,7 +1997,7 @@
     }
 
     // إنشاء مسارات كفافية
-    function generateContourPaths(width, height, threshold, scaleX, scaleY, maxH) {
+    function generateContourPaths(width, height, threshold, scaleX, scaleY, maxH, heightData) {
       const paths = [];
       const visited = new Array(width * height).fill(false);
       
@@ -1930,8 +2005,8 @@
         for (let x = designBounds.minX; x < designBounds.maxX; x++) {
           const idx = y * width + x;
           
-          if (!visited[idx] && heightMapData && heightMapData[idx] >= threshold) {
-            const path = traceContour(x, y, width, height, threshold, visited);
+          if (!visited[idx] && heightData && heightData[idx] >= threshold) {
+            const path = traceContour(x, y, width, height, threshold, visited, heightData);
             
             if (path.length > 0) {
               // تحويل الإحداثيات النسبية إلى إحداثيات حقيقية
@@ -1951,7 +2026,7 @@
     }
 
     // إنشاء مسارات تتبع الحواف
-    function generateEdgeFollowingPaths(width, height, scaleX, scaleY, maxH) {
+    function generateEdgeFollowingPaths(width, height, scaleX, scaleY, maxH, heightData) {
       const paths = [];
       
       if (!edgeMapData || currentEdges.length === 0) return paths;
@@ -1974,7 +2049,7 @@
       for (const edgePath of edgePaths) {
         const realPath = edgePath.map(p => {
           const idx = p.y * width + p.x;
-          const value = heightMapData ? heightMapData[idx] : 0;
+          const value = heightData ? heightData[idx] : 0;
           const z = (value / 255) * maxH;
           
           return {
@@ -2029,7 +2104,7 @@
     }
 
     // تتبع خط الكنتور
-    function traceContour(startX, startY, width, height, threshold, visited) {
+    function traceContour(startX, startY, width, height, threshold, visited, heightData) {
       const path = [];
       let x = startX;
       let y = startY;
@@ -2041,7 +2116,7 @@
         path.push({x, y});
         
         // البحث عن البكسل التالي في الاتجاه الحالي
-        const next = findNextContourPoint(x, y, width, height, threshold, dir, visited);
+        const next = findNextContourPoint(x, y, width, height, threshold, dir, visited, heightData);
         
         if (next) {
           x = next.x;
@@ -2056,7 +2131,7 @@
     }
 
     // البحث عن نقطة الكنتور التالية
-    function findNextContourPoint(x, y, width, height, threshold, startDir, visited) {
+    function findNextContourPoint(x, y, width, height, threshold, startDir, visited, heightData) {
       // اتجاهات البحث (باتجاه عقارب الساعة)
       const dirs = [
         {dx: 1, dy: 0},   // يمين
@@ -2080,7 +2155,7 @@
             ny >= designBounds.minY && ny < designBounds.maxY) {
           const nIdx = ny * width + nx;
           
-          if (!visited[nIdx] && heightMapData && heightMapData[nIdx] >= threshold) {
+          if (!visited[nIdx] && heightData && heightData[nIdx] >= threshold) {
             return {x: nx, y: ny, dir: (dirIdx + 5) % 8}; // عكس الاتجاه + 2
           }
         }
@@ -2123,7 +2198,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'cnc_design_advanced.gcode';
+      a.download = 'cnc_design_enhanced.gcode';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -2154,12 +2229,24 @@
       updateEdgePreview(imgData);
 
       // 3D mesh مع تحسين الأداء
+      update3DPreview();
+    }
+
+    // تحديث المعاينة ثلاثية الأبعاد
+    function update3DPreview() {
+      if (!heightMapData) return;
+      
+      const w = currentImageData.width;
+      const h = currentImageData.height;
       const quality = parseInt(analysisQuality.value);
       const meshResolution = Math.max(10, 50 - quality * 8); // تقليل دقة الشبكة بناءً على الجودة
       
       const geometry = new THREE.PlaneGeometry(100, 100, meshResolution, meshResolution);
       let min = 255, max = 0;
       const colors = [];
+      
+      // استخدام خريطة الارتفاعات المعززة إذا كانت متاحة
+      const heightData = enhancedHeightMapData || heightMapData;
       
       // تقليل عدد النقاط المعالجة
       const xStep = Math.max(1, Math.floor(w / meshResolution));
@@ -2174,7 +2261,7 @@
         const y = Math.min(h - 1, Math.round(gridY * yStep));
         
         const idx = y * w + x;
-        const brightness = heightMapData[idx];
+        const brightness = heightData[idx];
         min = Math.min(min, brightness);
         max = Math.max(max, brightness);
         geometry.attributes.position.array[stride + 2] = brightness / 80;
@@ -2191,7 +2278,7 @@
       mesh = new THREE.Mesh(geometry, material);
       scene.add(mesh);
 
-      drawHeatmap(heightMapData, w, h, min, max);
+      drawHeatmap(heightData, w, h, min, max);
     }
 
     // رسم خريطة الألوان
