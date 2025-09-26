@@ -123,6 +123,7 @@
       maxDepthValue.textContent = maxDepthSlider.value;
     });
 
+    // عند رفع الصورة
     fileInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -185,7 +186,7 @@
       };
     }
 
-    // كشف الحواف
+    // كشف الحواف باستخدام Sobel
     function detectEdges() {
       const imgData = ctxOriginal.getImageData(0, 0, width, height);
       const gray = new Uint8ClampedArray(width * height);
@@ -236,47 +237,52 @@
       container.innerHTML = "";
 
       const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x000000);
+      scene.background = new THREE.Color(0x222222);
 
-      const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 2000);
-      const renderer = new THREE.WebGLRenderer();
+      const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 5000);
+      camera.position.set(0, -height * 1.5, 200); 
+      camera.lookAt(0, 0, 0);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(container.clientWidth, container.clientHeight);
       container.appendChild(renderer.domElement);
 
       const controls = new THREE.OrbitControls(camera, renderer.domElement);
-
-      // موضع الكاميرا
-      camera.position.set(width / 2, -height * 1.2, height);
       controls.update();
 
-      // توليد المجسم
+      // إضاءة قوية
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+      scene.add(ambientLight);
+
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+      directionalLight.position.set(0, 0, 500);
+      scene.add(directionalLight);
+
+      // إنشاء المجسم
       const geometry = new THREE.PlaneGeometry(width, height, width - 1, height - 1);
 
+      const zScale = 30; // تضخيم المحور Z
       for (let i = 0; i < geometry.attributes.position.count; i++) {
         const ix = i % width;
         const iy = Math.floor(i / width);
         const pixelValue = heightMapData[iy * width + ix];
         const norm = 1 - (pixelValue / 255);
-        geometry.attributes.position.setZ(i, norm * 20); // تكبير Z للتوضيح
+        geometry.attributes.position.setZ(i, norm * zScale);
       }
 
       geometry.computeVertexNormals();
 
       const material = new THREE.MeshStandardMaterial({
         color: 0x8B4513,
-        wireframe: false,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
+        flatShading: false
       });
 
       const mesh = new THREE.Mesh(geometry, material);
+      mesh.rotation.x = Math.PI; // قلب النموذج ليكون الاتجاه للأعلى
       scene.add(mesh);
 
-      // الإضاءة
-      const light = new THREE.DirectionalLight(0xffffff, 1);
-      light.position.set(0, 0, 200);
-      scene.add(light);
-
-      // الأنيميشن
+      // تحريك الكاميرا
       function animate() {
         requestAnimationFrame(animate);
         controls.update();
@@ -284,6 +290,41 @@
       }
       animate();
     }
+
+    // ✅ توليد G-code من الحواف مع خريطة الارتفاعات
+    document.getElementById('generateGcodeBtn').addEventListener('click', () => {
+      if (!edgesData || !heightMapData) {
+        alert('الرجاء رفع صورة أولاً');
+        return;
+      }
+
+      const maxDepth = parseFloat(maxDepthSlider.value);
+      let gcode = ["G21 ; Set units to mm", "G90 ; Absolute positioning", "G1 F300 ; Set feedrate"];
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const edgeVal = edgesData[y * width + x];
+          if (edgeVal > 0) { // فقط الحواف
+            const pixelValue = heightMapData[y * width + x];
+            const norm = 1 - (pixelValue / 255);
+            const z = -(norm * maxDepth); // العمق
+            gcode.push(`G1 X${x} Y${y} Z${z.toFixed(2)}`);
+          }
+        }
+      }
+
+      gcode.push("G0 Z5 ; رفع الأداة");
+      gcode.push("M30 ; End of program");
+
+      const blob = new Blob([gcode.join("\n")], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = "output.gcode";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
   </script>
 </body>
 </html>
