@@ -1,0 +1,1290 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CNC AI Preview - النسخة المتطورة</title>
+  <style>
+    :root {
+      --primary-color: #4a90e2;
+      --secondary-color: #67b0f5;
+      --bg-color: #f8f9fa;
+      --text-color: #212529;
+      --card-bg: #ffffff;
+      --border-color: #dee2e6;
+      --header-bg: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+      --header-text: #ffffff;
+      --button-bg: #e9ecef;
+      --button-hover: #dee2e6;
+      --success-color: #28a745;
+      --warning-color: #ffc107;
+      --error-color: #dc3545;
+      --tab-inactive: #e9ecef;
+      --tab-active: var(--primary-color);
+    }
+
+    body.dark {
+      --bg-color: #121212;
+      --text-color: #e0e0e0;
+      --card-bg: #1e1e1e;
+      --border-color: #444;
+      --header-bg: linear-gradient(90deg, #2c2c2c, #444);
+      --button-bg: #333;
+      --button-hover: #555;
+      --tab-inactive: #333;
+      --tab-active: #4a90e2;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      line-height: 1.6;
+      transition: all 0.3s ease;
+      padding: 0;
+      margin: 0;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    header {
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 1rem;
+      text-align: center;
+      border-radius: 0 0 10px 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      margin-bottom: 2rem;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      max-width: 1200px;
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+    }
+
+    #themeToggle {
+      background: transparent;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--header-text);
+      transition: transform 0.3s;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #themeToggle:hover {
+      transform: scale(1.1);
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* تنسيق التابات */
+    .tabs {
+      display: flex;
+      margin-bottom: 20px;
+      background: var(--card-bg);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .tab {
+      padding: 12px 20px;
+      cursor: pointer;
+      background: var(--tab-inactive);
+      transition: all 0.3s;
+      text-align: center;
+      flex: 1;
+      font-weight: 500;
+    }
+
+    .tab.active {
+      background: var(--tab-active);
+      color: white;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* محتوى التابات */
+    .upload-section {
+      background: var(--card-bg);
+      padding: 2rem;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+      margin-bottom: 2rem;
+      text-align: center;
+      border: 1px solid var(--border-color);
+    }
+
+    .previews-container {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 2rem;
+    }
+
+    @media (min-width: 992px) {
+      .previews-container {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .preview-block {
+      background: var(--card-bg);
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      border: 1px solid var(--border-color);
+    }
+
+    .preview-title {
+      font-size: 1.2rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--primary-color);
+    }
+
+    .preview-content {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      margin-bottom: 1rem;
+    }
+
+    canvas {
+      max-width: 100%;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    #preview3d, #gcodeSimulation {
+      width: 100%;
+      height: 300px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      position: relative;
+    }
+
+    .options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      justify-content: center;
+      width: 100%;
+      margin-top: 1rem;
+    }
+
+    .option-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .option-group label {
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    input[type="range"] {
+      width: 150px;
+      accent-color: var(--primary-color);
+    }
+
+    .settings-panel {
+      background: var(--card-bg);
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+      margin-bottom: 2rem;
+      border: 1px solid var(--border-color);
+    }
+
+    .settings-group {
+      margin-bottom: 1.5rem;
+    }
+
+    .settings-group h3 {
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border-color);
+      color: var(--primary-color);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+    }
+
+    .form-group select, 
+    .form-group input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 5px;
+      background: var(--bg-color);
+      color: var(--text-color);
+    }
+
+    .gcode-output {
+      background: var(--bg-color);
+      border: 1px solid var(--border-color);
+      border-radius: 5px;
+      padding: 15px;
+      height: 200px;
+      overflow-y: auto;
+      font-family: monospace;
+      white-space: pre-wrap;
+      margin-top: 1rem;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.3s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: var(--primary-color);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--secondary-color);
+    }
+
+    .btn-secondary {
+      background: var(--button-bg);
+      color: var(--text-color);
+    }
+
+    .btn-secondary:hover {
+      background: var(--button-hover);
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 3rem;
+      padding: 1.5rem;
+      color: var(--text-color);
+      font-size: 0.9rem;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .image-enhancement {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+
+    .enhancement-btn {
+      padding: 8px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 5px;
+      background: var(--button-bg);
+      color: var(--text-color);
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.3s;
+    }
+
+    .enhancement-btn:hover {
+      background: var(--button-hover);
+    }
+
+    .loading {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      color: white;
+      z-index: 100;
+      border-radius: 8px;
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top: 4px solid white;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .notification {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 15px 20px;
+      border-radius: 8px;
+      background: var(--success-color);
+      color: white;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      transform: translateX(100%);
+      opacity: 0;
+      transition: all 0.3s ease;
+      z-index: 1000;
+    }
+
+    .notification.show {
+      transform: translateX(0);
+      opacity: 1;
+    }
+
+    .notification.error {
+      background: var(--error-color);
+    }
+
+    .simulation-controls {
+      display: flex;
+      gap: 10px;
+      margin-top: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 768px) {
+      h1 {
+        font-size: 1.4rem;
+      }
+      
+      .header-content {
+        flex-direction: column;
+        gap: 15px;
+      }
+      
+      .preview-block {
+        padding: 1rem;
+      }
+      
+      .options {
+        flex-direction: column;
+        align-items: center;
+      }
+      
+      .action-buttons {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-content">
+      <h1><span>🛠️</span> CNC AI Preview - النسخة المتطورة</h1>
+      <div class="controls">
+        <button id="themeToggle">🌙</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- التابات -->
+    <div class="tabs">
+      <div class="tab active" data-tab="preview">معاينة الصورة</div>
+      <div class="tab" data-tab="gcode">G-code إعدادات</div>
+      <div class="tab" data-tab="simulation">محاكاة G-code</div>
+    </div>
+
+    <!-- تاب المعاينة -->
+    <div class="tab-content active" id="preview-tab">
+      <section class="upload-section">
+        <h2 class="upload-title">📤 تحميل الصورة</h2>
+        <div class="file-upload">
+          <input type="file" id="fileInput" accept="image/*">
+          <label for="fileInput"><span>📁</span> اختر صورة</label>
+          <div class="file-name" id="fileName">لم يتم اختيار أي صورة بعد</div>
+        </div>
+
+        <div class="image-enhancement">
+          <div class="enhancement-btn" onclick="applyEnhancement('brightness')">🔆 سطوع</div>
+          <div class="enhancement-btn" onclick="applyEnhancement('contrast')">🌓 تباين</div>
+          <div class="enhancement-btn" onclick="applyEnhancement('sharpen')">🔍 حدة</div>
+          <div class="enhancement-btn" onclick="applyEnhancement('smooth')">🔄 نعومة</div>
+          <div class="enhancement-btn" onclick="applyEnhancement('grayscale')">⚫ تدرج رمادي</div>
+          <div class="enhancement-btn" onclick="applyEnhancement('reset')">🔄 إعادة تعيين</div>
+        </div>
+      </section>
+
+      <div class="previews-container">
+        <!-- الصورة الأصلية -->
+        <div class="preview-block">
+          <h3 class="preview-title">📷 الصورة الأصلية</h3>
+          <div class="preview-content">
+            <canvas id="preview2d"></canvas>
+          </div>
+        </div>
+
+        <!-- معاينة 3D -->
+        <div class="preview-block">
+          <h3 class="preview-title">🌀 المعاينة ثلاثية الأبعاد</h3>
+          <div class="preview-content">
+            <div id="preview3d">
+              <div class="loading" id="loading3d">
+                <div class="loading-spinner"></div>
+                <p>جاري تحميل النموذج...</p>
+              </div>
+            </div>
+          </div>
+          <div class="options">
+            <div class="option-group">
+              <label for="rotationSpeed">🔄 سرعة الدوران</label>
+              <input type="range" id="rotationSpeed" min="0" max="0.05" step="0.001" value="0.01">
+            </div>
+            <div class="option-group">
+              <label for="zoomControl">🔍 زوم</label>
+              <input type="range" id="zoomControl" min="50" max="500" step="10" value="200">
+            </div>
+            <div class="option-group">
+              <label for="heightIntensity">📏 شدة الارتفاع</label>
+              <input type="range" id="heightIntensity" min="20" max="200" step="5" value="80">
+            </div>
+          </div>
+        </div>
+
+        <!-- Heatmap -->
+        <div class="preview-block">
+          <h3 class="preview-title">🌈 خريطة الارتفاعات (Heatmap)</h3>
+          <div class="preview-content">
+            <canvas id="heatmap"></canvas>
+          </div>
+          <div class="colormap-controls">
+            <button class="btn btn-secondary" onclick="setColormap('jet')"><span>🌈</span> Jet</button>
+            <button class="btn btn-secondary" onclick="setColormap('hot')"><span>🔥</span> Hot</button>
+            <button class="btn btn-secondary" onclick="setColormap('cool')"><span>❄️</span> Cool</button>
+            <button class="btn btn-secondary" onclick="setColormap('gray')"><span>⚪</span> Gray</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- تاب إعدادات G-code -->
+    <div class="tab-content" id="gcode-tab">
+      <div class="settings-panel">
+        <div class="settings-group">
+          <h3><span>🏭</span> إعدادات الماكينة</h3>
+          <div class="form-group">
+            <label for="machineType">نوع الماكينة</label>
+            <select id="machineType">
+              <option value="cnc">CNC Router</option>
+              <option value="laser">Laser Cutter</option>
+              <option value="3dprinter">3D Printer</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <h3><span>📦</span> إعدادات الخامة</h3>
+          <div class="form-group">
+            <label for="materialType">نوع الخامة</label>
+            <select id="materialType">
+              <option value="wood">خشب</option>
+              <option value="acrylic">أكريليك</option>
+              <option value="aluminum">ألومنيوم</option>
+              <option value="steel">صلب</option>
+              <option value="pla">PLA (بلاستيك)</option>
+              <option value="abs">ABS (بلاستيك)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <h3><span>⚙️</span> إعدادات القطع</h3>
+          <div class="form-group">
+            <label for="feedRate">سرعة التغذية (mm/min)</label>
+            <input type="number" id="feedRate" value="1000">
+          </div>
+          <div class="form-group">
+            <label for="spindleSpeed">سرعة المغزل (RPM)</label>
+            <input type="number" id="spindleSpeed" value="10000">
+          </div>
+          <div class="form-group">
+            <label for="cutDepth">عمق القطع (mm)</label>
+            <input type="number" id="cutDepth" value="2" step="0.1">
+          </div>
+          <div class="form-group">
+            <label for="passDepth">عمق التمريرة (mm)</label>
+            <input type="number" id="passDepth" value="0.5" step="0.1">
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <h3><span>🔧</span> إعدادات G-code</h3>
+          <div class="form-group">
+            <label for="gcodeType">نوع المخرجات</label>
+            <select id="gcodeType">
+              <option value="heatmap">بناءً على Heatmap</option>
+              <option value="3dmodel">بناءً على النموذج ثلاثي الأبعاد</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="gcodePrecision">دقة التوليد</label>
+            <select id="gcodePrecision">
+              <option value="low">منخفضة (أسرع)</option>
+              <option value="medium" selected>متوسطة</option>
+              <option value="high">عالية (أبطأ)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="action-buttons">
+          <button class="btn btn-primary" onclick="generateGcode()">
+            <span>⚡</span> توليد G-code
+          </button>
+          <button class="btn btn-secondary" onclick="downloadGcode()">
+            <span>💾</span> حفظ G-code
+          </button>
+          <button class="btn btn-secondary" onclick="simulateGcode()">
+            <span>🔄</span> محاكاة G-code
+          </button>
+        </div>
+
+        <div class="gcode-output" id="gcodeOutput">
+// سيظهر كود G-code هنا بعد التوليد
+// اضغط على "توليد G-code" لبدء عملية التوليد
+        </div>
+      </div>
+    </div>
+
+    <!-- تاب محاكاة G-code -->
+    <div class="tab-content" id="simulation-tab">
+      <div class="preview-block">
+        <h3 class="preview-title">🎮 محاكاة مسار الأداة</h3>
+        <div class="preview-content">
+          <div id="gcodeSimulation">
+            <div class="loading" id="loadingSimulation">
+              <div class="loading-spinner"></div>
+              <p>جاري تحميل المحاكاة...</p>
+            </div>
+          </div>
+        </div>
+        <div class="simulation-controls">
+          <button class="btn btn-secondary" onclick="startSimulation()">▶️ تشغيل</button>
+          <button class="btn btn-secondary" onclick="pauseSimulation()">⏸️ إيقاف</button>
+          <button class="btn btn-secondary" onclick="resetSimulation()">⏹️ إعادة تعيين</button>
+          <div class="option-group">
+            <label for="simulationSpeed">سرعة المحاكاة</label>
+            <input type="range" id="simulationSpeed" min="1" max="10" step="1" value="5">
+          </div>
+        </div>
+      </div>
+
+      <div class="preview-block">
+        <h3 class="preview-title">📊 معلومات المحاكاة</h3>
+        <div id="simulationInfo">
+          <p>⏱️ الوقت المتوقع: <span id="simulationTime">0</span> دقيقة</p>
+          <p>📏 المسافة الإجمالية: <span id="simulationDistance">0</span> مم</p>
+          <p>🔧 عدد الأوامر: <span id="simulationCommands">0</span></p>
+          <p>⚡ الحالة: <span id="simulationStatus">في انتظار التوليد</span></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <p>تم التطوير باستخدام Three.js - مشروع CncAi Preview المتطور</p>
+  </footer>
+
+  <div class="notification" id="notification">تم تحميل الصورة بنجاح!</div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <script>
+    // عناصر DOM
+    const fileInput = document.getElementById('fileInput');
+    const fileName = document.getElementById('fileName');
+    const canvas2d = document.getElementById('preview2d');
+    const ctx2d = canvas2d.getContext('2d');
+    const heatmap = document.getElementById('heatmap');
+    const ctxHeat = heatmap.getContext('2d');
+    const preview3d = document.getElementById('preview3d');
+    const rotationSpeedInput = document.getElementById('rotationSpeed');
+    const zoomControl = document.getElementById('zoomControl');
+    const heightIntensity = document.getElementById('heightIntensity');
+    const tabs = document.querySelectorAll('.tab');
+    const tabContents = document.querySelectorAll('.tab-content');
+    const gcodeOutput = document.getElementById('gcodeOutput');
+    const notification = document.getElementById('notification');
+    const loading3d = document.getElementById('loading3d');
+    const gcodeSimulation = document.getElementById('gcodeSimulation');
+    const loadingSimulation = document.getElementById('loadingSimulation');
+
+    // إعداد Three.js للمعاينة
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
+    const camera = new THREE.PerspectiveCamera(45, preview3d.offsetWidth / preview3d.offsetHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(preview3d.offsetWidth, preview3d.offsetHeight);
+    preview3d.appendChild(renderer.domElement);
+
+    // إعداد Three.js للمحاكاة
+    const simulationScene = new THREE.Scene();
+    simulationScene.background = new THREE.Color(0xf0f0f0);
+    const simulationCamera = new THREE.PerspectiveCamera(45, gcodeSimulation.offsetWidth / gcodeSimulation.offsetHeight, 0.1, 1000);
+    const simulationRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    simulationRenderer.setSize(gcodeSimulation.offsetWidth, gcodeSimulation.offsetHeight);
+    gcodeSimulation.appendChild(simulationRenderer.domElement);
+
+    // إضاءة المشاهد
+    function setupLights(scene) {
+      const ambientLight = new THREE.AmbientLight(0x404040, 1);
+      scene.add(ambientLight);
+      
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      directionalLight.position.set(1, 1, 1);
+      scene.add(directionalLight);
+      
+      const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+      directionalLight2.position.set(-1, -1, -1);
+      scene.add(directionalLight2);
+    }
+
+    setupLights(scene);
+    setupLights(simulationScene);
+
+    camera.position.z = 200;
+    simulationCamera.position.z = 200;
+
+    let mesh;
+    let rotationSpeed = 0.01;
+    let currentColormap = 'jet';
+    let heightFactor = 80;
+    let heightMapData = null;
+    let originalImageData = null;
+    let simulation = null;
+    let isSimulationPlaying = false;
+
+    // تبديل التابات
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const tabId = tab.getAttribute('data-tab');
+        
+        // إلغاء تفعيل جميع التابات
+        tabs.forEach(t => t.classList.remove('active'));
+        tabContents.forEach(tc => tc.classList.remove('active'));
+        
+        // تفعيل التاب المحدد
+        tab.classList.add('active');
+        document.getElementById(`${tabId}-tab`).classList.add('active');
+      });
+    });
+
+    // دالة لتحسين الصورة
+    function applyEnhancement(type) {
+      if (!originalImageData) {
+        showNotification('يجب تحميل صورة أولاً', true);
+        return;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas2d.width;
+      canvas.height = canvas2d.height;
+      const ctx = canvas.getContext('2d');
+      ctx.putImageData(originalImageData, 0, 0);
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+
+      switch(type) {
+        case 'brightness':
+          // زيادة السطوع
+          for (let i = 0; i < data.length; i += 4) {
+            data[i] = Math.min(255, data[i] + 30);
+            data[i+1] = Math.min(255, data[i+1] + 30);
+            data[i+2] = Math.min(255, data[i+2] + 30);
+          }
+          break;
+        case 'contrast':
+          // زيادة التباين
+          const factor = 1.2;
+          for (let i = 0; i < data.length; i += 4) {
+            data[i] = Math.min(255, Math.max(0, factor * (data[i] - 128) + 128));
+            data[i+1] = Math.min(255, Math.max(0, factor * (data[i+1] - 128) + 128));
+            data[i+2] = Math.min(255, Math.max(0, factor * (data[i+2] - 128) + 128));
+          }
+          break;
+        case 'sharpen':
+          // زيادة الحدة (تصفية بسيطة)
+          const weights = [0, -1, 0, -1, 5, -1, 0, -1, 0];
+          const tempData = new Uint8ClampedArray(data);
+          for (let y = 1; y < canvas.height - 1; y++) {
+            for (let x = 1; x < canvas.width - 1; x++) {
+              for (let c = 0; c < 3; c++) {
+                let sum = 0;
+                for (let ky = -1; ky <= 1; ky++) {
+                  for (let kx = -1; kx <= 1; kx++) {
+                    const idx = ((y + ky) * canvas.width + (x + kx)) * 4 + c;
+                    const weight = weights[(ky + 1) * 3 + (kx + 1)];
+                    sum += tempData[idx] * weight;
+                  }
+                }
+                const idx = (y * canvas.width + x) * 4 + c;
+                data[idx] = Math.min(255, Math.max(0, sum));
+              }
+            }
+          }
+          break;
+        case 'smooth':
+          // تطبيق نعومة (تصفية Gaussian بسيطة)
+          for (let y = 1; y < canvas.height - 1; y++) {
+            for (let x = 1; x < canvas.width - 1; x++) {
+              for (let c = 0; c < 3; c++) {
+                let sum = 0;
+                for (let ky = -1; ky <= 1; ky++) {
+                  for (let kx = -1; kx <= 1; kx++) {
+                    const idx = ((y + ky) * canvas.width + (x + kx)) * 4 + c;
+                    sum += data[idx];
+                  }
+                }
+                const idx = (y * canvas.width + x) * 4 + c;
+                data[idx] = sum / 9;
+              }
+            }
+          }
+          break;
+        case 'grayscale':
+          // تحويل إلى تدرج رمادي
+          for (let i = 0; i < data.length; i += 4) {
+            const avg = 0.3 * data[i] + 0.59 * data[i+1] + 0.11 * data[i+2];
+            data[i] = data[i+1] = data[i+2] = avg;
+          }
+          break;
+        case 'reset':
+          // إعادة تعيين إلى الصورة الأصلية
+          ctx.putImageData(originalImageData, 0, 0);
+          break;
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+      ctx2d.clearRect(0, 0, canvas2d.width, canvas2d.height);
+      ctx2d.drawImage(canvas, 0, 0);
+      
+      // إنشاء خريطة ارتفاع جديدة من الصورة المحسنة
+      createHeightMapFromCanvas(canvas);
+    }
+
+    // دالة لإنشاء خريطة ارتفاع من canvas
+    function createHeightMapFromCanvas(canvas) {
+      loading3d.style.display = 'flex';
+      
+      setTimeout(() => {
+        const img = new Image();
+        img.onload = () => {
+          createHeightMap(img);
+          loading3d.style.display = 'none';
+        };
+        img.src = canvas.toDataURL();
+      }, 100);
+    }
+
+    // دالة لإنشاء خريطة الارتفاع
+    function createHeightMap(image) {
+      const w = Math.min(image.width, 100);
+      const h = Math.min(image.height, 100);
+      
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = w; 
+      tempCanvas.height = h;
+      const tctx = tempCanvas.getContext('2d');
+      tctx.drawImage(image, 0, 0, w, h);
+      const imgData = tctx.getImageData(0, 0, w, h).data;
+
+      // حفظ بيانات الارتفاع للاستخدام لاحقاً في توليد G-code
+      heightMapData = {
+        data: new Uint8Array(imgData),
+        width: w,
+        height: h
+      };
+
+      // إنشاء شبكة 3D
+      const geometry = new THREE.PlaneGeometry(100, 100, w-1, h-1);
+      let min = 255, max = 0;
+      const colors = [];
+      
+      for (let i = 0; i < geometry.attributes.position.count; i++) {
+        const stride = i * 3;
+        const x = i % w;
+        const y = Math.floor(i / w);
+        const idx = (y * w + x) * 4;
+        const brightness = 0.34 * imgData[idx] + 0.5 * imgData[idx+1] + 0.16 * imgData[idx+2]; // تحويل إلى grayscale
+        min = Math.min(min, brightness);
+        max = Math.max(max, brightness);
+        geometry.attributes.position.array[stride + 2] = brightness / heightFactor;
+
+        const norm = (brightness - min) / (max - min || 1);
+        const color = getHeatColor(norm, currentColormap);
+        colors.push(color.r/255, color.g/255, color.b/255);
+      }
+      
+      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geometry.computeVertexNormals();
+
+      const material = new THREE.MeshLambertMaterial({ 
+        vertexColors: true, 
+        side: THREE.DoubleSide,
+        wireframe: false
+      });
+      
+      if (mesh) scene.remove(mesh);
+      mesh = new THREE.Mesh(geometry, material);
+      scene.add(mesh);
+
+      drawHeatmap(imgData, w, h, min, max);
+    }
+
+    // دالة لرسم خريطة الحرارة
+    function drawHeatmap(imgData, w, h, min, max) {
+      heatmap.width = w;
+      heatmap.height = h;
+      const heatData = ctxHeat.createImageData(w, h);
+      
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const idx = (y * w + x) * 4;
+          const brightness = 0.34 * imgData[idx] + 0.5 * imgData[idx+1] + 0.16 * imgData[idx+2]; // تحويل إلى grayscale
+          const norm = (brightness - min) / (max - min || 1);
+          const color = getHeatColor(norm, currentColormap);
+          heatData.data[idx] = color.r;
+          heatData.data[idx+1] = color.g;
+          heatData.data[idx+2] = color.b;
+          heatData.data[idx+3] = 255;
+        }
+      }
+      
+      ctxHeat.putImageData(heatData, 0, 0);
+    }
+
+    // دالة للحصول على لون الخريطة الحرارية
+    function getHeatColor(value, map) {
+      let r=0, g=0, b=0;
+      
+      if(map === 'jet'){ 
+        r = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-3),1),0));
+        g = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-2),1),0));
+        b = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*value-1),1),0));
+      } else if(map === 'hot'){ 
+        r = Math.floor(255 * Math.min(1, 3*value));
+        g = Math.floor(255 * Math.min(1, 3*value-1));
+        g = Math.max(g,0);
+        b = Math.floor(255 * Math.min(1, 3*value-2));
+        b = Math.max(b,0);
+      } else if(map === 'cool'){
+        r = Math.floor(255 * value);
+        g = Math.floor(255 * (1-value));
+        b = 255;
+      } else if(map === 'gray'){
+        r = g = b = Math.floor(255 * value);
+      }
+      
+      return {r, g, b};
+    }
+
+    // دالة لتعيين خريطة الألوان
+    function setColormap(map) {
+      currentColormap = map;
+      
+      if(fileInput.files[0]){
+        const img = new Image();
+        img.onload = () => createHeightMap(img);
+        img.src = URL.createObjectURL(fileInput.files[0]);
+      }
+    }
+
+    // دورة الرسوم المتحركة
+    function animate() {
+      requestAnimationFrame(animate);
+      if (mesh) mesh.rotation.y += rotationSpeed;
+      renderer.render(scene, camera);
+      
+      if (simulationRenderer) {
+        simulationRenderer.render(simulationScene, simulationCamera);
+      }
+    }
+    animate();
+
+    // أحداث عناصر التحكم
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      fileName.textContent = file.name;
+      
+      const img = new Image();
+      img.onload = () => {
+        canvas2d.width = img.width;
+        canvas2d.height = img.height;
+        ctx2d.drawImage(img, 0, 0, canvas2d.width, canvas2d.height);
+        
+        // حفظ بيانات الصورة الأصلية
+        originalImageData = ctx2d.getImageData(0, 0, canvas2d.width, canvas2d.height);
+        
+        createHeightMap(img);
+        showNotification('تم تحميل الصورة بنجاح');
+      };
+      img.src = URL.createObjectURL(file);
+    });
+
+    rotationSpeedInput.addEventListener('input', () => {
+      rotationSpeed = parseFloat(rotationSpeedInput.value);
+    });
+
+    zoomControl.addEventListener('input', () => {
+      camera.position.z = parseFloat(zoomControl.value);
+    });
+
+    heightIntensity.addEventListener('input', () => {
+      heightFactor = parseFloat(heightIntensity.value);
+      if(fileInput.files[0]){
+        const img = new Image();
+        img.onload = () => createHeightMap(img);
+        img.src = URL.createObjectURL(fileInput.files[0]);
+      }
+    });
+
+    // تبديل الوضع الليلي/النهاري
+    const themeToggle = document.getElementById('themeToggle');
+    themeToggle.addEventListener('click', () => {
+      document.body.classList.toggle('dark');
+      themeToggle.textContent = document.body.classList.contains('dark') ? "☀️" : "🌙";
+      
+      // تحديث لون خلفية المشهد ثلاثي الأبعاد
+      scene.background = new THREE.Color(document.body.classList.contains('dark') ? 0x121212 : 0xf0f0f0);
+      simulationScene.background = new THREE.Color(document.body.classList.contains('dark') ? 0x121212 : 0xf0f0f0);
+    });
+
+    // جعل النماذج ثلاثية الأبعاد متجاوبة
+    window.addEventListener('resize', () => {
+      renderer.setSize(preview3d.offsetWidth, preview3d.offsetHeight);
+      camera.aspect = preview3d.offsetWidth / preview3d.offsetHeight;
+      camera.updateProjectionMatrix();
+      
+      simulationRenderer.setSize(gcodeSimulation.offsetWidth, gcodeSimulation.offsetHeight);
+      simulationCamera.aspect = gcodeSimulation.offsetWidth / gcodeSimulation.offsetHeight;
+      simulationCamera.updateProjectionMatrix();
+    });
+
+    // دالة لعرض الإشعارات
+    function showNotification(message, isError = false) {
+      notification.textContent = message;
+      notification.className = 'notification';
+      if (isError) notification.classList.add('error');
+      notification.classList.add('show');
+      
+      setTimeout(() => {
+        notification.classList.remove('show');
+      }, 3000);
+    }
+
+    // دالة لتوليد G-code
+    function generateGcode() {
+      if (!heightMapData) {
+        showNotification('يجب تحميل صورة أولاً', true);
+        return;
+      }
+
+      const machineType = document.getElementById('machineType').value;
+      const materialType = document.getElementById('materialType').value;
+      const feedRate = document.getElementById('feedRate').value;
+      const spindleSpeed = document.getElementById('spindleSpeed').value;
+      const cutDepth = document.getElementById('cutDepth').value;
+      const gcodeType = document.getElementById('gcodeType').value;
+      
+      // محاكاة عملية توليد G-code
+      gcodeOutput.textContent = "⏳ جاري توليد G-code...";
+      
+      setTimeout(() => {
+        // G-code أساسي كمثال
+        let gcode = `; G-code generated by CNC AI Preview\n`;
+        gcode += `; Machine: ${machineType}\n`;
+        gcode += `; Material: ${materialType}\n`;
+        gcode += `; Feed rate: ${feedRate}\n`;
+        gcode += `; Spindle speed: ${spindleSpeed}\n\n`;
+        
+        gcode += `G21 ; Set units to millimeters\n`;
+        gcode += `G90 ; Absolute positioning\n`;
+        gcode += `M3 S${spindleSpeed} ; Spindle on\n`;
+        gcode += `G0 Z5 ; Lift spindle\n`;
+        gcode += `G0 X0 Y0 ; Move to start position\n\n`;
+        
+        // محاكاة بعض أوامر الحركة بناءً على بيانات الارتفاع
+        gcode += `; Beginning of cutting path\n`;
+        gcode += `G1 Z-${cutDepth} F${feedRate/2} ; Lower to cutting depth\n`;
+        
+        for (let y = 0; y < heightMapData.height; y += 5) {
+          for (let x = 0; x < heightMapData.width; x += 5) {
+            const idx = (y * heightMapData.width + x) * 4;
+            const brightness = 0.34 * heightMapData.data[idx] + 0.5 * heightMapData.data[idx+1] + 0.16 * heightMapData.data[idx+2];
+            const depth = (brightness / 255) * cutDepth;
+            
+            gcode += `G1 X${x} Y${y} Z-${depth.toFixed(2)} F${feedRate}\n`;
+          }
+        }
+        
+        gcode += `\nG0 Z5 ; Lift spindle\n`;
+        gcode += `M5 ; Spindle off\n`;
+        gcode += `G0 X0 Y0 ; Return to start\n`;
+        gcode += `M30 ; End program\n`;
+        
+        gcodeOutput.textContent = gcode;
+        showNotification('تم توليد G-code بنجاح');
+      }, 1500);
+    }
+
+    // دالة لتحميل G-code
+    function downloadGcode() {
+      if (gcodeOutput.textContent.includes("يجب تحميل صورة") || 
+          gcodeOutput.textContent.includes("جاري توليد")) {
+        showNotification('لا يوجد G-code لتحميله', true);
+        return;
+      }
+      
+      const blob = new Blob([gcodeOutput.textContent], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'cnc-program.gcode';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showNotification('تم تحميل الملف بنجاح');
+    }
+
+    // دالة لمحاكاة G-code
+    function simulateGcode() {
+      if (!gcodeOutput.textContent || gcodeOutput.textContent.includes("يجب تحميل صورة") || 
+          gcodeOutput.textContent.includes("جاري توليد")) {
+        showNotification('يجب توليد G-code أولاً', true);
+        return;
+      }
+      
+      // الانتقال إلى تاب المحاكاة
+      tabs.forEach(t => t.classList.remove('active'));
+      tabContents.forEach(tc => tc.classList.remove('active'));
+      document.querySelector('[data-tab="simulation"]').classList.add('active');
+      document.getElementById('simulation-tab').classList.add('active');
+      
+      loadingSimulation.style.display = 'flex';
+      
+      // محاكاة عملية تحميل المحاكاة
+      setTimeout(() => {
+        // مسح المحاكاة السابقة
+        while(simulationScene.children.length > 0) { 
+          simulationScene.remove(simulationScene.children[0]); 
+        }
+        setupLights(simulationScene);
+        
+        // إنشاء نموذج أساسي للمحاكاة
+        const geometry = new THREE.BoxGeometry(50, 50, 5);
+        const material = new THREE.MeshLambertMaterial({ color: 0x4a90e2 });
+        const base = new THREE.Mesh(geometry, material);
+        simulationScene.add(base);
+        
+        // إنشاء مسار الأداة
+        const points = [];
+        for (let i = 0; i < 20; i++) {
+          points.push(new THREE.Vector3(
+            Math.sin(i * 0.3) * 40,
+            Math.cos(i * 0.3) * 40,
+            i * 0.5
+          ));
+        }
+        
+        const pathGeometry = new THREE.BufferGeometry().setFromPoints(points);
+        const pathMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
+        const path = new THREE.Line(pathGeometry, pathMaterial);
+        simulationScene.add(path);
+        
+        // إنشاء مؤشر الأداة
+        const toolGeometry = new THREE.ConeGeometry(2, 10, 8);
+        const toolMaterial = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
+        const tool = new THREE.Mesh(toolGeometry, toolMaterial);
+        tool.position.copy(points[0]);
+        tool.rotation.x = Math.PI;
+        simulationScene.add(tool);
+        
+        // حفظ بيانات المحاكاة
+        simulation = {
+          points: points,
+          tool: tool,
+          currentPoint: 0,
+          speed: 5
+        };
+        
+        // تحديث معلومات المحاكاة
+        document.getElementById('simulationTime').textContent = '2.5';
+        document.getElementById('simulationDistance').textContent = '1250';
+        document.getElementById('simulationCommands').textContent = '25';
+        document.getElementById('simulationStatus').textContent = 'جاهز للتشغيل';
+        
+        loadingSimulation.style.display = 'none';
+        showNotification('تم تحميل المحاكاة بنجاح');
+      }, 2000);
+    }
+
+    // دوال التحكم في المحاكاة
+    function startSimulation() {
+      if (!simulation) {
+        showNotification('يجب تحميل المحاكاة أولاً', true);
+        return;
+      }
+      
+      isSimulationPlaying = true;
+      document.getElementById('simulationStatus').textContent = 'جاري التشغيل';
+      animateSimulation();
+    }
+    
+    function pauseSimulation() {
+      isSimulationPlaying = false;
+      document.getElementById('simulationStatus').textContent = 'متوقف';
+    }
+    
+    function resetSimulation() {
+      if (!simulation) return;
+      
+      isSimulationPlaying = false;
+      simulation.currentPoint = 0;
+      simulation.tool.position.copy(simulation.points[0]);
+      document.getElementById('simulationStatus').textContent = 'تم إعادة التعيين';
+    }
+    
+    function animateSimulation() {
+      if (!isSimulationPlaying || !simulation) return;
+      
+      if (simulation.currentPoint < simulation.points.length - 1) {
+        simulation.currentPoint++;
+        simulation.tool.position.copy(simulation.points[simulation.currentPoint]);
+        
+        setTimeout(() => {
+          requestAnimationFrame(animateSimulation);
+        }, 1000 / simulation.speed);
+      } else {
+        isSimulationPlaying = false;
+        document.getElementById('simulationStatus').textContent = 'اكتمل التشغيل';
+      }
+    }
+    
+    // التحكم في سرعة المحاكاة
+    document.getElementById('simulationSpeed').addEventListener('input', function() {
+      if (simulation) {
+        simulation.speed = parseInt(this.value);
+      }
+    });
+
+    // تحديث خيارات الخامة بناءً على نوع الماكينة
+    document.getElementById('machineType').addEventListener('change', function() {
+      const materialSelect = document.getElementById('materialType');
+      const machineType = this.value;
+      
+      // مسح الخيارات الحالية
+      materialSelect.innerHTML = '';
+      
+      // إضافة الخيارات المناسبة بناءً على نوع الماكينة
+      if (machineType === 'cnc') {
+        materialSelect.innerHTML = `
+          <option value="wood">خشب</option>
+          <option value="acrylic">أكريليك</option>
+          <option value="aluminum">ألومنيوم</option>
+          <option value="steel">صلب</option>
+        `;
+      } else if (machineType === 'laser') {
+        materialSelect.innerHTML = `
+          <option value="wood">خشب</option>
+          <option value="acrylic">أكريليك</option>
+          <option value="leather">جلد</option>
+          <option value="fabric">قماش</option>
+        `;
+      } else if (machineType === '3dprinter') {
+        materialSelect.innerHTML = `
+          <option value="pla">PLA (بلاستيك)</option>
+          <option value="abs">ABS (بلاستيك)</option>
+          <option value="petg">PETG (بلاستيك)</option>
+          <option value="tpu">TPU (مطاطي)</option>
+        `;
+      }
+    });
+  </script>
+</body>
+</html>
