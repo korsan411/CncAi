@@ -206,7 +206,7 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.1);
     }
 
-    #preview3d, #gcodeSimulation, #edgePreview3d {
+    #preview3d, #gcodeSimulation {
       width: 100%;
       height: 300px;
       border-radius: 8px;
@@ -449,12 +449,6 @@
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 1rem;
-    }
-
-    .edge-path {
-      stroke: var(--edge-color);
-      stroke-width: 2;
-      fill: none;
     }
 
     @media (max-width: 768px) {
@@ -764,9 +758,10 @@
     const ctx2d = canvas2d.getContext('2d');
     const heatmap = document.getElementById('heatmap');
     const ctxHeat = heatmap.getContext('2d');
-    const preview3d = document.getElementById('preview3d');
     const edgeCanvas = document.getElementById('edgeCanvas');
     const edgeCtx = edgeCanvas.getContext('2d');
+    const preview3d = document.getElementById('preview3d');
+    const gcodeSimulation = document.getElementById('gcodeSimulation');
     const rotationSpeedInput = document.getElementById('rotationSpeed');
     const zoomControl = document.getElementById('zoomControl');
     const heightIntensity = document.getElementById('heightIntensity');
@@ -777,26 +772,48 @@
     const gcodeOutput = document.getElementById('gcodeOutput');
     const notification = document.getElementById('notification');
     const loading3d = document.getElementById('loading3d');
-    const gcodeSimulation = document.getElementById('gcodeSimulation');
     const loadingSimulation = document.getElementById('loadingSimulation');
 
     // إعداد Three.js للمعاينة
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf0f0f0);
-    const camera = new THREE.PerspectiveCamera(45, preview3d.offsetWidth / preview3d.offsetHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(preview3d.offsetWidth, preview3d.offsetHeight);
-    preview3d.appendChild(renderer.domElement);
+    let scene, camera, renderer, mesh;
+    let simulationScene, simulationCamera, simulationRenderer;
+    let rotationSpeed = 0.01;
+    let currentColormap = 'jet';
+    let heightFactor = 80;
+    let heightMapData = null;
+    let originalImageData = null;
+    let simulation = null;
+    let isSimulationPlaying = false;
+    let edgePoints = [];
+    let edgePaths = [];
 
-    // إعداد Three.js للمحاكاة
-    const simulationScene = new THREE.Scene();
-    simulationScene.background = new THREE.Color(0xf0f0f0);
-    const simulationCamera = new THREE.PerspectiveCamera(45, gcodeSimulation.offsetWidth / gcodeSimulation.offsetHeight, 0.1, 1000);
-    const simulationRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    simulationRenderer.setSize(gcodeSimulation.offsetWidth, gcodeSimulation.offsetHeight);
-    gcodeSimulation.appendChild(simulationRenderer.domElement);
+    // تهيئة Three.js
+    function initThreeJS() {
+      // المشهد الرئيسي
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xf0f0f0);
+      camera = new THREE.PerspectiveCamera(45, preview3d.offsetWidth / preview3d.offsetHeight, 0.1, 1000);
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(preview3d.offsetWidth, preview3d.offsetHeight);
+      preview3d.appendChild(renderer.domElement);
 
-    // إضاءة المشاهد
+      // مشهد المحاكاة
+      simulationScene = new THREE.Scene();
+      simulationScene.background = new THREE.Color(0xf0f0f0);
+      simulationCamera = new THREE.PerspectiveCamera(45, gcodeSimulation.offsetWidth / gcodeSimulation.offsetHeight, 0.1, 1000);
+      simulationRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      simulationRenderer.setSize(gcodeSimulation.offsetWidth, gcodeSimulation.offsetHeight);
+      gcodeSimulation.appendChild(simulationRenderer.domElement);
+
+      // إعداد الإضاءة
+      setupLights(scene);
+      setupLights(simulationScene);
+
+      camera.position.z = 200;
+      simulationCamera.position.z = 200;
+    }
+
+    // إعداد الإضاءة
     function setupLights(scene) {
       const ambientLight = new THREE.AmbientLight(0x404040, 1);
       scene.add(ambientLight);
@@ -809,23 +826,6 @@
       directionalLight2.position.set(-1, -1, -1);
       scene.add(directionalLight2);
     }
-
-    setupLights(scene);
-    setupLights(simulationScene);
-
-    camera.position.z = 200;
-    simulationCamera.position.z = 200;
-
-    let mesh;
-    let rotationSpeed = 0.01;
-    let currentColormap = 'jet';
-    let heightFactor = 80;
-    let heightMapData = null;
-    let originalImageData = null;
-    let simulation = null;
-    let isSimulationPlaying = false;
-    let edgePoints = [];
-    let edgePaths = [];
 
     // تحديث قيمة عتبة الحواف
     edgeThreshold.addEventListener('input', function() {
@@ -960,12 +960,12 @@
         img.onload = function() {
           // ضبط أبعاد Canvas
           const maxWidth = 400;
-          const scale = maxWidth / img.width;
-          canvas2d.width = maxWidth;
+          const scale = Math.min(maxWidth / img.width, 1);
+          canvas2d.width = img.width * scale;
           canvas2d.height = img.height * scale;
-          heatmap.width = maxWidth;
+          heatmap.width = img.width * scale;
           heatmap.height = img.height * scale;
-          edgeCanvas.width = maxWidth;
+          edgeCanvas.width = img.width * scale;
           edgeCanvas.height = img.height * scale;
           
           // رسم الصورة
@@ -1088,11 +1088,11 @@
         scene.remove(mesh);
       }
       
-      const width = canvas2d.width;
-      const height = canvas2d.height;
+      const width = Math.min(canvas2d.width, 100);
+      const height = Math.min(canvas2d.height, 100);
       
       // إنشاء هندسة النموذج
-      const geometry = new THREE.PlaneGeometry(width, height, width-1, height-1);
+      const geometry = new THREE.PlaneGeometry(100, 100, width-1, height-1);
       const vertices = geometry.attributes.position.array;
       
       // تطبيق بيانات الارتفاع على الرؤوس
@@ -1336,7 +1336,6 @@
       gcode += "M3 S" + spindleSpeed + " ; Spindle on clockwise\n";
       gcode += "G4 P2 ; Wait for spindle to reach speed\n\n";
       
-      let zPos = 0;
       let pathIndex = 0;
       
       for (const path of edgePaths) {
@@ -1427,7 +1426,6 @@
       }
       
       const gcodeType = document.getElementById('gcodeType').value;
-      let gcode = "";
       
       if (gcodeType === 'edges' && edgePaths.length > 0) {
         generateGcodeFromEdges();
@@ -1435,7 +1433,7 @@
       }
       
       // توليد G-code بناءً على Heatmap أو النموذج ثلاثي الأبعاد
-      gcode = "; G-code generated from image\n";
+      let gcode = "; G-code generated from image\n";
       gcode += "G21 ; Set units to millimeters\n";
       gcode += "G90 ; Absolute positioning\n";
       gcode += "G17 ; XY plane selection\n";
@@ -1455,11 +1453,10 @@
       const height = canvas2d.height;
       const step = 5; // خطوة بين النقاط (بكسل)
       
-      let zPos = 0;
       let passCount = Math.ceil(cutDepth / passDepth);
       
       for (let pass = 0; pass < passCount; pass++) {
-        zPos = Math.min(cutDepth, (pass + 1) * passDepth);
+        const zPos = Math.min(cutDepth, (pass + 1) * passDepth);
         gcode += "; Pass " + (pass + 1) + " at depth " + zPos.toFixed(2) + "mm\n";
         
         for (let y = 0; y < height; y += step) {
@@ -1606,6 +1603,10 @@
     document.getElementById('themeToggle').addEventListener('click', function() {
       document.body.classList.toggle('dark');
       this.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
+      
+      // تحديث خلفية المشاهد ثلاثية الأبعاد
+      scene.background = new THREE.Color(document.body.classList.contains('dark') ? 0x121212 : 0xf0f0f0);
+      simulationScene.background = new THREE.Color(document.body.classList.contains('dark') ? 0x121212 : 0xf0f0f0);
     });
 
     // دالة لعرض الإشعارات
@@ -1684,8 +1685,11 @@
       simulationRenderer.setSize(gcodeSimulation.offsetWidth, gcodeSimulation.offsetHeight);
     });
 
-    // بدء التصيير
-    animate();
+    // تهيئة التطبيق عند تحميل الصفحة
+    window.addEventListener('DOMContentLoaded', function() {
+      initThreeJS();
+      animate();
+    });
   </script>
 </body>
 </html>
