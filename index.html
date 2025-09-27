@@ -1,444 +1,559 @@
-<!DOCTYPE html><html lang="ar" dir="rtl">
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CNC AI - معاينة ثلاثية الأبعاد (محسّن)</title>
-  <style>
-    :root{--bg:#f6f7fb;--panel:#fff;--accent:#1f6feb}
-    body{font-family:Arial, Helvetica, sans-serif;background:var(--bg);color:#222;margin:0;padding:0}
-    header{background:#222;color:#fff;padding:14px 18px;font-size:1.15rem;text-align:center}
-    .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center;padding:12px;background:var(--panel);border-bottom:1px solid #e3e6ee}
-    .controls > *{margin:4px}
-    button,input[type=range],select{padding:8px 12px;border-radius:6px;border:1px solid #ccc;background:var(--accent);color:#fff;cursor:pointer}
-    input[type=checkbox]{width:18px;height:18px}
-    label{margin-inline:6px}
-    .flex-row{display:flex;gap:12px;align-items:center}
-    .container{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px;max-width:1200px;margin:12px auto}
-    .panel{background:var(--panel);padding:12px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
-    canvas{width:100%;height:auto;border:1px solid #ddd;display:block}
-    #threeContainer{width:100%;height:500px}
-    .small{font-size:0.9rem}
-    footer{font-size:0.85rem;color:#555;text-align:center;padding:14px}
-    @media(max-width:900px){.container{grid-template-columns:1fr}}
-  </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>CNC AI - Heatmap → G-code from edges (Single File)</title>
+<style>
+  :root{--bg:#f5f7fb;--card:#fff;--accent:#1565c0}
+  body{font-family:Arial,Helvetica,sans-serif;background:var(--bg);margin:0;color:#111}
+  header{background:var(--accent);color:#fff;padding:12px 16px;text-align:center;font-size:1.1rem}
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px;padding:12px;align-items:center;justify-content:center;background:var(--card);border-bottom:1px solid #e6eefb}
+  .toolbar label{font-size:0.95rem;margin-inline:6px}
+  .toolbar input[type=file]{padding:6px}
+  .toolbar input, .toolbar select, .toolbar button {padding:8px 10px;border-radius:6px;border:1px solid #cbdff6;background:var(--accent);color:#fff;cursor:pointer}
+  .toolbar input[type=range]{appearance:none;height:6px;background:#ddd;border-radius:6px;cursor:pointer;width:140px;padding:0}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;padding:14px;max-width:1200px;margin:14px auto}
+  .panel{background:var(--card);padding:12px;border-radius:8px;box-shadow:0 1px 6px rgba(16,40,80,.06)}
+  canvas{display:block;max-width:100%;height:auto;border:1px solid #ddd}
+  #threeContainer{height:480px;border:1px solid #ddd}
+  .controls-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center}
+  .small{font-size:0.92rem}
+  footer{padding:12px;text-align:center;color:#555}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
-  <header>🛠️ CNC AI - معاينة ثلاثية الأبعاد (محسّن - تصحيح الحواف والاتجاه)</header>  <div class="controls">
-    <input type="file" id="fileInput" accept="image/*" /><div class="flex-row small">
-  <label for="maxDepth">أقصى عمق (مم)</label>
-  <input type="range" id="maxDepth" min="0.5" max="20" step="0.1" value="5" />
-  <span id="maxDepthValue">5</span>
+<header>🛠️ CNC AI — Heatmap (عرض) & G-code من الحواف فقط</header>
+
+<div class="toolbar">
+  <input type="file" id="fileInput" accept="image/*"/>
+  <label class="small">Colormap:
+    <select id="colormap">
+      <option value="jet">Jet</option>
+      <option value="hot">Hot</option>
+      <option value="cool">Cool</option>
+      <option value="gray">Gray</option>
+    </select>
+  </label>
+
+  <label class="small">تباين:
+    <input type="range" id="contrast" min="0.5" max="3" step="0.1" value="1"/>
+  </label>
+
+  <label class="small">عتبة الحواف:
+    <input type="range" id="edgeThreshold" min="1" max="255" value="40"/>
+  </label>
+
+  <label class="small">أقصى عمق (مم):
+    <input type="range" id="maxDepth" min="0.5" max="20" step="0.1" value="5"/>
+  </label>
+
+  <label class="small">مم/بكسل:
+    <input type="number" id="mmPerPixel" step="0.1" value="0.5" style="width:90px;padding:6px;border-radius:6px;border:1px solid #ccc;color:#111"/>
+  </label>
+
+  <label class="small"><input type="checkbox" id="invertZ"/> انعكاس الارتفاع</label>
+  <label class="small"><input type="checkbox" id="flipY"/> قلب Y في G-code</label>
+
+  <button id="btnProcess">معالجة</button>
+  <button id="btnPreview3D">معاينة 3D</button>
+  <button id="btnGcode">توليد G-code</button>
 </div>
 
-<div class="flex-row small">
-  <label for="meshRes">دقة الـ 3D (مربعات)</label>
-  <input type="range" id="meshRes" min="16" max="512" step="1" value="200" />
-  <span id="meshResValue">200</span>
+<div class="grid">
+  <div class="panel">
+    <h3>الصورة الأصلية</h3>
+    <canvas id="canvasOriginal"></canvas>
+  </div>
+
+  <div class="panel">
+    <h3>Heatmap (مع Colormap & Contrast)</h3>
+    <canvas id="canvasHeatmap"></canvas>
+  </div>
+
+  <div class="panel">
+    <h3>حواف (Edges)</h3>
+    <canvas id="canvasEdges"></canvas>
+  </div>
+
+  <div class="panel">
+    <h3>معاينة ثلاثية الأبعاد</h3>
+    <div id="threeContainer"></div>
+  </div>
 </div>
 
-<div class="flex-row small">
-  <label for="edgeThreshold">عتبة الحواف</label>
-  <input type="range" id="edgeThreshold" min="0" max="255" step="1" value="40" />
-  <span id="edgeThresholdValue">40</span>
-</div>
+<footer class="small">ملاحظة: النموذج يتعامل مع الصور الكبيرة عبر تصغير مؤقت لتسريع المعالجة — دقّة الــ3D قابلة للتعديل في الكود إن رغبت.</footer>
 
-<div class="flex-row small">
-  <label for="mmPerPixel">مم/بكسل</label>
-  <input type="number" id="mmPerPixel" step="0.1" value="0.5" style="width:80px;padding:6px;border-radius:6px;border:1px solid #ccc" />
-</div>
+<!-- three.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
-<div class="flex-row small">
-  <label><input type="checkbox" id="invertZ" /> انعكاس الارتفاع (إذا ظهر مقلوب)</label>
-  <label><input type="checkbox" id="flipY" /> قلب محور Y (لـ G-code)</label>
-</div>
+<script>
+/* ======== عناصر DOM وبيانات ======== */
+const fileInput = document.getElementById('fileInput');
+const canvasOriginal = document.getElementById('canvasOriginal'), ctxOrig = canvasOriginal.getContext('2d');
+const canvasHeatmap = document.getElementById('canvasHeatmap'), ctxHeat = canvasHeatmap.getContext('2d');
+const canvasEdges = document.getElementById('canvasEdges'), ctxEdges = canvasEdges.getContext('2d');
 
-<button id="btnProcess">معالجة وإظهار Heatmap & الحواف</button>
-<button id="btnPreview3D">معاينة 3D</button>
-<button id="btnGcode">توليد G-code</button>
+const colormapSel = document.getElementById('colormap');
+const contrastR = document.getElementById('contrast');
+const edgeThresholdR = document.getElementById('edgeThreshold');
+const maxDepthR = document.getElementById('maxDepth');
+const mmPerPixelInput = document.getElementById('mmPerPixel');
+const invertZChk = document.getElementById('invertZ');
+const flipYChk = document.getElementById('flipY');
 
-  </div>  <div class="container">
-    <div class="panel">
-      <h3>الصورة الأصلية</h3>
-      <canvas id="canvasOriginal"></canvas>
-    </div><div class="panel">
-  <h3>خريطة الارتفاعات (Heatmap)</h3>
-  <canvas id="canvasHeightmap"></canvas>
-</div>
+const btnProcess = document.getElementById('btnProcess');
+const btnPreview3D = document.getElementById('btnPreview3D');
+const btnGcode = document.getElementById('btnGcode');
 
-<div class="panel">
-  <h3>الحواف (Edges)</h3>
-  <canvas id="canvasEdges"></canvas>
-</div>
+let imgW=0, imgH=0;
+let procW=0, procH=0;
+let rawImageData=null;
+let gray=null, blurred=null, edges=null, heightMap=null; // Float32Array
+const MAX_PROC_DIM = 900; // لتسريع: إذا الصورة كبيرة نقلِّصها مؤقتًا
 
-<div class="panel">
-  <h3>معاينة ثلاثية الأبعاد</h3>
-  <div id="threeContainer"></div>
-</div>
+/* ======== تحميل الصورة ======== */
+fileInput.addEventListener('change', (e)=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = ev=>{
+    const img = new Image();
+    img.onload = ()=>{
+      imgW = img.width; imgH = img.height;
+      canvasOriginal.width = imgW; canvasOriginal.height = imgH;
+      ctxOrig.clearRect(0,0,imgW,imgH);
+      ctxOrig.drawImage(img,0,0);
+      rawImageData = ctxOrig.getImageData(0,0,imgW,imgH);
+      // مسح سابق
+      ctxHeat.clearRect(0,0,canvasHeatmap.width, canvasHeatmap.height);
+      ctxEdges.clearRect(0,0,canvasEdges.width, canvasEdges.height);
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(f);
+});
 
-  </div>  <footer class="small">ملاحظة: إذا كانت الصورة كبيرة جداً سيجري ضغطها مؤقتاً للمعالجة لتسريع الأداء (يمكن تعديل الدقة من شريط دقة 3D).</footer>  <!-- three.js و OrbitControls -->  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>  <script>
-    // عناصر DOM
-    const fileInput = document.getElementById('fileInput');
-    const canvasOriginal = document.getElementById('canvasOriginal');
-    const ctxOriginal = canvasOriginal.getContext('2d');
-    const canvasHeightmap = document.getElementById('canvasHeightmap');
-    const ctxHeightmap = canvasHeightmap.getContext('2d');
-    const canvasEdges = document.getElementById('canvasEdges');
-    const ctxEdges = canvasEdges.getContext('2d');
+/* ======== أدوات معالجة الصور ======== */
+// تحويل إلى grayscale مع ضبط التباين (contrast factor)
+function buildGray(data, w, h, contrast=1){
+  const g = new Float32Array(w*h);
+  // contrast: 1 = no change, >1 increases contrast centered at 128
+  const c = contrast;
+  for(let i=0, j=0;i<data.length;i+=4,j++){
+    const r=data[i], gch=data[i+1], b=data[i+2];
+    let v = 0.299*r + 0.587*gch + 0.114*b;
+    // contrast around 128
+    v = 128 + c*(v - 128);
+    if (v<0) v=0; if (v>255) v=255;
+    g[j]=v;
+  }
+  return g;
+}
 
-    const maxDepthSlider = document.getElementById('maxDepth');
-    const maxDepthValue = document.getElementById('maxDepthValue');
-    const meshResSlider = document.getElementById('meshRes');
-    const meshResValue = document.getElementById('meshResValue');
-    const edgeThreshold = document.getElementById('edgeThreshold');
-    const edgeThresholdValue = document.getElementById('edgeThresholdValue');
-
-    const mmPerPixelInput = document.getElementById('mmPerPixel');
-    const invertZChk = document.getElementById('invertZ');
-    const flipYChk = document.getElementById('flipY');
-
-    const btnProcess = document.getElementById('btnProcess');
-    const btnPreview3D = document.getElementById('btnPreview3D');
-    const btnGcode = document.getElementById('btnGcode');
-
-    // بيانات الصورة والمعالجة
-    let imgWidth = 0, imgHeight = 0;
-    let procWidth = 0, procHeight = 0; // حجم المعالجة (ممكن مصغر)
-    let rawImageData = null; // ImageData من الكانفاس الأصلي
-    let grayData = null; // Float32Array
-    let blurred = null; // Float32Array
-    let edges = null; // Float32Array
-    let heightMap = null; // Float32Array (0..1)
-
-    // إعدادات
-    const MAX_PROC_SIZE = 1200; // أقصى بعد للمعالجة (لتجنب بطء المتصفح)
-
-    // تحديثات واجهة
-    maxDepthSlider.addEventListener('input', () => { maxDepthValue.textContent = maxDepthSlider.value; });
-    meshResSlider.addEventListener('input', () => { meshResValue.textContent = meshResSlider.value; });
-    edgeThreshold.addEventListener('input', () => { edgeThresholdValue.textContent = edgeThreshold.value; });
-
-    // تحميل الصورة
-    fileInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const img = new Image();
-        img.onload = () => {
-          imgWidth = img.width;
-          imgHeight = img.height;
-
-          // عرض الصورة الأصلية بحجمها (أو مصغرة ليتناسب مع الشاشة)
-          canvasOriginal.width = imgWidth;
-          canvasOriginal.height = imgHeight;
-          ctxOriginal.clearRect(0,0,canvasOriginal.width, canvasOriginal.height);
-          ctxOriginal.drawImage(img, 0, 0, imgWidth, imgHeight);
-
-          rawImageData = ctxOriginal.getImageData(0,0, imgWidth, imgHeight);
-
-          // مسح نتائج سابقة
-          ctxHeightmap.clearRect(0,0,canvasHeightmap.width, canvasHeightmap.height);
-          ctxEdges.clearRect(0,0,canvasEdges.width, canvasEdges.height);
-
-          // افتراضي: process عند التحميل الخفيف أو بالزر
-          // لا نعالج تلقائياً لتفادي ثقل
-        };
-        img.src = ev.target.result;
-      };
-      reader.readAsDataURL(file);
-    });
-
-    // ---------- معالجة: grayscale, blur, sobel, combine ----------
-    function prepareProcessing() {
-      if (!rawImageData) { alert('⚠️ ارفع صورة أولاً'); return false; }
-
-      // تحديد حجم المعالجة (مصغر إن كانت الصورة كبيرة)
-      const scale = Math.min(1, MAX_PROC_SIZE / Math.max(imgWidth, imgHeight));
-      procWidth = Math.max(1, Math.floor(imgWidth * scale));
-      procHeight = Math.max(1, Math.floor(imgHeight * scale));
-
-      // رسم على كانفاس مؤقت
-      const off = document.createElement('canvas');
-      off.width = procWidth; off.height = procHeight;
-      const octx = off.getContext('2d');
-      octx.drawImage(canvasOriginal, 0, 0, imgWidth, imgHeight, 0,0, procWidth, procHeight);
-      const id = octx.getImageData(0,0, procWidth, procHeight);
-
-      // grayscale
-      grayData = new Float32Array(procWidth * procHeight);
-      for (let i=0, j=0; i<id.data.length; i+=4, j++){
-        const r=id.data[i], g=id.data[i+1], b=id.data[i+2];
-        grayData[j] = 0.299*r + 0.587*g + 0.114*b;
+// Gaussian 5x5 convolution
+function gaussianBlur(src, w, h){
+  const kernel = [
+    [1,4,7,4,1],
+    [4,16,26,16,4],
+    [7,26,41,26,7],
+    [4,16,26,16,4],
+    [1,4,7,4,1]
+  ];
+  const weight = 273;
+  const out = new Float32Array(w*h);
+  for(let y=2;y<h-2;y++){
+    for(let x=2;x<w-2;x++){
+      let s=0;
+      for(let ky=-2;ky<=2;ky++){
+        for(let kx=-2;kx<=2;kx++){
+          s += src[(y+ky)*w + (x+kx)] * kernel[ky+2][kx+2];
+        }
       }
-
-      // Gaussian blur (5x5 separable would be faster; simple 5x5 conv used)
-      blurred = gaussianBlur(grayData, procWidth, procHeight);
-
-      // Sobel edges
-      edges = sobel(blurred, procWidth, procHeight);
-
-      // Build heightMap: combine blurred + edgesBoost
-      const edgeBoost = 1.5; // معامل إبراز الحواف
-      heightMap = new Float32Array(procWidth * procHeight);
-      let min=Infinity, max=-Infinity;
-      for (let i=0; i<heightMap.length; i++){
-        const val = blurred[i] + edges[i]*edgeBoost;
-        heightMap[i] = val;
-        if (val<min) min=val;
-        if (val>max) max=val;
-      }
-      // normalize 0..1
-      const denom = (max - min) || 1;
-      for (let i=0; i<heightMap.length; i++) heightMap[i] = (heightMap[i] - min)/denom;
-
-      // رسم heatmap والحواف على كانفاسات العرض
-      drawHeatmap();
-      drawEdges();
-
-      return true;
+      out[y*w + x] = s/weight;
     }
+  }
+  // حدود: نسخ القيم من المصدر لعدم التفريغ
+  for(let x=0;x<w;x++){ out[x]=src[x]; out[(h-1)*w + x]=src[(h-1)*w + x]; }
+  for(let y=0;y<h;y++){ out[y*w]=src[y*w]; out[y*w + (w-1)]=src[y*w + (w-1)]; }
+  return out;
+}
 
-    // Gaussian blur (5x5)
-    function gaussianBlur(src, w, h){
-      const kernel = [
-        [1,4,7,4,1],
-        [4,16,26,16,4],
-        [7,26,41,26,7],
-        [4,16,26,16,4],
-        [1,4,7,4,1]
-      ];
-      const weight = 273;
-      const out = new Float32Array(w*h);
-      for (let y=2; y<h-2; y++){
-        for (let x=2; x<w-2; x++){
-          let sum=0;
-          for (let ky=-2; ky<=2; ky++){
-            for (let kx=-2; kx<=2; kx++){
-              sum += src[(y+ky)*w + (x+kx)] * kernel[ky+2][kx+2];
+// Sobel magnitude
+function sobelMag(src, w, h){
+  const out = new Float32Array(w*h);
+  for(let y=1;y<h-1;y++){
+    for(let x=1;x<w-1;x++){
+      const a = src[(y-1)*w + (x-1)], b = src[(y-1)*w + x], c = src[(y-1)*w + (x+1)];
+      const d = src[y*w + (x-1)], e = src[y*w + x], f = src[y*w + (x+1)];
+      const g = src[(y+1)*w + (x-1)], h2 = src[(y+1)*w + x], i = src[(y+1)*w + (x+1)];
+      const gx = (c + 2*f + i) - (a + 2*d + g);
+      const gy = (g + 2*h2 + i) - (a + 2*b + c);
+      out[y*w + x] = Math.sqrt(gx*gx + gy*gy);
+    }
+  }
+  return out;
+}
+
+/* ======== Colormaps ======== */
+function colormapJet(t){
+  // t in [0,1]
+  const fourT = 4*t;
+  const r = clamp(Math.min(fourT-1.5, -fourT+4.5), 0,1);
+  const g = clamp(Math.min(fourT-0.5, -fourT+3.5), 0,1);
+  const b = clamp(Math.min(fourT+0.5, -fourT+2.5), 0,1);
+  return {r:Math.round(r*255), g:Math.round(g*255), b:Math.round(b*255)};
+}
+function colormapHot(t){
+  // black->red->yellow->white
+  t = clamp(t,0,1);
+  let r = Math.min(1, 3*t);
+  let g = Math.min(1, 3*t-1);
+  if (g<0) g=0;
+  let b = Math.min(1, 3*t-2);
+  if (b<0) b=0;
+  return {r:Math.round(r*255), g:Math.round(g*255), b:Math.round(b*255)};
+}
+function colormapCool(t){
+  return {r:Math.round(255*(1-t)), g:Math.round(255*t), b:255};
+}
+function colormapGray(t){
+  const v = Math.round(255*t); return {r:v,g:v,b:v};
+}
+function clamp(v,a,b){ return v<a? a: (v>b? b: v); }
+
+/* ======== رسم Heatmap ======== */
+function drawHeatmapFromHeightMap(hmap, w, h, colormapName){
+  // draw at proc size, then scale up to original canvas size for display
+  const img = new ImageData(w,h);
+  for(let i=0;i<w*h;i++){
+    const t = clamp(hmap[i],0,1);
+    let col;
+    switch(colormapName){
+      case 'jet': col = colormapJet(t); break;
+      case 'hot': col = colormapHot(t); break;
+      case 'cool': col = colormapCool(t); break;
+      case 'gray': default: col = colormapGray(t); break;
+    }
+    img.data[i*4] = col.r; img.data[i*4+1] = col.g; img.data[i*4+2] = col.b; img.data[i*4+3]=255;
+  }
+  // draw to temp canvas then scale to display at original image size
+  const tmp = document.createElement('canvas');
+  tmp.width = w; tmp.height = h;
+  tmp.getContext('2d').putImageData(img,0,0);
+  canvasHeatmap.width = imgW; canvasHeatmap.height = imgH;
+  ctxHeat.clearRect(0,0,canvasHeatmap.width, canvasHeatmap.height);
+  ctxHeat.drawImage(tmp, 0,0, imgW, imgH);
+}
+
+/* ======== حوسبة خريطة الارتفاعات و الحواف ======== */
+function processImage(){
+  if(!rawImageData){ alert('ارفع صورة أولاً'); return false; }
+  // تحديد حجم المعالجة (تقليل المؤقت)
+  const scale = Math.min(1, MAX_PROC_DIM / Math.max(imgW, imgH));
+  procW = Math.max(2, Math.floor(imgW*scale));
+  procH = Math.max(2, Math.floor(imgH*scale));
+  // نسخ وإعادة التحجيم لمؤقت
+  const tmp = document.createElement('canvas'); tmp.width = procW; tmp.height = procH;
+  tmp.getContext('2d').drawImage(canvasOriginal, 0,0, imgW, imgH, 0,0, procW, procH);
+  const id = tmp.getContext('2d').getImageData(0,0, procW, procH);
+
+  // grayscale مع contrast
+  const contrast = parseFloat(contrastR.value) || 1;
+  gray = buildGray(id.data, procW, procH, contrast);
+
+  // blur
+  blurred = gaussianBlur(gray, procW, procH);
+
+  // sobel edges
+  edges = sobelMag(blurred, procW, procH);
+
+  // build normalized heightMap: blurred normalized + edges weighted
+  const eBoost = 1.5;
+  heightMap = new Float32Array(procW*procH);
+  let mn = Infinity, mx = -Infinity;
+  for(let i=0;i<procW*procH;i++){
+    const v = blurred[i] + edges[i]*eBoost;
+    heightMap[i] = v;
+    if(v < mn) mn = v;
+    if(v > mx) mx = v;
+  }
+  const denom = (mx - mn) || 1;
+  for(let i=0;i<procW*procH;i++) heightMap[i] = (heightMap[i]-mn)/denom;
+
+  // رسم heatmap و edges على كانفاسات العرض (scaled back to original image size)
+  drawHeatmapFromHeightMap(heightMap, procW, procH, colormapSel.value);
+
+  // edges binary map for tracing
+  const thr = parseFloat(edgeThresholdR.value) || 40;
+  // edges are in gradient magnitude on [0..~], need scaling - find max
+  let maxEdge = 0; for(let i=0;i<edges.length;i++) if(edges[i]>maxEdge) maxEdge = edges[i];
+  // build binary map
+  const bin = new Uint8Array(procW*procH);
+  for(let i=0;i<procW*procH;i++){
+    const val = edges[i] / (maxEdge || 1) * 255;
+    bin[i] = (val >= thr) ? 1 : 0;
+  }
+  // draw edge canvas for display (scale up)
+  const eImg = new ImageData(procW, procH);
+  for(let i=0;i<procW*procH;i++){
+    const v = bin[i]?255:0;
+    eImg.data[i*4] = v; eImg.data[i*4+1] = v; eImg.data[i*4+2] = v; eImg.data[i*4+3]=255;
+  }
+  const edTmp = document.createElement('canvas'); edTmp.width=procW; edTmp.height=procH;
+  edTmp.getContext('2d').putImageData(eImg,0,0);
+  canvasEdges.width = imgW; canvasEdges.height = imgH;
+  ctxEdges.clearRect(0,0,canvasEdges.width, canvasEdges.height);
+  ctxEdges.drawImage(edTmp, 0,0, imgW, imgH);
+
+  // save binary map for contour tracing
+  binMap = {w:procW, h:procH, data:bin};
+  alert('تمت المعالجة: Heatmap وEdges جاهزة. اضغط "معاينة 3D" أو "توليد G-code".');
+  return true;
+}
+
+/* ======== تتبُّع الحواف إلى مسارات متصلة (contour tracing - Moore) ======== */
+// binMap: {w,h,data Uint8Array} global
+let binMap = null;
+
+function traceContours(binMap){
+  const w = binMap.w, h = binMap.h, data = binMap.data;
+  const visited = new Uint8Array(w*h);
+  const contours = [];
+
+  const neighbors = [[1,0],[1,-1],[0,-1],[-1,-1],[-1,0],[-1,1],[0,1],[1,1]]; // cw
+  function inside(x,y){ return x>=0 && y>=0 && x<w && y<h; }
+
+  for(let y=0;y<h;y++){
+    for(let x=0;x<w;x++){
+      const idx = y*w + x;
+      if(data[idx] && !visited[idx]){
+        // start Moore-Neighbor tracing
+        let contour = [];
+        let sx = x, sy = y;
+        let cx = sx, cy = sy;
+        let prevDir = 6; // start search from direction 6 (arbitrary)
+        let loopCount = 0;
+        do {
+          contour.push([cx, cy]);
+          visited[cy*w + cx] = 1;
+          // find next boundary pixel by scanning neighbors starting from prevDir-2
+          let found = false;
+          let start = (prevDir + 6) % 8; // start two steps ccw to follow boundary
+          for(let k=0;k<8;k++){
+            const nd = (start + k) % 8;
+            const nx = cx + neighbors[nd][0];
+            const ny = cy + neighbors[nd][1];
+            if(inside(nx,ny) && data[ny*w + nx]){
+              // move to next
+              prevDir = nd;
+              cx = nx; cy = ny;
+              found = true; break;
             }
           }
-          out[y*w + x] = sum/weight;
-        }
+          if(!found) break; // isolated pixel
+          loopCount++;
+          if(loopCount > 20000) break; // safety
+        } while(!(cx===sx && cy===sy));
+        // store only if contour length sufficient
+        if(contour.length >= 4) contours.push(contour);
       }
-      // edges fill border by copying
-      for (let x=0;x<w;x++){ out[x]=src[x]; out[(h-1)*w + x]=src[(h-1)*w + x]; }
-      for (let y=0;y<h;y++){ out[y*w]=src[y*w]; out[y*w + (w-1)] = src[y*w + (w-1)]; }
-      return out;
     }
+  }
+  return contours;
+}
 
-    // Sobel edge detector
-    function sobel(src, w, h){
-      const out = new Float32Array(w*h);
-      for (let y=1; y<h-1; y++){
-        for (let x=1; x<w-1; x++){
-          const a = src[(y-1)*w + (x-1)];
-          const b = src[(y-1)*w + x];
-          const c = src[(y-1)*w + (x+1)];
-          const d = src[y*w + (x-1)];
-          const e = src[y*w + x];
-          const f = src[y*w + (x+1)];
-          const g = src[(y+1)*w + (x-1)];
-          const h2 = src[(y+1)*w + x];
-          const i = src[(y+1)*w + (x+1)];
-
-          const gx = (c + 2*f + i) - (a + 2*d + g);
-          const gy = (g + 2*h2 + i) - (a + 2*b + c);
-          out[y*w + x] = Math.sqrt(gx*gx + gy*gy);
-        }
-      }
-      return out;
+// simplify polyline (Ramer-Douglas-Peucker)
+function simplify(points, eps){
+  if(points.length < 3) return points.slice();
+  const sqr = (a)=>a*a;
+  function distPointLineSq(p, a, b){
+    const dx = b[0]-a[0], dy = b[1]-a[1];
+    const len2 = dx*dx + dy*dy;
+    if(len2 === 0) return sqr(p[0]-a[0]) + sqr(p[1]-a[1]);
+    let t = ((p[0]-a[0])*dx + (p[1]-a[1])*dy) / len2;
+    t = Math.max(0, Math.min(1, t));
+    const projx = a[0] + t*dx, projy = a[1] + t*dy;
+    return sqr(p[0]-projx) + sqr(p[1]-projy);
+  }
+  function rdp(pts, epsSq){
+    const dmax = {idx:-1,dist:0};
+    const A = pts[0], B = pts[pts.length-1];
+    for(let i=1;i<pts.length-1;i++){
+      const d = distPointLineSq(pts[i], A, B);
+      if(d > dmax.dist){ dmax.idx = i; dmax.dist = d; }
     }
-
-    // Heatmap renderer (uses simple color ramp)
-    function drawHeatmap(){
-      canvasHeightmap.width = procWidth;
-      canvasHeightmap.height = procHeight;
-      const img = ctxHeightmap.createImageData(procWidth, procHeight);
-      for (let i=0; i<heightMap.length; i++){
-        const v = heightMap[i];
-        const col = heatColor(v);
-        img.data[i*4] = col.r;
-        img.data[i*4+1] = col.g;
-        img.data[i*4+2] = col.b;
-        img.data[i*4+3] = 255;
-      }
-      // scale up to display original image size while keeping aspect
-      const display = document.createElement('canvas');
-      display.width = imgWidth; display.height = imgHeight;
-      const dctx = display.getContext('2d');
-      dctx.putImageData(img, 0, 0);
-      // draw scaled to full size so user sees it
-      ctxHeightmap.clearRect(0,0,canvasHeightmap.width, canvasHeightmap.height);
-      canvasHeightmap.width = imgWidth; canvasHeightmap.height = imgHeight;
-      ctxHeightmap.drawImage(display, 0, 0, imgWidth, imgHeight);
+    if(dmax.dist > epsSq){
+      const rec1 = rdp(pts.slice(0, dmax.idx+1), epsSq);
+      const rec2 = rdp(pts.slice(dmax.idx), epsSq);
+      return rec1.slice(0, -1).concat(rec2);
+    } else {
+      return [A, B];
     }
+  }
+  return rdp(points, eps*eps);
+}
 
-    function heatColor(t){
-      // jet-like ramp: blue->cyan->yellow->red
-      const r = Math.floor(255 * Math.max(0, Math.min(1, 1.5*(t-0.66))));
-      const g = Math.floor(255 * Math.max(0, Math.min(1, 1.5*(1 - Math.abs(t-0.5)))));
-      const b = Math.floor(255 * Math.max(0, Math.min(1, 1.5*(0.66 - t))));
-      return {r,g,b};
+/* ======== G-code generation from contours ======== */
+function generateGcodeFromContours(contours){
+  if(!contours || contours.length===0){ alert('لا توجد حواف لاستخراجها'); return; }
+
+  const mmPerPixel = parseFloat(mmPerPixelInput.value) || 0.5;
+  const maxDepth = parseFloat(maxDepthR.value) || 5;
+  const flipY = flipYChk.checked;
+  const invertZ = invertZChk.checked;
+  const feedCut = 300; // سرعة القطع G1
+  const feedMove = 1500; // سرعة الحركة G0
+
+  const lines = [];
+  lines.push('G21 ; mm');
+  lines.push('G90 ; absolute positioning');
+  lines.push('G0 Z5.000 F' + feedMove);
+
+  // For each contour, transform points to mm and emit a continuous path
+  for(const c of contours){
+    // simplify contour to reduce points
+    const sim = simplify(c, 1.2); // eps ~1.2 pixels, adjust if needed
+    if(sim.length < 2) continue;
+    // map first point
+    const p0 = sim[0];
+    const x0 = p0[0] * mmPerPixel;
+    const y0 = (flipY ? p0[1] : (procH - 1 - p0[1])) * mmPerPixel;
+    lines.push(`; contour start (${sim.length} pts)`);
+    lines.push(`G0 X${x0.toFixed(3)} Y${y0.toFixed(3)} Z5.000 F${feedMove}`);
+    // plunge to cutting depth
+    lines.push(`G1 Z${(invertZ? '-' : '-')}${(maxDepth).toFixed(3)} F${feedCut}`);
+    // follow points
+    for(let i=1;i<sim.length;i++){
+      const pi = sim[i];
+      const xi = pi[0]*mmPerPixel;
+      const yi = (flipY ? pi[1] : (procH - 1 - pi[1]))*mmPerPixel;
+      lines.push(`G1 X${xi.toFixed(3)} Y${yi.toFixed(3)} F${feedCut}`);
     }
+    // retraction
+    lines.push(`G0 Z5.000 F${feedMove}`);
+  }
 
-    function drawEdges(){
-      canvasEdges.width = procWidth; canvasEdges.height = procHeight;
-      const img = ctxEdges.createImageData(procWidth, procHeight);
-      const thr = parseInt(edgeThreshold.value,10);
-      for (let i=0;i<edges.length;i++){
-        const v = edges[i];
-        const bw = v>thr ? 255 : 0;
-        img.data[i*4] = bw; img.data[i*4+1] = bw; img.data[i*4+2] = bw; img.data[i*4+3] = 255;
-      }
-      // scale up for display
-      const display = document.createElement('canvas'); display.width = procWidth; display.height = procHeight;
-      display.getContext('2d').putImageData(img,0,0);
-      canvasEdges.width = imgWidth; canvasEdges.height = imgHeight;
-      ctxEdges.clearRect(0,0,canvasEdges.width, canvasEdges.height);
-      ctxEdges.drawImage(display, 0,0, imgWidth, imgHeight);
+  lines.push('M30');
+
+  const blob = new Blob([lines.join('\n')], {type:'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'cnc_edges.gcode'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ======== 3D Preview (three.js) ======== */
+let three = {renderer:null, scene:null, camera:null, controls:null, mesh:null, edgesLine:null};
+function preview3D(){
+  if(!heightMap) { alert('اضغط "معالجة" أولاً'); return; }
+  const container = document.getElementById('threeContainer');
+  const cw = container.clientWidth || 800, ch = container.clientHeight || 480;
+  if(!three.renderer){
+    three.renderer = new THREE.WebGLRenderer({antialias:true});
+    three.renderer.setSize(cw,ch);
+    container.innerHTML=''; container.appendChild(three.renderer.domElement);
+    three.scene = new THREE.Scene();
+    three.camera = new THREE.PerspectiveCamera(45, cw/ch, 0.1, 10000);
+    three.controls = new THREE.OrbitControls(three.camera, three.renderer.domElement);
+    three.controls.enableDamping = true;
+    const light = new THREE.DirectionalLight(0xffffff,1);
+    light.position.set(0,0,1000);
+    three.scene.add(light);
+    three.scene.add(new THREE.AmbientLight(0x888888));
+  } else {
+    three.renderer.setSize(cw,ch);
+  }
+
+  // create geometry
+  const subdivisionsX = Math.min(procW, 200); // limit to 200 subdivisions for perf
+  const subdivisionsY = Math.round(subdivisionsX * procH / procW);
+  const geo = new THREE.PlaneGeometry(procW, procH, subdivisionsX-1, subdivisionsY-1);
+  // fill z from heightMap
+  const pos = geo.attributes.position;
+  const maxDepth = parseFloat(maxDepthR.value) || 5;
+  const invertZ = invertZChk.checked ? -1 : 1;
+  for(let row=0; row<subdivisionsY; row++){
+    for(let col=0; col<subdivisionsX; col++){
+      const vi = row*subdivisionsX + col;
+      const sx = Math.floor(col/(subdivisionsX-1) * (procW-1));
+      const sy = Math.floor(row/(subdivisionsY-1) * (procH-1));
+      const hv = heightMap[sy*procW + sx] || 0;
+      const z = hv * maxDepth * invertZ;
+      pos.setZ(vi, z);
     }
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
 
-    // ---------- 3D Preview ----------
-    let threeScene, threeCamera, threeRenderer, threeControls, threeMesh, threeLight;
-    function preview3D(){
-      if (!heightMap) { alert('✅ اضغط على "معالجة" أولاً لإنشاء خريطة الارتفاعات'); return; }
+  // texture from heatmap canvas scaled to proc size
+  const texCanvas = document.createElement('canvas'); texCanvas.width = procW; texCanvas.height = procH;
+  const tctx = texCanvas.getContext('2d');
+  tctx.drawImage(canvasHeatmap, 0,0, procW, procH);
+  const texture = new THREE.CanvasTexture(texCanvas);
+  texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.flipY = true;
 
-      // تهيئة المشهد sekali
-      if (!threeRenderer){
-        threeScene = new THREE.Scene();
-        threeRenderer = new THREE.WebGLRenderer({antialias:true});
-        threeRenderer.setPixelRatio(window.devicePixelRatio || 1);
-        threeRenderer.setSize(document.getElementById('threeContainer').clientWidth, document.getElementById('threeContainer').clientHeight);
-        document.getElementById('threeContainer').innerHTML='';
-        document.getElementById('threeContainer').appendChild(threeRenderer.domElement);
-        threeCamera = new THREE.PerspectiveCamera(45, document.getElementById('threeContainer').clientWidth / document.getElementById('threeContainer').clientHeight, 0.1, 10000);
-        threeControls = new THREE.OrbitControls(threeCamera, threeRenderer.domElement);
-        threeControls.enableDamping = true;
+  const mat = new THREE.MeshStandardMaterial({map:texture, side:THREE.DoubleSide});
+  if(three.mesh){ three.scene.remove(three.mesh); three.mesh.geometry.dispose(); three.mesh.material.dispose(); }
+  three.mesh = new THREE.Mesh(geo, mat);
+  three.mesh.rotation.x = -Math.PI/2; // lay flat, z up
+  three.scene.add(three.mesh);
 
-        threeLight = new THREE.DirectionalLight(0xffffff, 1);
-        threeLight.position.set(100,100,200);
-        threeScene.add(threeLight);
-        threeScene.add(new THREE.AmbientLight(0x888888));
-      }
-
-      // حدد دقة الشبكة لمشاهد 3D
-      const res = parseInt(meshResSlider.value,10);
-      const cols = res; const rows = Math.round(res * (procHeight/procWidth));
-
-      // plane size نعطيه نسبة العرض الحقيقي للحفاظ على النسبة
-      const planeW = procWidth; const planeH = procHeight;
-
-      // إنشاء هندسة بمستوى (centered)
-      const geometry = new THREE.PlaneGeometry(planeW, planeH, cols-1, rows-1);
-
-      // توليد texture من heatmap لإسقاط الألوان على الميش
-      const texCanvas = document.createElement('canvas');
-      texCanvas.width = procWidth; texCanvas.height = procHeight;
-      texCanvas.getContext('2d').putImageData(ctxHeightmap.getImageData ? ctxHeightmap.getImageData(0,0, canvasHeightmap.width, canvasHeightmap.height) : ctxHeightmap.getImageData(0,0,procWidth,procHeight), 0,0);
-      // Safety: if previous fails, fallback to heightmap raw drawing
-      try{
-        // create from scaled heatmap on canvasHeightmap
-        const tmp = document.createElement('canvas'); tmp.width = procWidth; tmp.height = procHeight;
-        tmp.getContext('2d').drawImage(canvasHeightmap, 0,0, procWidth, procHeight);
-        const texture = new THREE.CanvasTexture(tmp);
-        texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
-        texture.flipY = true;
-        var material = new THREE.MeshStandardMaterial({ map: texture, side: THREE.DoubleSide, displacementScale: 0 });
-      }catch(e){
-        var material = new THREE.MeshStandardMaterial({ color:0xdddddd, side: THREE.DoubleSide});
-      }
-
-      // تعبئة z-values
-      const pos = geometry.attributes.position;
-      const maxDepth = parseFloat(maxDepthSlider.value);
-      const invertZ = invertZChk.checked ? -1 : 1;
-      for (let r=0; r<rows; r++){
-        for (let c=0; c<cols; c++){
-          const vi = r*cols + c;
-          // sample from heightMap (procWidth x procHeight)
-          const sx = Math.floor(c/(cols-1) * (procWidth-1));
-          const sy = Math.floor(r/(rows-1) * (procHeight-1));
-          const hv = heightMap[sy*procWidth + sx] || 0;
-          const z = hv * maxDepth * invertZ;
-          pos.setZ(vi, z);
-        }
-      }
-      pos.needsUpdate = true;
-      geometry.computeVertexNormals();
-
-      if (threeMesh) { threeScene.remove(threeMesh); threeMesh.geometry.dispose(); }
-      threeMesh = new THREE.Mesh(geometry, material);
-      // مضبوطة لكي يكون مركز النموذج في (0,0,0)
-      threeMesh.rotation.x = 0; // plane in XY with Z up
-      threeScene.add(threeMesh);
-
-      // وضع الكاميرا
-      threeCamera.position.set(0, 0, Math.max(planeW, planeH) * 1.2);
-      threeCamera.up.set(0,1,0);
-      threeCamera.lookAt(0,0,0);
-
-      // loop
-      function animate(){
-        requestAnimationFrame(animate);
-        threeControls.update();
-        threeRenderer.render(threeScene, threeCamera);
-      }
-      animate();
+  // draw edges as Line segments above surface
+  if(three.edgesLine) { three.scene.remove(three.edgesLine); }
+  // get contours and project to 3D lines
+  const contours = traceContours(binMap);
+  const lineMat = new THREE.LineBasicMaterial({color:0xffffff, linewidth:1});
+  const lineGroup = new THREE.Group();
+  for(const c of contours){
+    const points = [];
+    const scaleX = procW / procW, scaleY = procH / procH; // identity
+    for(const pt of c){
+      const x = (pt[0] - procW/2);
+      const y = (pt[1] - procH/2);
+      const hv = heightMap[pt[1]*procW + pt[0]] || 0;
+      const z = hv * parseFloat(maxDepthR.value) * 1.05; // slightly above
+      points.push(new THREE.Vector3(x, z, -y)); // adjust axes to match rotated mesh
     }
-
-    // ---------- G-code generation ----------
-    function generateGcode(){
-      if (!heightMap) { alert('اضغط "معالجة" أولاً'); return; }
-
-      const mmPerPixel = parseFloat(mmPerPixelInput.value) || 0.5;
-      const maxDepth = parseFloat(maxDepthSlider.value) || 5;
-      const step = Math.max(1, Math.round(procWidth / 300)); // تخفيف النقاط إن كانت كبيرة جداً
-      const thr = parseInt(edgeThreshold.value,10);
-      const flipY = flipYChk.checked;
-
-      const lines = [];
-      lines.push('G21 ; mm');
-      lines.push('G90 ; absolute');
-      lines.push('G0 Z5.00 ; safe');
-
-      // Generate simple raster following edges: for each pixel where edge > thr, probe height
-      for (let y=0; y<procHeight; y+=step){
-        // snake pattern to reduce moves
-        const dir = (Math.floor(y/step)%2===0);
-        const xs = dir ? [0, procWidth-1, 1] : [procWidth-1, 0, -1];
-        let x = xs[0];
-        while ((dir && x<=xs[1]) || (!dir && x>=xs[1])){
-          const edgeVal = edges[y*procWidth + x] || 0;
-          if (edgeVal > thr){
-            const hv = heightMap[y*procWidth + x] || 0; // 0..1
-            const z = -hv * maxDepth;
-            // map x,y to mm. origin at bottom-left unless flipY
-            const xm = x * mmPerPixel;
-            const ym = (flipY ? y : (procHeight-1 - y)) * mmPerPixel;
-            lines.push(`G0 X${xm.toFixed(3)} Y${ym.toFixed(3)} Z5.000`);
-            lines.push(`G1 Z${z.toFixed(3)} F300`);
-            lines.push('G0 Z5.000');
-          }
-          x += xs[2];
-        }
-      }
-
-      lines.push('M30 ; end');
-
-      const blob = new Blob([lines.join('\n')], {type:'text/plain'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'cnc_output.gcode'; a.click();
-      URL.revokeObjectURL(url);
+    if(points.length>1){
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const line = new THREE.Line(geometry, lineMat);
+      lineGroup.add(line);
     }
+  }
+  three.scene.add(lineGroup);
+  three.edgesLine = lineGroup;
 
-    // ---------- عناصر التحكم ----------
-    btnProcess.addEventListener('click', () => { const ok = prepareProcessing(); if (ok) alert('تم إنشاء Heatmap والحواف — اضغط معاينة 3D لعرض النموذج'); });
-    btnPreview3D.addEventListener('click', preview3D);
-    btnGcode.addEventListener('click', generateGcode);
+  // camera
+  three.camera.position.set(0, Math.max(procW,procH), Math.max(procW,procH));
+  three.camera.lookAt(0,0,0);
 
-    // Helpers: read pixel data from canvasHeightmap when creating texture
-    // (no-op here; texture created from drawImage)
+  // animate
+  (function animate(){
+    requestAnimationFrame(animate);
+    three.controls.update();
+    three.renderer.render(three.scene, three.camera);
+  })();
+}
 
-  </script></body>
+/* ======== أحداث الأزرار ======== */
+btnProcess.addEventListener('click', ()=>{ processImage(); });
+btnPreview3D.addEventListener('click', ()=>{ preview3D(); });
+btnGcode.addEventListener('click', ()=>{
+  if(!binMap){ alert('اضغط معالجة أولاً'); return; }
+  const contours = traceContours(binMap);
+  if(!contours || contours.length===0){ alert('لم تُكتشف حواف قابلة للتقطيع'); return; }
+  generateGcodeFromContours(contours);
+});
+
+/* ======== اختصار/نصائح ======== */
+// User experience: تغيير بعض القيم الافتراضية ممكن يساعد على نتائج أفضل حسب الصورة
+// - عتبة الحواف: زدها إن كانت الحواف مبعثرة، خفّضها إن فقدت بعض التفاصيل.
+// - التباين: زِد لتفتيح الاختلافات الضعيفة.
+// - مم/بكسل: قلل لقيم أصغر لتحكم أدق (لكن سيزداد طول G-code).
+</script>
+</body>
 </html>
