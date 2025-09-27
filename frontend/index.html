@@ -90,7 +90,7 @@
     .preview-title { font-size:1.2rem; margin-bottom:1rem; display:flex; align-items:center; gap:8px; color:var(--primary-color); }
     .preview-content { width:100%; display:flex; justify-content:center; margin-bottom:1rem; }
     canvas { max-width:100%; border-radius:8px; border:1px solid var(--border-color); box-shadow:0 2px 6px rgba(0,0,0,0.1); }
-    #preview3d, #gcodeSimulation { width:100%; height:400px; border-radius:8px; overflow:hidden; border:1px solid var(--border-color); box-shadow:0 2px 6px rgba(0,0,0,0.1); position:relative; }
+    #preview3d, #gcodeSimulation { width:100%; height:300px; border-radius:8px; overflow:hidden; border:1px solid var(--border-color); box-shadow:0 2px 6px rgba(0,0,0,0.1); position:relative; }
 
     .options { display:flex; flex-wrap:wrap; gap:1rem; justify-content:center; width:100%; margin-top:1rem; }
     .option-group { display:flex; flex-direction:column; align-items:center; gap:5px; }
@@ -112,15 +112,10 @@
     .notification.show { transform:translateX(0); opacity:1; }
     .notification.error { background:var(--error-color); }
 
-    .simulation-controls { display:flex; gap:8px; justify-content:center; margin-top:8px; flex-wrap:wrap; }
-    .simulation-info { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:15px; }
-    .info-item { background:var(--bg-color); padding:10px; border-radius:5px; text-align:center; }
-
     @media (max-width:768px) {
       h1 { font-size:1.4rem; }
       .header-content { flex-direction:column; gap:15px; }
       .preview-block { padding:1rem; }
-      .simulation-info { grid-template-columns:1fr; }
     }
   </style>
 </head>
@@ -138,7 +133,7 @@
     <div class="tabs">
       <div class="tab active" data-tab="preview">معاينة الصورة</div>
       <div class="tab" data-tab="gcode">G-code إعدادات</div>
-      <div class="tab" data-tab="simulation">محاكاة ثلاثية الأبعاد</div>
+      <div class="tab" data-tab="simulation">محاكاة G-code</div>
     </div>
 
     <!-- ========== TAB: PREVIEW ========== -->
@@ -301,7 +296,7 @@
         <div style="display:flex; gap:8px; justify-content:center; margin-top:12px;">
           <button class="btn btn-primary" onclick="generateGcode()">⚡ توليد G-code</button>
           <button class="btn btn-secondary" onclick="downloadGcode()">💾 حفظ G-code</button>
-          <button class="btn btn-secondary" onclick="generate3DModel()">🎯 توليد نموذج 3D</button>
+          <button class="btn btn-secondary" onclick="simulateGcode()">🔄 محاكاة G-code</button>
         </div>
 
         <div class="gcode-output" id="gcodeOutput">// سيظهر كود G-code هنا</div>
@@ -311,51 +306,33 @@
     <!-- ========== TAB: SIMULATION ========== -->
     <div class="tab-content" id="simulation-tab">
       <div class="preview-block">
-        <h3 class="preview-title">🎮 النموذج ثلاثي الأبعاد النهائي</h3>
+        <h3 class="preview-title">🎮 محاكاة مسار الأداة</h3>
         <div class="preview-content">
           <div id="gcodeSimulation">
             <div class="loading" id="loadingSimulation">
               <div class="loading-spinner"></div>
-              <p>جاري توليد النموذج ثلاثي الأبعاد...</p>
+              <p>جاري تحميل المحاكاة...</p>
             </div>
           </div>
         </div>
-        <div class="simulation-controls">
-          <button class="btn btn-secondary" onclick="rotateModelX()">↻ X</button>
-          <button class="btn btn-secondary" onclick="rotateModelY()">↻ Y</button>
-          <button class="btn btn-secondary" onclick="rotateModelZ()">↻ Z</button>
-          <button class="btn btn-secondary" onclick="resetModelView()">🔄 إعادة تعيين</button>
-          <button class="btn btn-secondary" onclick="toggleWireframe()">📐 إطار سلكي</button>
-          <button class="btn btn-primary" onclick="exportSTL()">💾 تصدير STL</button>
-        </div>
-        
-        <div class="simulation-info">
-          <div class="info-item">
-            <p>📏 الأبعاد</p>
-            <p id="modelDimensions">0 × 0 × 0 مم</p>
-          </div>
-          <div class="info-item">
-            <p>⚖️ الحجم</p>
-            <p id="modelVolume">0 مم³</p>
-          </div>
-          <div class="info-item">
-            <p>🔧 التعقيد</p>
-            <p id="modelComplexity">0 مثلث</p>
-          </div>
-          <div class="info-item">
-            <p>⏱️ الوقت المتوقع</p>
-            <p id="modelTime">0 دقيقة</p>
+        <div style="display:flex; gap:8px; justify-content:center; margin-top:8px;">
+          <button class="btn btn-secondary" onclick="startSimulation()">▶️ تشغيل</button>
+          <button class="btn btn-secondary" onclick="pauseSimulation()">⏸️ إيقاف</button>
+          <button class="btn btn-secondary" onclick="resetSimulation()">⏹️ إعادة</button>
+          <div style="display:flex; flex-direction:column; align-items:center;">
+            <label>سرعة المحاكاة</label>
+            <input type="range" id="simulationSpeed" min="1" max="20" value="5">
           </div>
         </div>
       </div>
 
       <div class="preview-block">
-        <h3 class="preview-title">📊 معلومات النموذج</h3>
-        <div id="modelInfo">
-          <p>📋 النوع: <span id="modelType">لم يتم التوليد بعد</span></p>
-          <p>🎯 الدقة: <span id="modelResolution">-</span></p>
-          <p>🔍 الجودة: <span id="modelQuality">-</span></p>
-          <p>⚡ الحالة: <span id="modelStatus">في انتظار التوليد</span></p>
+        <h3 class="preview-title">📊 معلومات المحاكاة</h3>
+        <div id="simulationInfo">
+          <p>⏱️ الوقت المتوقع: <span id="simulationTime">0</span> دقيقة</p>
+          <p>📏 المسافة الإجمالية: <span id="simulationDistance">0</span> مم</p>
+          <p>🔧 عدد الأوامر: <span id="simulationCommands">0</span></p>
+          <p>⚡ الحالة: <span id="simulationStatus">في انتظار التوليد</span></p>
         </div>
       </div>
     </div>
@@ -369,8 +346,6 @@
 
   <!-- three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-  <!-- STL exporter -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/exporters/STLExporter.js"></script>
 
   <script>
     // ---------- عناصر DOM ----------
@@ -396,7 +371,7 @@
     const gcodeSimulation = document.getElementById('gcodeSimulation');
     const loadingSimulation = document.getElementById('loadingSimulation');
 
-    // ---------- Three.js setup ----------
+    // ---------- Three.js setup (preview) ----------
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f0f0);
     const camera = new THREE.PerspectiveCamera(45, preview3d.offsetWidth / preview3d.offsetHeight, 0.1, 1000);
@@ -404,271 +379,657 @@
     renderer.setSize(preview3d.offsetWidth, preview3d.offsetHeight);
     preview3d.appendChild(renderer.domElement);
 
-    // نموذج 3D للمحاكاة
+    // simulation renderer
     const simulationScene = new THREE.Scene();
-    simulationScene.background = new THREE.Color(0x2c3e50);
+    simulationScene.background = new THREE.Color(0xf0f0f0);
     const simulationCamera = new THREE.PerspectiveCamera(45, gcodeSimulation.offsetWidth / gcodeSimulation.offsetHeight, 0.1, 1000);
     const simulationRenderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
     simulationRenderer.setSize(gcodeSimulation.offsetWidth, gcodeSimulation.offsetHeight);
-    simulationRenderer.shadowMap.enabled = true;
-    simulationRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
     gcodeSimulation.appendChild(simulationRenderer.domElement);
 
     function setupLights(targetScene) {
-      const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+      const ambientLight = new THREE.AmbientLight(0x404040, 1);
       targetScene.add(ambientLight);
-      
-      const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-      dirLight.position.set(50, 50, 50);
-      dirLight.castShadow = true;
-      dirLight.shadow.mapSize.width = 2048;
-      dirLight.shadow.mapSize.height = 2048;
-      targetScene.add(dirLight);
-      
-      const pointLight = new THREE.PointLight(0xffffff, 0.4);
-      pointLight.position.set(-50, -50, 50);
-      targetScene.add(pointLight);
+      const dir1 = new THREE.DirectionalLight(0xffffff, 0.8);
+      dir1.position.set(1,1,1);
+      targetScene.add(dir1);
+      const dir2 = new THREE.DirectionalLight(0xffffff, 0.4);
+      dir2.position.set(-1,-1,-1);
+      targetScene.add(dir2);
     }
-
     setupLights(scene);
     setupLights(simulationScene);
 
     camera.position.z = 200;
-    simulationCamera.position.set(100, 100, 100);
-    simulationCamera.lookAt(0, 0, 0);
+    simulationCamera.position.z = 200;
 
     // ---------- حالات عامة ----------
     let mesh = null;
-    let finalModel = null;
     let rotationSpeed = parseFloat(rotationSpeedInput.value) || 0.01;
     let currentColormap = 'jet';
     let heightFactor = parseFloat(heightIntensity.value) || 80;
-    let heightMapData = null;
+    let heightMapData = null; // { data: Uint8Array, width, height }
     let originalImageData = null;
     let edgeData = null;
     let isEdgeOverlayVisible = false;
-    let isWireframeVisible = false;
+    let simulation = null;
+    let isSimulationPlaying = false;
+    let generatedGcode = '';
 
-    // ---------- وظائف النموذج ثلاثي الأبعاد ----------
-    function generate3DModel() {
-      if (!heightMapData) { 
-        showNotification('يجب تحميل صورة أولاً', true); 
-        return; 
-      }
-
-      loadingSimulation.style.display = 'flex';
-      document.getElementById('modelStatus').textContent = 'جاري التوليد...';
-
-      setTimeout(() => {
-        // مسح المشهد الحالي
-        while (simulationScene.children.length > 0) {
-          simulationScene.remove(simulationScene.children[0]);
-        }
-        setupLights(simulationScene);
-
-        // إنشاء قاعدة النموذج
-        createBasePlate();
-
-        // توليد النموذج ثلاثي الأبعاد من بيانات Heightmap
-        const model = create3DModelFromHeightmap();
-        simulationScene.add(model);
-        finalModel = model;
-
-        // إضافة محور الإحداثيات
-        addCoordinateAxes();
-
-        // تحديث معلومات النموذج
-        updateModelInfo(model);
-
-        // ضبط الكاميرا
-        fitCameraToObject(simulationCamera, model, 1.5);
-
-        loadingSimulation.style.display = 'none';
-        document.getElementById('modelStatus').textContent = 'تم التوليد بنجاح';
-        showNotification('تم توليد النموذج ثلاثي الأبعاد بنجاح');
-
-        // الانتقال إلى تبويب المحاكاة
+    // ---------- تبويبات ----------
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const tabId = tab.getAttribute('data-tab');
         tabs.forEach(t => t.classList.remove('active'));
         tabContents.forEach(tc => tc.classList.remove('active'));
-        document.querySelector('[data-tab="simulation"]').classList.add('active');
-        document.getElementById('simulation-tab').classList.add('active');
-      }, 1000);
-    }
-
-    function create3DModelFromHeightmap() {
-      const width = heightMapData.width;
-      const height = heightMapData.height;
-      const scale = 0.5; // تحجيم النموذج
-
-      // إنشاء هندسة النموذج
-      const geometry = new THREE.BufferGeometry();
-      const vertices = [];
-      const indices = [];
-      const colors = [];
-
-      // إنشاء القمم (vertices)
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-          const idx = (y * width + x) * 4;
-          const brightness = (heightMapData.data[idx] + heightMapData.data[idx+1] + heightMapData.data[idx+2]) / 3;
-          const z = (brightness / 255) * heightFactor * scale;
-          
-          vertices.push(
-            (x - width/2) * scale,
-            (y - height/2) * scale,
-            z
-          );
-
-          // ألوان بناء على الارتفاع
-          const color = getHeatColor(brightness / 255, currentColormap);
-          colors.push(color.r / 255, color.g / 255, color.b / 255);
-        }
-      }
-
-      // إنشاء الوجوه (faces)
-      for (let y = 0; y < height - 1; y++) {
-        for (let x = 0; x < width - 1; x++) {
-          const a = y * width + x;
-          const b = y * width + (x + 1);
-          const c = (y + 1) * width + x;
-          const d = (y + 1) * width + (x + 1);
-
-          indices.push(a, b, d);
-          indices.push(a, d, c);
-        }
-      }
-
-      geometry.setIndex(indices);
-      geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-      geometry.computeVertexNormals();
-
-      const material = new THREE.MeshLambertMaterial({ 
-        vertexColors: true,
-        side: THREE.DoubleSide
+        tab.classList.add('active');
+        document.getElementById(`${tabId}-tab`).classList.add('active');
       });
+    });
 
-      return new THREE.Mesh(geometry, material);
-    }
+    // ---------- تحسينات الصورة ----------
+    function applyEnhancement(type) {
+      if (!originalImageData) { showNotification('يجب تحميل صورة أولاً', true); return; }
 
-    function createBasePlate() {
-      const baseGeometry = new THREE.BoxGeometry(
-        heightMapData.width * 0.5 + 10,
-        heightMapData.height * 0.5 + 10,
-        2
-      );
-      const baseMaterial = new THREE.MeshLambertMaterial({ 
-        color: 0x34495e,
-        transparent: true,
-        opacity: 0.8
-      });
-      const base = new THREE.Mesh(baseGeometry, baseMaterial);
-      base.position.z = -1;
-      base.receiveShadow = true;
-      simulationScene.add(base);
-    }
-
-    function addCoordinateAxes() {
-      const axesHelper = new THREE.AxesHelper(50);
-      simulationScene.add(axesHelper);
-    }
-
-    function updateModelInfo(model) {
-      const bbox = new THREE.Box3().setFromObject(model);
-      const size = new THREE.Vector3();
-      bbox.getSize(size);
-      
-      const volume = size.x * size.y * size.z;
-      const triangleCount = model.geometry.index ? model.geometry.index.count / 3 : 0;
-      
-      document.getElementById('modelDimensions').textContent = 
-        `${size.x.toFixed(1)} × ${size.y.toFixed(1)} × ${size.z.toFixed(1)} مم`;
-      document.getElementById('modelVolume').textContent = `${volume.toFixed(0)} مم³`;
-      document.getElementById('modelComplexity').textContent = `${triangleCount} مثلث`;
-      document.getElementById('modelTime').textContent = `${(triangleCount / 1000).toFixed(1)} دقيقة`;
-      
-      document.getElementById('modelType').textContent = 'نموذج ارتفاعي';
-      document.getElementById('modelResolution').textContent = `${heightMapData.width} × ${heightMapData.height}`;
-      document.getElementById('modelQuality').textContent = 'عالية';
-    }
-
-    function fitCameraToObject(camera, object, offset = 1.5) {
-      const bbox = new THREE.Box3().setFromObject(object);
-      const center = new THREE.Vector3();
-      bbox.getCenter(center);
-      const size = new THREE.Vector3();
-      bbox.getSize(size);
-      
-      const maxDim = Math.max(size.x, size.y, size.z);
-      const fov = camera.fov * (Math.PI / 180);
-      let cameraZ = Math.abs(maxDim / (2 * Math.tan(fov / 2))) * offset;
-      
-      cameraZ *= 1.5; // مسافة إضافية
-      
-      camera.position.set(center.x, center.y, cameraZ);
-      camera.lookAt(center);
-    }
-
-    function rotateModelX() {
-      if (finalModel) {
-        finalModel.rotation.x += Math.PI / 8;
-      }
-    }
-
-    function rotateModelY() {
-      if (finalModel) {
-        finalModel.rotation.y += Math.PI / 8;
-      }
-    }
-
-    function rotateModelZ() {
-      if (finalModel) {
-        finalModel.rotation.z += Math.PI / 8;
-      }
-    }
-
-    function resetModelView() {
-      if (finalModel) {
-        finalModel.rotation.set(0, 0, 0);
-        fitCameraToObject(simulationCamera, finalModel, 1.5);
-      }
-    }
-
-    function toggleWireframe() {
-      if (finalModel) {
-        isWireframeVisible = !isWireframeVisible;
-        finalModel.material.wireframe = isWireframeVisible;
-      }
-    }
-
-    function exportSTL() {
-      if (!finalModel) {
-        showNotification('لا يوجد نموذج لتصديره', true);
+      // حالة إعادة التعيين: أعد الصورة الأصلية واطلب إنشاء heightmap منها
+      if (type === 'reset') {
+        ctx2d.putImageData(originalImageData, 0, 0);
+        createHeightMapFromCanvas(canvas2d);
         return;
       }
 
-      const exporter = new THREE.STLExporter();
-      const stlString = exporter.parse(finalModel);
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas2d.width;
+      canvas.height = canvas2d.height;
+      const ctx = canvas.getContext('2d');
+      ctx.putImageData(originalImageData, 0, 0);
+
+      const imageData = ctx.getImageData(0,0,canvas.width,canvas.height);
+      const data = imageData.data;
+
+      if (type === 'brightness') {
+        for (let i=0;i<data.length;i+=4) {
+          data[i] = Math.min(255, data[i] + 30);
+          data[i+1] = Math.min(255, data[i+1] + 30);
+          data[i+2] = Math.min(255, data[i+2] + 30);
+        }
+      } else if (type === 'contrast') {
+        const factor = 1.2;
+        for (let i=0;i<data.length;i+=4) {
+          data[i] = Math.min(255, Math.max(0, factor * (data[i] - 128) + 128));
+          data[i+1] = Math.min(255, Math.max(0, factor * (data[i+1] - 128) + 128));
+          data[i+2] = Math.min(255, Math.max(0, factor * (data[i+2] - 128) + 128));
+        }
+      } else if (type === 'sharpen') {
+        const weights = [0,-1,0,-1,5,-1,0,-1,0];
+        const temp = new Uint8ClampedArray(data);
+        const w = canvas.width, h = canvas.height;
+        for (let y=1;y<h-1;y++){
+          for (let x=1;x<w-1;x++){
+            for (let c=0;c<3;c++){
+              let sum=0;
+              for(let ky=-1; ky<=1; ky++){
+                for(let kx=-1; kx<=1; kx++){
+                  const idx = ((y+ky)*w + (x+kx))*4 + c;
+                  const weight = weights[(ky+1)*3 + (kx+1)];
+                  sum += temp[idx]*weight;
+                }
+              }
+              const idx = (y*w + x)*4 + c;
+              data[idx] = Math.min(255, Math.max(0, sum));
+            }
+          }
+        }
+      } else if (type === 'smooth') {
+        const w = canvas.width, h = canvas.height;
+        const temp = new Uint8ClampedArray(data);
+        for (let y=1;y<h-1;y++){
+          for (let x=1;x<w-1;x++){
+            for (let c=0;c<3;c++){
+              let sum=0;
+              for (let ky=-1; ky<=1; ky++){
+                for (let kx=-1; kx<=1; kx++){
+                  const idx = ((y+ky)*w + (x+kx))*4 + c;
+                  sum += temp[idx];
+                }
+              }
+              const idx = (y*w + x)*4 + c;
+              data[idx] = Math.round(sum/9);
+            }
+          }
+        }
+      } else if (type === 'grayscale') {
+        for (let i=0;i<data.length;i+=4){
+          const avg = 0.3*data[i] + 0.59*data[i+1] + 0.11*data[i+2];
+          data[i]=data[i+1]=data[i+2]=avg;
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+      ctx2d.clearRect(0,0,canvas2d.width, canvas2d.height);
+      ctx2d.drawImage(canvas, 0, 0, canvas2d.width, canvas2d.height);
+
+      createHeightMapFromCanvas(canvas);
+    }
+
+    function createHeightMapFromCanvas(canvas) {
+      loading3d.style.display = 'flex';
+      setTimeout(() => {
+        const img = new Image();
+        img.onload = () => {
+          createHeightMap(img);
+          loading3d.style.display = 'none';
+        };
+        img.src = canvas.toDataURL();
+      }, 50);
+    }
+
+    // ---------- Create heightmap (محسّن) ----------
+    function createHeightMap(image) {
+      // زيادة الدقة إلى 300x300 كحد أقصى
+      const maxSize = 300;
+      const scale = Math.min(maxSize / image.width, maxSize / image.height, 1);
+      const w = Math.floor(image.width * scale);
+      const h = Math.floor(image.height * scale);
+
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = w;
+      tempCanvas.height = h;
+      const tctx = tempCanvas.getContext('2d');
+      tctx.drawImage(image, 0, 0, w, h);
+
+      const imgData = tctx.getImageData(0, 0, w, h);
       
-      const blob = new Blob([stlString], { type: 'application/octet-stream' });
+      // تخزين البيانات بشكل صحيح
+      heightMapData = {
+        data: new Uint8Array(imgData.data), // تحويل إلى Uint8Array
+        width: w,
+        height: h
+      };
+
+      // حساب السطوع
+      const brightness = new Float32Array(w*h);
+      let min = 255, max = 0;
+      for (let y=0; y<h; y++){
+        for (let x=0; x<w; x++){
+          const idx = (y*w + x)*4;
+          const b = 0.34*imgData.data[idx] + 0.5*imgData.data[idx+1] + 0.16*imgData.data[idx+2];
+          brightness[y*w + x] = b;
+          if (b < min) min = b;
+          if (b > max) max = b;
+        }
+      }
+
+      // إنشاء هندسة ثلاثية الأبعاد
+      const geometry = new THREE.PlaneGeometry(100, 100, w-1, h-1);
+
+      const colors = [];
+      for (let i=0; i<geometry.attributes.position.count; i++){
+        const x = i % w;
+        const y = Math.floor(i / w);
+        const b = brightness[y*w + x];
+        const norm = (b - min) / (max - min || 1);
+        geometry.attributes.position.array[i*3 + 2] = norm * heightFactor;
+        const color = getHeatColor(norm, currentColormap);
+        colors.push(color.r/255, color.g/255, color.b/255);
+      }
+
+      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geometry.computeVertexNormals();
+
+      const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, wireframe:false });
+      if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose(); }
+      mesh = new THREE.Mesh(geometry, material);
+      scene.add(mesh);
+
+      // رسم الـ heatmap
+      drawHeatmap(imgData.data, w, h, min, max);
+    }
+
+    // رسم Heatmap
+    function drawHeatmap(imgData, w, h, min, max) {
+      heatmap.width = w;
+      heatmap.height = h;
+      const heatData = ctxHeat.createImageData(w, h);
+
+      for (let y=0;y<h;y++){
+        for (let x=0;x<w;x++){
+          const idx = (y*w + x)*4;
+          const brightness = 0.34*imgData[idx] + 0.5*imgData[idx+1] + 0.16*imgData[idx+2];
+          const norm = (brightness - min) / (max - min || 1);
+          const color = getHeatColor(norm, currentColormap);
+          heatData.data[idx] = color.r;
+          heatData.data[idx+1] = color.g;
+          heatData.data[idx+2] = color.b;
+          heatData.data[idx+3] = 255;
+        }
+      }
+
+      ctxHeat.putImageData(heatData, 0, 0);
+    }
+
+    // دالة توليد ألوان Heatmap
+    function getHeatColor(value, map) {
+      let r=0,g=0,b=0;
+      const v = Math.max(0, Math.min(1, value));
+      if (map === 'jet') {
+        r = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*v-3), 1), 0));
+        g = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*v-2), 1), 0));
+        b = Math.floor(255 * Math.max(Math.min(1.5 - Math.abs(4*v-1), 1), 0));
+      } else if (map === 'hot') {
+        r = Math.floor(255 * Math.min(1, 3*v));
+        g = Math.floor(255 * Math.min(1, 3*v - 1));
+        g = Math.max(g, 0);
+        b = Math.floor(255 * Math.min(1, 3*v - 2));
+        b = Math.max(b, 0);
+      } else if (map === 'cool') {
+        r = Math.floor(255 * v);
+        g = Math.floor(255 * (1 - v));
+        b = 255;
+      } else { // gray
+        r = g = b = Math.floor(255 * v);
+      }
+      return { r, g, b };
+    }
+
+    // تغيير colormap
+    function setColormap(map) {
+      currentColormap = map;
+      if (fileInput.files[0]) {
+        const img = new Image();
+        img.onload = () => createHeightMap(img);
+        img.src = URL.createObjectURL(fileInput.files[0]);
+      } else if (originalImageData) {
+        createHeightMapFromCanvas(canvas2d);
+      }
+    }
+
+    // ---------- Edge detection (محسّن) ----------
+    function detectEdges() {
+      if (!originalImageData) { showNotification('يجب تحميل صورة أولاً', true); return; }
+
+      const w = canvas2d.width, h = canvas2d.height;
+      edgeCanvas.width = w;
+      edgeCanvas.height = h;
+
+      const imgData = ctx2d.getImageData(0,0,w,h);
+      const data = imgData.data;
+      const gray = new Float32Array(w*h);
+
+      // تحويل إلى تدرج رمادي
+      for (let y=0;y<h;y++){
+        for (let x=0;x<w;x++){
+          const idx = (y*w + x)*4;
+          gray[y*w + x] = 0.34*data[idx] + 0.5*data[idx+1] + 0.16*data[idx+2];
+        }
+      }
+
+      const blurAmount = parseInt(edgeBlur.value);
+      if (blurAmount > 0) {
+        const temp = new Float32Array(w*h);
+        for (let y=1;y<h-1;y++){
+          for (let x=1;x<w-1;x++){
+            let sum=0;
+            for (let ky=-1;ky<=1;ky++){
+              for (let kx=-1;kx<=1;kx++){
+                sum += gray[(y+ky)*w + (x+kx)];
+              }
+            }
+            temp[y*w + x] = sum/9;
+          }
+        }
+        for (let i=0;i<gray.length;i++) gray[i] = temp[i];
+      }
+
+      const threshold = parseInt(edgeThreshold.value) / 100;
+      const edgeImg = ctxEdge.createImageData(w,h);
+      edgeData = new Uint8Array(w*h);
+
+      // Sobel edge detection
+      for (let y=1;y<h-1;y++){
+        for (let x=1;x<w-1;x++){
+          const gx = -gray[(y-1)*w + (x-1)] - 2*gray[y*w + (x-1)] - gray[(y+1)*w + (x-1)]
+                    + gray[(y-1)*w + (x+1)] + 2*gray[y*w + (x+1)] + gray[(y+1)*w + (x+1)];
+          const gy = -gray[(y-1)*w + (x-1)] - 2*gray[(y-1)*w + x] - gray[(y-1)*w + (x+1)]
+                    + gray[(y+1)*w + (x-1)] + 2*gray[(y+1)*w + x] + gray[(y+1)*w + (x+1)];
+          const mag = Math.sqrt(gx*gx + gy*gy);
+          const norm = Math.min(1, mag/255);
+          const idx = (y*w + x)*4;
+          edgeImg.data[idx] = edgeImg.data[idx+1] = edgeImg.data[idx+2] = norm > threshold ? 255 : 0;
+          edgeImg.data[idx+3] = 255;
+          edgeData[y*w + x] = norm > threshold ? 255 : 0;
+        }
+      }
+
+      ctxEdge.putImageData(edgeImg, 0, 0);
+      showNotification('تم استكشاف الحواف بنجاح');
+    }
+
+    function toggleEdgeOverlay() {
+      if (!edgeData) { showNotification('يجب استكشاف الحواف أولاً', true); return; }
+      isEdgeOverlayVisible = !isEdgeOverlayVisible;
+      if (isEdgeOverlayVisible) {
+        const w = canvas2d.width, h = canvas2d.height;
+        const overlay = ctx2d.getImageData(0,0,w,h);
+        for (let y=0;y<h;y++){
+          for (let x=0;x<w;x++){
+            if (edgeData[y*w + x] > 0) {
+              const idx = (y*w + x)*4;
+              overlay.data[idx] = 255;
+              overlay.data[idx+1] = 0;
+              overlay.data[idx+2] = 0;
+            }
+          }
+        }
+        ctx2d.putImageData(overlay, 0, 0);
+      } else {
+        ctx2d.putImageData(originalImageData, 0, 0);
+      }
+    }
+
+    // ---------- G-code generation (محسّن) ----------
+    function generateGcode() {
+      if (!heightMapData) { showNotification('يجب تحميل صورة أولاً', true); return; }
+
+      loadingSimulation.style.display = 'flex';
+      setTimeout(() => {
+        const machineType = document.getElementById('machineType').value;
+        const materialType = document.getElementById('materialType').value;
+        const feedRate = parseInt(document.getElementById('feedRate').value);
+        const spindleSpeed = parseInt(document.getElementById('spindleSpeed').value);
+        const cutDepth = parseFloat(document.getElementById('cutDepth').value);
+        const passDepth = parseFloat(document.getElementById('passDepth').value);
+        const gcodeType = document.getElementById('gcodeType').value;
+        const precision = document.getElementById('gcodePrecision').value;
+        const edgePathStrategy = document.getElementById('edgePathStrategy').value;
+
+        // إعدادات الدقة
+        const step = precision === 'low' ? 10 : precision === 'high' ? 2 : 5;
+        const w = heightMapData.width, h = heightMapData.height;
+
+        // توليد G-code بناءً على النوع المحدد
+        let gcode = '';
+        gcode += `; CNC AI Preview - G-code\n`;
+        gcode += `; Machine: ${machineType}\n`;
+        gcode += `; Material: ${materialType}\n`;
+        gcode += `; Feed Rate: ${feedRate}\n`;
+        gcode += `; Spindle Speed: ${spindleSpeed}\n`;
+        gcode += `; Cut Depth: ${cutDepth}\n`;
+        gcode += `; Generated from: ${gcodeType}\n\n`;
+
+        // أوامر البدء
+        gcode += `G21 ; Set units to mm\n`;
+        gcode += `G90 ; Absolute positioning\n`;
+        gcode += `G94 ; Feed rate units per minute\n`;
+        gcode += `M3 S${spindleSpeed} ; Spindle on\n`;
+        gcode += `G4 P2 ; Wait for spindle\n\n`;
+
+        // حساب المسارات بناءً على النوع
+        if (gcodeType === 'heatmap' || gcodeType === '3dmodel') {
+          // مسار ثلاثي الأبعاد بناءً على heightmap
+          const maxPasses = Math.ceil(cutDepth / passDepth);
+          for (let pass = 0; pass < maxPasses; pass++) {
+            const currentDepth = -Math.min(cutDepth, (pass + 1) * passDepth);
+            gcode += `; Pass ${pass + 1}, Depth: ${currentDepth}mm\n`;
+            
+            for (let y = 0; y < h; y += step) {
+              let isCutting = false;
+              for (let x = 0; x < w; x += step) {
+                const idx = (y * w + x) * 4;
+                const brightness = 0.34 * heightMapData.data[idx] + 0.5 * heightMapData.data[idx+1] + 0.16 * heightMapData.data[idx+2];
+                const heightValue = (brightness / 255) * currentDepth;
+                
+                const gx = (x / w) * 100 - 50;
+                const gy = 50 - (y / h) * 100;
+                
+                if (!isCutting) {
+                  gcode += `G0 X${gx.toFixed(2)} Y${gy.toFixed(2)} Z5\n`;
+                  gcode += `G1 Z${heightValue.toFixed(2)} F${feedRate/2}\n`;
+                  isCutting = true;
+                } else {
+                  gcode += `G1 X${gx.toFixed(2)} Y${gy.toFixed(2)} Z${heightValue.toFixed(2)} F${feedRate}\n`;
+                }
+              }
+              gcode += `G0 Z5\n`;
+            }
+            gcode += `\n`;
+          }
+        } else if (gcodeType === 'edges' && edgeData) {
+          // مسار الحواف
+          gcode += `; Edge-based toolpath\n`;
+          gcode += `G0 Z5\n`;
+          
+          // البحث عن نقاط الحواف
+          const edgePoints = [];
+          for (let y = 0; y < h; y += step) {
+            for (let x = 0; x < w; x += step) {
+              if (edgeData[y * w + x] > 0) {
+                const gx = (x / w) * 100 - 50;
+                const gy = 50 - (y / h) * 100;
+                edgePoints.push({x: gx, y: gy});
+              }
+            }
+          }
+          
+          // توليد مسار الحواف
+          if (edgePoints.length > 0) {
+            gcode += `G0 X${edgePoints[0].x.toFixed(2)} Y${edgePoints[0].y.toFixed(2)}\n`;
+            gcode += `G1 Z-${cutDepth.toFixed(2)} F${feedRate/2}\n`;
+            
+            for (let i = 1; i < edgePoints.length; i++) {
+              gcode += `G1 X${edgePoints[i].x.toFixed(2)} Y${edgePoints[i].y.toFixed(2)} F${feedRate}\n`;
+            }
+            
+            gcode += `G0 Z5\n`;
+          }
+        }
+
+        // أوامر النهاية
+        gcode += `\nG0 Z20 ; Retract\n`;
+        gcode += `M5 ; Spindle off\n`;
+        gcode += `G0 X0 Y0 ; Return home\n`;
+        gcode += `M30 ; Program end\n`;
+
+        generatedGcode = gcode;
+        gcodeOutput.textContent = gcode;
+        loadingSimulation.style.display = 'none';
+        showNotification('تم توليد G-code بنجاح');
+      }, 500);
+    }
+
+    function downloadGcode() {
+      if (!generatedGcode) { showNotification('يجب توليد G-code أولاً', true); return; }
+      const blob = new Blob([generatedGcode], {type: 'text/plain'});
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'cnc-model.stl';
-      document.body.appendChild(a);
+      a.download = 'cnc_ai_preview.gcode';
       a.click();
-      document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
-      showNotification('تم تصدير النموذج كملف STL');
     }
 
-    // ---------- باقي الوظائف (بدون تغيير) ----------
-    // [يتم الحفاظ على جميع الوظائف الأخرى كما هي من الكود السابق]
-    // بما في ذلك: applyEnhancement, createHeightMap, detectEdges, generateGcode, etc.
+    // ---------- G-code simulation (محسّن) ----------
+    function simulateGcode() {
+      if (!generatedGcode) { showNotification('يجب توليد G-code أولاً', true); return; }
 
-    // ... [الكود المتبقي يبقى كما هو بدون تغيير] ...
+      loadingSimulation.style.display = 'flex';
+      setTimeout(() => {
+        // تنظيف المشهد
+        while(simulationScene.children.length > 0){ 
+          simulationScene.remove(simulationScene.children[0]); 
+        }
+        setupLights(simulationScene);
 
+        // إضافة شبكة أرضية
+        const grid = new THREE.GridHelper(100, 10, 0x888888, 0x444444);
+        simulationScene.add(grid);
+
+        // إضافة محور
+        const axes = new THREE.AxesHelper(20);
+        simulationScene.add(axes);
+
+        // محاكاة مسار الأداة
+        const toolPath = new THREE.BufferGeometry();
+        const vertices = [];
+        const colors = [];
+
+        const lines = generatedGcode.split('\n');
+        let x = 0, y = 0, z = 5;
+        let isCutting = false;
+
+        for (const line of lines) {
+          if (line.startsWith('G0') || line.startsWith('G1')) {
+            const parts = line.split(' ');
+            let newX = x, newY = y, newZ = z;
+            
+            for (const part of parts) {
+              if (part.startsWith('X')) newX = parseFloat(part.substring(1));
+              if (part.startsWith('Y')) newY = parseFloat(part.substring(1));
+              if (part.startsWith('Z')) newZ = parseFloat(part.substring(1));
+            }
+
+            // إضافة النقاط إلى المسار
+            vertices.push(x, y, z);
+            vertices.push(newX, newY, newZ);
+            
+            // لون المسار (أحمر للقطع، أزرق للحركة السريعة)
+            const color = line.startsWith('G1') && newZ < 0 ? 
+              new THREE.Color(1, 0, 0) : new THREE.Color(0, 0, 1);
+            colors.push(color.r, color.g, color.b);
+            colors.push(color.r, color.g, color.b);
+
+            x = newX; y = newY; z = newZ;
+          }
+        }
+
+        toolPath.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        toolPath.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        
+        const lineMaterial = new THREE.LineBasicMaterial({ vertexColors: true, linewidth: 2 });
+        const toolPathLine = new THREE.LineSegments(toolPath, lineMaterial);
+        simulationScene.add(toolPathLine);
+
+        // إضافة نموذج للأداة
+        const toolGeometry = new THREE.CylinderGeometry(1, 1, 10, 8);
+        const toolMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+        const tool = new THREE.Mesh(toolGeometry, toolMaterial);
+        simulationScene.add(tool);
+        tool.position.set(x, y, z);
+
+        loadingSimulation.style.display = 'none';
+        showNotification('تم تحميل المحاكاة بنجاح');
+      }, 500);
+    }
+
+    function startSimulation() {
+      isSimulationPlaying = true;
+      showNotification('بدأت المحاكاة');
+    }
+
+    function pauseSimulation() {
+      isSimulationPlaying = false;
+      showNotification('توقفت المحاكاة');
+    }
+
+    function resetSimulation() {
+      isSimulationPlaying = false;
+      simulateGcode();
+      showNotification('تم إعادة المحاكاة');
+    }
+
+    // ---------- Event listeners ----------
+    fileInput.addEventListener('change', function(e) {
+      if (e.target.files[0]) {
+        fileName.textContent = e.target.files[0].name;
+        const reader = new FileReader();
+        reader.onload = function(event) {
+          const img = new Image();
+          img.onload = function() {
+            // ضبط حجم الـ canvas
+            const maxWidth = 400, maxHeight = 300;
+            let { width, height } = img;
+            if (width > maxWidth) {
+              height = (height * maxWidth) / width;
+              width = maxWidth;
+            }
+            if (height > maxHeight) {
+              width = (width * maxHeight) / height;
+              height = maxHeight;
+            }
+            
+            canvas2d.width = width;
+            canvas2d.height = height;
+            ctx2d.drawImage(img, 0, 0, width, height);
+            originalImageData = ctx2d.getImageData(0, 0, width, height);
+            
+            createHeightMap(img);
+            showNotification('تم تحميل الصورة بنجاح');
+          };
+          img.src = event.target.result;
+        };
+        reader.readAsDataURL(e.target.files[0]);
+      }
+    });
+
+    rotationSpeedInput.addEventListener('input', () => {
+      rotationSpeed = parseFloat(rotationSpeedInput.value);
+    });
+
+    zoomControl.addEventListener('input', () => {
+      camera.position.z = parseFloat(zoomControl.value);
+      simulationCamera.position.z = parseFloat(zoomControl.value);
+    });
+
+    heightIntensity.addEventListener('input', () => {
+      heightFactor = parseFloat(heightIntensity.value);
+      if (fileInput.files[0]) {
+        const img = new Image();
+        img.onload = () => createHeightMap(img);
+        img.src = URL.createObjectURL(fileInput.files[0]);
+      }
+    });
+
+    // ---------- Animation loop ----------
+    function animate() {
+      requestAnimationFrame(animate);
+      
+      if (mesh) {
+        mesh.rotation.x += rotationSpeed * 0.5;
+        mesh.rotation.y += rotationSpeed;
+      }
+      
+      renderer.render(scene, camera);
+      simulationRenderer.render(simulationScene, simulationCamera);
+    }
+    animate();
+
+    // ---------- Utility functions ----------
+    function showNotification(message, isError = false) {
+      notification.textContent = message;
+      notification.className = 'notification' + (isError ? ' error' : '');
+      notification.classList.add('show');
+      setTimeout(() => {
+        notification.classList.remove('show');
+      }, 3000);
+    }
+
+    // ---------- Theme toggle ----------
+    document.getElementById('themeToggle').addEventListener('click', () => {
+      document.body.classList.toggle('dark');
+      document.getElementById('themeToggle').textContent = 
+        document.body.classList.contains('dark') ? '☀️' : '🌙';
+    });
+
+    // ---------- Handle window resize ----------
+    window.addEventListener('resize', () => {
+      camera.aspect = preview3d.offsetWidth / preview3d.offsetHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(preview3d.offsetWidth, preview3d.offsetHeight);
+      
+      simulationCamera.aspect = gcodeSimulation.offsetWidth / gcodeSimulation.offsetHeight;
+      simulationCamera.updateProjectionMatrix();
+      simulationRenderer.setSize(gcodeSimulation.offsetWidth, gcodeSimulation.offsetHeight);
+    });
   </script>
 </body>
 </html>
