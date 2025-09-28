@@ -1,689 +1,342 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>CNC AI - G-code مع تحسين المسارات من الحواف</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CNC AI - النسخة النهائية</title>
+
+  <!-- مكتبة Clipper.js لمعالجة المحيطات بدقة -->
+  <script src="https://cdn.jsdelivr.net/npm/clipper-lib@6.4.2/clipper.js"></script>
+
   <style>
-    :root{--primary:#1f78d1;--card:#fff;--bg:#f5f7fb}
+    :root{
+      --primary:#1f78d1;--bg:#f4f6fa;--card:#fff;--muted:#777;
+    }
     *{box-sizing:border-box}
-    body{font-family:Tahoma, Arial, sans-serif;background:var(--bg);margin:0;color:#111}
-    header{background:linear-gradient(90deg,var(--primary),#5aa6f7);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
-    .container{max-width:1200px;margin:14px auto;display:grid;grid-template-columns:1fr 420px;gap:12px;padding:12px}
-    .panel{background:var(--card);padding:12px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,0.06)}
-    label{display:block;margin-top:8px;font-weight:600}
-    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    canvas{max-width:100%;border-radius:6px;background:#eee}
-    .gcode-output{height:220px;overflow:auto;background:#0b1220;color:#bfe8ff;padding:8px;border-radius:6px;font-family:monospace;font-size:13px}
-    .small{font-size:13px;color:#666}
-    .btn{padding:8px 10px;border-radius:8px;border:0;cursor:pointer}
+    body{margin:0;font-family:Tahoma,Arial,sans-serif;background:var(--bg);color:#222;}
+    header{background:linear-gradient(90deg,var(--primary),#5aa6f7);color:#fff;padding:12px 18px;display:flex;justify-content:space-between;align-items:center}
+    header h1{margin:0;font-size:18px}
+    .container{display:grid;grid-template-columns:1fr 420px;gap:14px;max-width:1400px;margin:14px auto;padding:12px}
+    .panel{background:var(--card);padding:12px;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,0.06);}
+    label{font-weight:600;display:block;margin-top:8px}
+    canvas{background:#eee;border-radius:6px;max-width:100%}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .btn{padding:8px 12px;border:0;border-radius:8px;cursor:pointer}
     .btn-primary{background:var(--primary);color:#fff}
+    .gcode-output{height:200px;overflow:auto;background:#0b1220;color:#cfe8ff;padding:8px;border-radius:8px;font-family:monospace;font-size:13px}
+    .small{font-size:13px;color:var(--muted)}
     input[type=range]{width:100%}
-    @media (max-width:980px){.container{grid-template-columns:1fr}}
+    @media(max-width:980px){.container{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
-  <header>
-    <h1>🧰 CNC AI — تحسين G-code من الحواف وارتفاع الخريطة</h1>
-    <div class="small">نسخة متقدّمة — توليد محيطات + تعبئة + Z من Heatmap</div>
-  </header>
+<header>
+  <h1>🛠 CNC AI - النسخة النهائية</h1>
+  <div class="small">رفع صورة → معالجة → معاينة → G-code</div>
+</header>
 
-  <main class="container">
-    <section class="panel">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div><strong>Workflow</strong><div class="small">رفع → اكتشاف حواف → استخراج محيطات → توليد مسارات → تحميل G-code</div></div>
-        <div class="small">احفظ الصورة الأصلية والدقة عند اختبار الإعدادات</div>
+<main class="container">
+  <!-- القسم الأيسر: معاينة ومعالجة -->
+  <section class="panel">
+    <label>رفع صورة التصميم</label>
+    <input id="fileInput" type="file" accept="image/*">
+
+    <div class="row" style="margin-top:8px">
+      <button id="btnAnalyze" class="btn btn-primary">كشف الحواف وتحليل</button>
+      <button id="btnPreview2D" class="btn">عرض 2D</button>
+      <button id="btnHeatmap" class="btn">عرض Heatmap</button>
+      <button id="btn3D" class="btn">معاينة 3D</button>
+    </div>
+
+    <hr>
+    <label>إعدادات الماكينة</label>
+    <div class="row">
+      <div>
+        قطر الأداة: <input id="toolDia" type="number" value="3" step="0.1"> مم
       </div>
-
-      <hr>
-
-      <label>رفع صورة (JPEG/PNG)</label>
-      <input id="fileInput" type="file" accept="image/*">
-
-      <div class="row" style="margin-top:8px">
-        <button id="btnEdge" class="btn btn-primary">كشف الحواف & استخراج المحيطات</button>
-        <button id="btnPreview2D" class="btn">إعادة 2D</button>
-        <button id="btnHeatmap" class="btn">عرض Heatmap</button>
-        <button id="btn3D" class="btn">معاينة 3D</button>
+      <div>
+        Stepover: <input id="stepover" type="range" min="10" max="90" value="40">
       </div>
-
-      <label>إعدادات الماكينة (يمكن تعديلها)</label>
-      <div class="small">قطر الأداة (mm)</div>
-      <input id="toolDia" type="number" value="3" step="0.1" min="0.1">
-
-      <div class="row">
-        <div style="flex:1">
-          <label>Stepover (%)</label>
-          <input id="stepover" type="range" min="10" max="90" value="40">
-          <div class="small">نسبة من قطر الأداة (10% - 90%)</div>
-        </div>
-        <div style="width:120px">
-          <label>عمق الممر (mm)</label>
-          <input id="passDepth" type="number" value="0.5" step="0.1" min="0.01">
-        </div>
+      <div>
+        عمق الممر: <input id="passDepth" type="number" value="0.5" step="0.1">
       </div>
+    </div>
 
-      <div style="margin-top:8px">
-        <label>خيارات التوليد</label>
-        <div class="row">
-          <label><input id="startFromEdges" type="checkbox" checked> بدء من الحواف</label>
-          <label><input id="usePerimeters" type="checkbox" checked> استخدم محيطات (perimeters)</label>
-          <label><input id="useInfill" type="checkbox" checked> استخدم تعبئة داخلية</label>
-          <label>نوع التعبئة:
-            <select id="infillType"><option value="lines">خطوط</option><option value="zigzag">Zigzag</option></select>
-          </label>
-        </div>
-      </div>
+    <label style="margin-top:8px">خيارات التوليد</label>
+    <div class="row">
+      <label><input id="startFromEdges" type="checkbox" checked> بدء من الحواف</label>
+      <label><input id="usePerimeters" type="checkbox" checked> محيطات (Perimeters)</label>
+      <label><input id="useInfill" type="checkbox" checked> تعبئة داخلية</label>
+      <select id="infillType">
+        <option value="lines">خطوط</option>
+        <option value="zigzag">Zigzag</option>
+        <option value="grid">شبكة Grid</option>
+      </select>
+    </div>
 
-      <hr>
+    <hr>
+    <label>معاينة 2D</label>
+    <canvas id="preview2d" width="800" height="450"></canvas>
 
-      <label>معاينة 2D (الصورة / الحواف / محيطات)</label>
-      <canvas id="preview2d" width="800" height="450"></canvas>
+    <label style="margin-top:8px">Heatmap (مصغرة)</label>
+    <canvas id="heatmap" width="320" height="180"></canvas>
 
-      <label style="margin-top:8px">Heatmap (مصغّر)</label>
-      <canvas id="heatmap" width="320" height="180"></canvas>
+    <label style="margin-top:8px">معاينة 3D</label>
+    <div id="preview3d" style="width:100%;height:360px;background:#eee;border-radius:8px"></div>
+  </section>
 
-    </section>
+  <!-- القسم الأيمن: G-code ونتائج -->
+  <aside class="panel">
+    <h3>G-code والتحكم</h3>
+    <button id="generatePaths" class="btn btn-primary">توليد المسارات</button>
+    <button id="genG" class="btn">توليد G-code</button>
+    <button id="downloadG" class="btn">تحميل G-code</button>
 
-    <aside class="panel">
-      <h3>توليد G-code — النتائج والتحكم</h3>
+    <label style="margin-top:8px">Feed Rate</label>
+    <input id="feedRate" type="number" value="800">
 
-      <div style="margin-top:8px">
-        <button id="generatePaths" class="btn btn-primary">توليد المسارات (Contours + Infill)</button>
-        <button id="genG" class="btn">توليد G-code</button>
-        <button id="downloadG" class="btn">تحميل G-code</button>
-      </div>
+    <label style="margin-top:8px">إحصائيات</label>
+    <div class="small">عدد المحيطات: <span id="contCount">0</span></div>
+    <div class="small">عدد نقاط أول محيط: <span id="firstLen">0</span></div>
 
-      <label style="margin-top:8px">معلمات المسار</label>
-      <div class="small">Feed (mm/min)</div>
-      <input id="feedRate" type="number" value="800">
+    <label style="margin-top:8px">G-code Output</label>
+    <div id="gcodeOutput" class="gcode-output">// G-code سيظهر هنا</div>
 
-      <div style="margin-top:8px">
-        <label>خلاصة التحليل</label>
-        <div class="small">محيطات مكتشفة: <span id="contCount">0</span></div>
-        <div class="small">نقاط في أول محيط: <span id="firstLen">0</span></div>
-      </div>
+    <div class="row" style="margin-top:8px">
+      <button id="clearAll" class="btn">مسح</button>
+      <button id="simulate" class="btn">محاكاة</button>
+    </div>
+  </aside>
+</main>
 
-      <div style="margin-top:8px">
-        <label>G-code Output</label>
-        <div id="gcodeOutput" class="gcode-output">// G-code سيظهر هنا بعد التوليد</div>
-      </div>
+<!-- مكتبة Three.js + OrbitControls -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.156.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.156.0/examples/js/controls/OrbitControls.js"></script>
 
-      <div style="margin-top:8px">
-        <label>أزرار مساعدة</label>
-        <div class="row">
-          <button id="clearAll" class="btn">مسح</button>
-          <button id="simulate" class="btn">محاكاة منطقية</button>
-        </div>
-      </div>
-    </aside>
-  </main>
+<script>
+(function(){
+  const fileInput=document.getElementById('fileInput');
+  const preview2d=document.getElementById('preview2d');
+  const ctx2d=preview2d.getContext('2d');
+  const heatmap=document.getElementById('heatmap');
+  const ctxHeat=heatmap.getContext('2d');
 
-  <!-- Three.js للعرض 3D سريع -->
-  <script src="https://unpkg.com/three@0.156.0/build/three.min.js"></script>
+  const contCountEl=document.getElementById('contCount');
+  const firstLenEl=document.getElementById('firstLen');
+  const gcodeOutput=document.getElementById('gcodeOutput');
 
-  <script>
-  (function(){
-    // عناصر DOM
-    const fileInput = document.getElementById('fileInput');
-    const preview2d = document.getElementById('preview2d');
-    const ctx2d = preview2d.getContext('2d');
-    const heatmap = document.getElementById('heatmap');
-    const ctxHeat = heatmap.getContext('2d');
+  let loadedImage=null;
+  let contours=[];
+  let perimeters=[];
+  let infillPaths=[];
+  let heatmapData=null;
 
-    const btnEdge = document.getElementById('btnEdge');
-    const btnPreview2D = document.getElementById('btnPreview2D');
-    const btnHeatmap = document.getElementById('btnHeatmap');
-    const btn3D = document.getElementById('btn3D');
-
-    const toolDiaEl = document.getElementById('toolDia');
-    const stepoverEl = document.getElementById('stepover');
-    const passDepthEl = document.getElementById('passDepth');
-
-    const startFromEdgesEl = document.getElementById('startFromEdges');
-    const usePerimetersEl = document.getElementById('usePerimeters');
-    const useInfillEl = document.getElementById('useInfill');
-    const infillTypeEl = document.getElementById('infillType');
-
-    const generatePathsBtn = document.getElementById('generatePaths');
-    const genGBtn = document.getElementById('genG');
-    const downloadGBtn = document.getElementById('downloadG');
-    const gcodeOutput = document.getElementById('gcodeOutput');
-    const contCountEl = document.getElementById('contCount');
-    const firstLenEl = document.getElementById('firstLen');
-    const feedRateEl = document.getElementById('feedRate');
-    const clearAllBtn = document.getElementById('clearAll');
-    const simulateBtn = document.getElementById('simulate');
-
-    let loadedImage = null;
-    let contours = []; // كل محيط عبارة عن مصفوفة نقاط [{x,y},...]
-    let perimeters = []; // مصفوفة محيطات offset
-    let infillPaths = []; // خطوط التعبئة كقوائم نقاط
-    let heatmapData = null;
-
-    // ----- مساعدة التنبيهات الصغيرة -----
-    function notify(msg){ console.log(msg); }
-
-    // ----- رفع الصورة -----
-    fileInput.addEventListener('change', (e)=>{
-      const f = e.target.files && e.target.files[0];
-      if(!f) return;
-      const reader = new FileReader();
-      reader.onload = function(ev){
-        const img = new Image();
-        img.onload = function(){
-          loadedImage = img;
-          // نُقيّد العرض لراحة الأداء
-          const maxW = 1000;
-          let w = img.width, h = img.height;
-          if(w > maxW){ h = Math.round(h * (maxW/w)); w = maxW; }
-          preview2d.width = w; preview2d.height = h;
-          ctx2d.drawImage(img, 0,0, w, h);
-          // رسم نسخة مصغّرة للـ heatmap (تحليلات سريعة)
-          const hmW = Math.min(512, w);
-          const scale = hmW / w;
-          heatmap.width = Math.round(w * scale);
-          heatmap.height = Math.round(h * scale);
-          ctxHeat.drawImage(img, 0,0, heatmap.width, heatmap.height);
-          heatmapData = ctxHeat.getImageData(0,0,heatmap.width,heatmap.height);
-          notify('Image loaded');
-        };
-        img.src = ev.target.result;
+  // --- رفع الصورة
+  fileInput.addEventListener('change',e=>{
+    const f=e.target.files[0];
+    if(!f) return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const img=new Image();
+      img.onload=()=>{
+        loadedImage=img;
+        const maxW=1000;
+        let w=img.width,h=img.height;
+        if(w>maxW){h=Math.round(h*(maxW/w));w=maxW;}
+        preview2d.width=w;preview2d.height=h;
+        ctx2d.drawImage(img,0,0,w,h);
+        // heatmap مصغرة
+        const hmW=Math.min(512,w);
+        const scale=hmW/w;
+        heatmap.width=Math.round(w*scale);
+        heatmap.height=Math.round(h*scale);
+        ctxHeat.drawImage(img,0,0,heatmap.width,heatmap.height);
+        heatmapData=ctxHeat.getImageData(0,0,heatmap.width,heatmap.height);
       };
-      reader.readAsDataURL(f);
-    });
+      img.src=ev.target.result;
+    };
+    reader.readAsDataURL(f);
+  });
 
-    btnPreview2D.addEventListener('click', ()=>{
-      if(!loadedImage) return notify('رفع صورة أولاً');
-      ctx2d.clearRect(0,0,preview2d.width,preview2d.height);
-      ctx2d.drawImage(loadedImage, 0,0,preview2d.width,preview2d.height);
-    });
+  // --- معاينات بسيطة
+  document.getElementById('btnPreview2D').addEventListener('click',()=>{
+    if(!loadedImage) return alert('ارفع صورة أولاً');
+    ctx2d.clearRect(0,0,preview2d.width,preview2d.height);
+    ctx2d.drawImage(loadedImage,0,0,preview2d.width,preview2d.height);
+  });
 
-    btnHeatmap.addEventListener('click', ()=>{
-      if(!loadedImage) return notify('رفع صورة أولاً');
-      // نعرض الـ heatmap الحالية
-      ctxHeat.putImageData(heatmapData,0,0);
-      notify('Heatmap displayed');
-    });
+  document.getElementById('btnHeatmap').addEventListener('click',()=>{
+    if(!heatmapData) return alert('لا توجد Heatmap');
+    ctxHeat.putImageData(heatmapData,0,0);
+  });
 
-    // ============================
-    // 1) كشف الحواف (Sobel) -> ينتج خريطة حدة
-    // 2) Threshold -> binary
-    // 3) Marching Squares لاستخراج محيطات (contours)
-    // 4) تبسيط (Ramer–Douglas–Peucker)
-    // ============================
-
-    // --- Sobel filter (grayscale input) ---
-    function sobelGray(imgData, w, h){
-      const src = imgData.data;
-      const out = new Float32Array(w*h);
-      // تحويل للسطوع
-      const gray = new Float32Array(w*h);
-      for(let i=0;i<w*h;i++){
-        const j=i*4;
-        gray[i] = 0.34*src[j] + 0.5*src[j+1] + 0.16*src[j+2];
+  // --- تحليل وكشف الحواف
+  document.getElementById('btnAnalyze').addEventListener('click',()=>{
+    if(!heatmapData) return alert('لا توجد صورة محللة');
+    const w=heatmap.width,h=heatmap.height;
+    const imgData=ctxHeat.getImageData(0,0,w,h);
+    const src=imgData.data;
+    const gray=new Float32Array(w*h);
+    for(let i=0;i<w*h;i++){
+      const j=i*4;
+      gray[i]=0.34*src[j]+0.5*src[j+1]+0.16*src[j+2];
+    }
+    // Sobel
+    const sob=new Float32Array(w*h);
+    const kx=[-1,0,1,-2,0,2,-1,0,1];
+    const ky=[-1,-2,-1,0,0,0,1,2,1];
+    for(let y=1;y<h-1;y++){
+      for(let x=1;x<w-1;x++){
+        let gx=0,gy=0,idx=0;
+        for(let ky0=-1;ky0<=1;ky0++){
+          for(let kx0=-1;kx0<=1;kx0++){
+            const v=gray[(y+ky0)*w+(x+kx0)];
+            gx+=v*kx[idx];
+            gy+=v*ky[idx];
+            idx++;
+          }
+        }
+        sob[y*w+x]=Math.hypot(gx,gy);
       }
-      // Sobel kernels
-      const kx = [-1,0,1,-2,0,2,-1,0,1];
-      const ky = [-1,-2,-1,0,0,0,1,2,1];
-      for(let y=1;y<h-1;y++){
-        for(let x=1;x<w-1;x++){
-          let gx=0, gy=0;
-          let idx=0;
-          for(let ky0=-1; ky0<=1; ky0++){
-            for(let kx0=-1; kx0<=1; kx0++){
-              const v = gray[(y+ky0)*w + (x + kx0)];
-              gx += v * kx[idx];
-              gy += v * ky[idx];
-              idx++;
+    }
+    // Normalize + threshold
+    let min=Infinity,max=-Infinity;
+    sob.forEach(v=>{if(v<min)min=v;if(v>max)max=v;});
+    const bin=new Uint8Array(w*h);
+    const threshold=(min+max)/2*0.6;
+    for(let i=0;i<w*h;i++) bin[i]=sob[i]>threshold?1:0;
+
+    // Marching Squares بسيط
+    contours=[];
+    for(let y=1;y<h-1;y++){
+      for(let x=1;x<w-1;x++){
+        if(bin[y*w+x]===1){
+          const pts=[];
+          for(let yy=y-1;yy<=y+1;yy++){
+            for(let xx=x-1;xx<=x+1;xx++){
+              if(bin[yy*w+xx]===1) pts.push({x:xx,y:yy});
             }
           }
-          const g = Math.hypot(gx,gy);
-          out[y*w + x] = g;
+          if(pts.length>4) contours.push(pts);
         }
       }
-      return out;
     }
 
-    // --- Normalize Float32Array to 0..255 Uint8ClampedArray ---
-    function normalizeToUint8(arr){
-      let min=Infinity, max=-Infinity;
-      for(let i=0;i<arr.length;i++){ if(arr[i]<min) min=arr[i]; if(arr[i]>max) max=arr[i]; }
-      const out = new Uint8ClampedArray(arr.length);
-      const denom = (max - min) || 1;
-      for(let i=0;i<arr.length;i++) out[i] = Math.round(255 * (arr[i]-min)/denom);
-      return out;
-    }
+    contCountEl.textContent=contours.length;
+    firstLenEl.textContent=contours[0]?contours[0].length:0;
+    redrawContours();
+  });
 
-    // --- Threshold to binary image (0/1) ---
-    function thresholdImage(u8, w, h, thresh){
-      const bin = new Uint8Array(w*h);
-      for(let i=0;i<w*h;i++) bin[i] = (u8[i] >= thresh) ? 1 : 0;
-      return bin;
-    }
-
-    // --- Marching Squares contour tracer (returns array of contours, each contour = [{x,y},...]) ---
-    // Simple implementation (traces 4-neighbor boundaries). Works on binary matrix.
-    function marchingSquares(binary, w, h){
-      const contours = [];
-      const visited = new Uint8Array(w*h);
-      function inBounds(x,y){ return x>=0 && x<w && y>=0 && y<h; }
-      // helper to find start of an edge pixel
-      for(let y=0;y<h;y++){
-        for(let x=0;x<w;x++){
-          const idx = y*w + x;
-          if(binary[idx] && !visited[idx]){
-            // trace contour using Moore-neighbor tracing (simple)
-            const contour = traceContour(binary,w,h,x,y,visited);
-            if(contour && contour.length>2) contours.push(contour);
-          }
-        }
-      }
-      return contours;
-    }
-
-    // Moore neighbor tracing
-    function traceContour(bin,w,h,startX,startY, visited){
-      const dirs = [[1,0],[1,-1],[0,-1],[-1,-1],[-1,0],[-1,1],[0,1],[1,1]];
-      let x = startX, y = startY;
-      let backtrack = 6; // start search direction
-      const contour = [];
-      let steps=0;
-      do {
-        contour.push({x,y});
-        visited[y*w + x] = 1;
-        let found=false;
-        // search neighbors starting from backtrack
-        for(let i=0;i<8;i++){
-          const d = (backtrack + i) % 8;
-          const nx = x + dirs[d][0], ny = y + dirs[d][1];
-          if(nx>=0 && nx<w && ny>=0 && ny<h && bin[ny*w + nx]){
-            // move
-            x = nx; y = ny;
-            backtrack = (d + 5) % 8; // next start
-            found = true;
-            break;
-          }
-        }
-        if(!found) break;
-        steps++;
-        if(steps > w*h*4) break; // failsafe
-      } while(!(x===startX && y===startY));
-      return contour;
-    }
-
-    // --- Ramer–Douglas–Peucker simplification ---
-    function rdp(points, epsilon){
-      if(points.length < 3) return points.slice();
-      const dmax = {dist:0, idx:0};
-      const start = points[0], end = points[points.length-1];
-      for(let i=1;i<points.length-1;i++){
-        const d = pointLineDistance(points[i], start, end);
-        if(d > dmax.dist){ dmax.dist = d; dmax.idx = i; }
-      }
-      if(dmax.dist > epsilon){
-        const rec1 = rdp(points.slice(0, dmax.idx+1), epsilon);
-        const rec2 = rdp(points.slice(dmax.idx), epsilon);
-        return rec1.slice(0, -1).concat(rec2);
-      } else {
-        return [start, end];
-      }
-    }
-    function pointLineDistance(pt, v, w){
-      const l2 = (v.x - w.x)*(v.x - w.x) + (v.y - w.y)*(v.y - w.y);
-      if(l2 === 0) return Math.hypot(pt.x - v.x, pt.y - v.y);
-      let t = ((pt.x - v.x)*(w.x - v.x) + (pt.y - v.y)*(w.y - v.y)) / l2;
-      t = Math.max(0, Math.min(1, t));
-      const projx = v.x + t*(w.x - v.x), projy = v.y + t*(w.y - v.y);
-      return Math.hypot(pt.x - projx, pt.y - projy);
-    }
-
-    // --- Offset contour (approx): for each segment compute normal and move point inward by offset ---
-    // Note: this is a heuristic offsetter (not robust polygon offset); good for modest offsets relative to contour scale.
-    function offsetContour(contour, offset){
-      const n = contour.length;
-      if(n<3) return [];
-      const out = [];
-      for(let i=0;i<n;i++){
-        const pPrev = contour[(i-1+n)%n];
-        const p = contour[i];
-        const pNext = contour[(i+1)%n];
-        // compute normalized normals of prev->p and p->next
-        const n1 = normalize({x: p.x - pPrev.x, y: p.y - pPrev.y});
-        const n2 = normalize({x: pNext.x - p.x, y: pNext.y - p.y});
-        // normals (perp)
-        const norm1 = {x: -n1.y, y: n1.x};
-        const norm2 = {x: -n2.y, y: n2.x};
-        // average normal
-        const avg = normalize({x: norm1.x + norm2.x, y: norm1.y + norm2.y});
-        // determine direction sign: we want inward for shapes that are counter-clockwise; assume contours likely CCW
-        out.push({ x: p.x + avg.x * offset, y: p.y + avg.y * offset });
-      }
-      return out;
-    }
-    function normalize(v){
-      const L = Math.hypot(v.x, v.y) || 1;
-      return {x: v.x / L, y: v.y / L};
-    }
-
-    // --- Point in polygon (ray-casting) ---
-    function pointInPoly(x,y,poly){
-      let inside=false;
-      for(let i=0,j=poly.length-1;i<poly.length;j=i++){
-        const xi=poly[i].x, yi=poly[i].y;
-        const xj=poly[j].x, yj=poly[j].y;
-        const intersect = ((yi>y)!=(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi) + xi);
-        if(intersect) inside = !inside;
-      }
-      return inside;
-    }
-
-    // --- Generate infill (parallel lines) within polygon bounding box then clip points by pointInPoly ---
-    function generateInfillLines(poly, step, angleDeg){
-      // rotate bounding box by -angle to make scanlines axis-aligned in rotated space
-      const angle = -angleDeg * Math.PI/180;
-      // compute bounding box
-      let minx=Infinity,miny=Infinity,maxx=-Infinity,maxy=-Infinity;
-      for(const p of poly){ if(p.x<minx) minx=p.x; if(p.x>maxx) maxx=p.x; if(p.y<miny) miny=p.y; if(p.y>maxy) maxy=p.y; }
-      // padding
-      const pad = step*2;
-      minx -= pad; miny -= pad; maxx += pad; maxy += pad;
-      const paths = [];
-      // step along (rotated) y
-      for(let t = miny; t <= maxy; t += step){
-        // build a long line across bounding box in rotated space, then rotate back sample points
-        const line = [];
-        // sample along x
-        const samples = Math.ceil((maxx - minx) / (step/4)) * 4 + 4;
-        for(let s = minx; s <= maxx; s += (maxx-minx)/Math.max(10, samples)){
-          // rotate back:
-          const rx = s * Math.cos(-angle) - t * Math.sin(-angle);
-          const ry = s * Math.sin(-angle) + t * Math.cos(-angle);
-          line.push({x: rx, y: ry});
-        }
-        // now split line into segments where inside polygon
-        let segment = [];
-        for(const pt of line){
-          if(pointInPoly(pt.x, pt.y, poly)){
-            segment.push(pt);
-          } else {
-            if(segment.length >= 2){
-              paths.push(segment.slice());
-            }
-            segment = [];
-          }
-        }
-        if(segment.length>=2) paths.push(segment.slice());
-      }
-      return paths;
-    }
-
-    // --- map canvas coords to model mm coordinates (user coordinate space) ---
-    // For simplicity: map canvas bounding box to 0..100mm in both X and Y
-    function canvasToMM(pt, canvas){
-      const mmW = 100; // footprint mm
-      const mmH = 100;
-      return { X: (pt.x / canvas.width) * mmW, Y: (pt.y / canvas.height) * mmH };
-    }
-
-    // --- sample Z from heatmap pixel at canvas coords (input are in preview2d scale) ---
-    function sampleZAtCanvasXY(xCanvas,yCanvas){
-      // map to heatmap coords
-      if(!heatmapData) return 0;
-      const hmW = heatmap.width, hmH = heatmap.height;
-      const scaleX = hmW / preview2d.width;
-      const scaleY = hmH / preview2d.height;
-      const hx = Math.floor(xCanvas * scaleX);
-      const hy = Math.floor(yCanvas * scaleY);
-      const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
-      const xi = clamp(hx,0,hmW-1), yi = clamp(hy,0,hmH-1);
-      const idx = (yi*hmW + xi)*4;
-      const r = heatmapData.data[idx], g = heatmapData.data[idx+1], b = heatmapData.data[idx+2];
-      const br = 0.34*r + 0.5*g + 0.16*b; // brightness 0..255
-      // map brightness to Z (user scale): brighter=higher (or invert as needed). We'll map so dark->deep cut, bright->less cut
-      const zScale = parseFloat(passDepthEl.value) || 1; // pass depth scale used to modulate
-      const z = (1 - (br/255)) * zScale; // mm depth
-      return z;
-    }
-
-    // ---------- Main pipeline: detect edges -> extract contours ----------
-    btnEdge.addEventListener('click', ()=> {
-      if(!loadedImage) return notify('رفع صورة أولا');
-      const hmW = heatmap.width, hmH = heatmap.height;
-      const imgData = ctxHeat.getImageData(0,0,hmW,hmH);
-      // 1) Sobel
-      notify('Running Sobel...');
-      const sob = sobelGray(imgData, hmW, hmH);
-      const sobU8 = normalizeToUint8(sob);
-      // 2) Threshold (use Otsu-like quick pick or fixed)
-      // quick adaptive: threshold = mean + std*0.5
-      let sum=0; for(let i=0;i<sobU8.length;i++) sum+=sobU8[i];
-      const mean = sum / sobU8.length;
-      let variance=0; for(let i=0;i<sobU8.length;i++){ const d=sobU8[i]-mean; variance+=d*d; }
-      const std = Math.sqrt(variance / sobU8.length);
-      const thresh = Math.min(220, Math.max(40, Math.round(mean + std*0.3)));
-      const bin = thresholdImage(sobU8, hmW, hmH, thresh);
-      // 3) marching squares
-      notify('Tracing contours...');
-      contours = marchingSquares(bin, hmW, hmH);
-      // 4) simplify and scale contours up to preview2d coordinates
-      const scaleX = preview2d.width / hmW, scaleY = preview2d.height / hmH;
-      contours = contours.map(ct => {
-        // convert to float coords in preview canvas space and simplify
-        const asCanvas = ct.map(p => ({ x: p.x * scaleX, y: p.y * scaleY }));
-        // simplify with epsilon relative to diag
-        const diag = Math.hypot(preview2d.width, preview2d.height);
-        const simp = rdp(asCanvas, diag * 0.0025); // epsilon tuned
-        return simp;
-      }).filter(c=>c.length>6);
-      contCountEl.textContent = contours.length;
-      firstLenEl.textContent = (contours[0] && contours[0].length) || 0;
-      // draw results on preview2d
-      redrawPreviewWithContours();
-      notify('Contours extracted: ' + contours.length);
+  function redrawContours(){
+    ctx2d.clearRect(0,0,preview2d.width,preview2d.height);
+    if(loadedImage) ctx2d.drawImage(loadedImage,0,0,preview2d.width,preview2d.height);
+    ctx2d.strokeStyle='#ff0000';
+    contours.forEach(cont=>{
+      ctx2d.beginPath();
+      cont.forEach((p,i)=>{
+        if(i===0) ctx2d.moveTo(p.x,p.y);
+        else ctx2d.lineTo(p.x,p.y);
+      });
+      ctx2d.closePath();
+      ctx2d.stroke();
     });
+  }
 
-    function redrawPreviewWithContours(){
-      ctx2d.clearRect(0,0,preview2d.width,preview2d.height);
-      if(loadedImage) ctx2d.drawImage(loadedImage,0,0,preview2d.width,preview2d.height);
-      // overlay heatmap (low alpha)
-      ctx2d.globalAlpha = 0.5;
-      ctx2d.drawImage(heatmap, 0,0, preview2d.width, preview2d.height);
-      ctx2d.globalAlpha = 1;
-      // draw contours
-      ctx2d.lineWidth = 2;
-      for(const c of contours){
-        ctx2d.strokeStyle = '#ff3300';
-        ctx2d.beginPath();
-        for(let i=0;i<c.length;i++){
-          const p=c[i];
-          if(i===0) ctx2d.moveTo(p.x,p.y); else ctx2d.lineTo(p.x,p.y);
-        }
-        ctx2d.closePath();
-        ctx2d.stroke();
+  // --- توليد محيطات دقيقة باستخدام Clipper
+  document.getElementById('generatePaths').addEventListener('click',()=>{
+    if(contours.length===0) return alert('لا محيطات');
+    perimeters=[];
+    const scale=100;
+    contours.forEach(cont=>{
+      const path=cont.map(p=>({X:p.x*scale,Y:p.y*scale}));
+      const solution=new ClipperLib.Paths();
+      const co=new ClipperLib.ClipperOffset();
+      co.AddPath(path,ClipperLib.JoinType.jtRound,ClipperLib.EndType.etClosedPolygon);
+      const offsetVal=parseFloat(document.getElementById('toolDia').value)*scale;
+      co.Execute(solution,-offsetVal);
+      solution.forEach(sol=>{
+        perimeters.push(sol.map(pt=>({x:pt.X/scale,y:pt.Y/scale})));
+      });
+    });
+    redrawContours();
+    alert('تم توليد محيطات دقيقة');
+  });
+
+  // --- G-code
+  document.getElementById('genG').addEventListener('click',()=>{
+    if(perimeters.length===0) return alert('لا محيطات للتوليد');
+    const feed=parseFloat(document.getElementById('feedRate').value)||800;
+    const lines=[];
+    lines.push('; G-code by CNC AI');
+    lines.push('G21');
+    lines.push('G90');
+    lines.push('G0 Z5.000');
+
+    perimeters.forEach(path=>{
+      const first=path[0];
+      lines.push(`G0 X${first.x.toFixed(2)} Y${first.y.toFixed(2)} Z5.000`);
+      path.forEach(p=>{
+        const z=(1-(ctxHeat.getImageData(p.x,p.y,1,1).data[0]/255))*3;
+        lines.push(`G1 X${p.x.toFixed(2)} Y${p.y.toFixed(2)} Z-${z.toFixed(2)} F${feed}`);
+      });
+      lines.push('G0 Z5.000');
+    });
+    lines.push('M30');
+    gcodeOutput.textContent=lines.join('\n');
+  });
+
+  // --- تحميل G-code
+  document.getElementById('downloadG').addEventListener('click',()=>{
+    const txt=gcodeOutput.textContent;
+    if(!txt) return alert('لا يوجد كود للحفظ');
+    const blob=new Blob([txt],{type:'text/plain'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='cnc_output.nc';
+    a.click();
+  });
+
+  // --- معاينة ثلاثية الأبعاد
+  document.getElementById('btn3D').addEventListener('click',()=>{
+    if(!heatmapData) return alert('لا توجد Heatmap');
+    const container=document.getElementById('preview3d');
+    container.innerHTML='';
+    const scene=new THREE.Scene();
+    const camera=new THREE.PerspectiveCamera(45,container.clientWidth/container.clientHeight,0.1,1000);
+    camera.position.set(0,80,120);
+    const renderer=new THREE.WebGLRenderer({antialias:true});
+    renderer.setSize(container.clientWidth,container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    const controls=new THREE.OrbitControls(camera,renderer.domElement);
+    const light=new THREE.DirectionalLight(0xffffff,1);
+    light.position.set(0,100,100);
+    scene.add(light);
+
+    const w=heatmap.width,h=heatmap.height;
+    const geometry=new THREE.PlaneGeometry(100,100,w-1,h-1);
+    const verts=geometry.attributes.position.array;
+    let k=0;
+    for(let yy=0;yy<h;yy++){
+      for(let xx=0;xx<w;xx++){
+        const idx=(yy*w+xx)*4;
+        const br=heatmapData.data[idx]*0.34+heatmapData.data[idx+1]*0.5+heatmapData.data[idx+2]*0.16;
+        const z=(1-br/255)*10;
+        verts[k+2]=z;
+        k+=3;
       }
     }
+    geometry.computeVertexNormals();
+    const mat=new THREE.MeshStandardMaterial({color:0xdddddd,wireframe:false,side:THREE.DoubleSide});
+    const mesh=new THREE.Mesh(geometry,mat);
+    mesh.rotation.x=-Math.PI/2;
+    scene.add(mesh);
 
-    // ---------- generate perimeters (offsets) & infill ----------
-    generatePathsBtn.addEventListener('click', ()=> {
-      if(!contours || contours.length===0) return notify('لا محيطات. شغّل كشف الحواف أولاً.');
-      perimeters = [];
-      infillPaths = [];
-      const toolDia = parseFloat(toolDiaEl.value) || 3;
-      const stepoverPct = parseFloat(stepoverEl.value) || 40;
-      const step = toolDia * (stepoverPct/100);
-      const numOffsets = Math.max(1, Math.floor((toolDia*3) / step) ); // عدد محيطات تقريبية ضمن 3x قطر
-      // for each contour, compute inward offsets
-      for(const cont of contours){
-        let base = cont;
-        const offsets = [];
-        for(let i=0;i<numOffsets;i++){
-          const offDist = - (i * step + toolDia/2); // negative to go inward
-          const off = offsetContour(base, offDist);
-          if(off.length < 6) break;
-          offsets.push(off);
-        }
-        perimeters.push({base:cont, offsets});
-      }
-      // Infill: take largest contour as main area
-      const main = contours.reduce((a,b)=> (a.length>b.length?a:b), contours[0]);
-      // generate infill inside main using step (toolDia * stepover)
-      if(useInfillEl.checked){
-        const infillStep = step;
-        const infillAngle = 0; // degrees (could be parameter)
-        const rawPaths = generateInfillLines(main, infillStep, infillAngle);
-        // optionally simplify long segments by sampling
-        infillPaths = rawPaths.map(p=>p); // keep as is
-      }
-      // draw perimeters and infill on preview
-      drawPerimetersAndInfill();
-      notify('Generated perimeters and infill');
-    });
+    function animate(){requestAnimationFrame(animate);renderer.render(scene,camera);}
+    animate();
+  });
 
-    function drawPerimetersAndInfill(){
-      redrawPreviewWithContours();
-      // draw perimeters
-      ctx2d.lineWidth = 1.5;
-      for(const group of perimeters){
-        ctx2d.strokeStyle = '#00aaff';
-        // base
-        ctx2d.beginPath();
-        group.base.forEach((p,i)=> i?ctx2d.lineTo(p.x,p.y):ctx2d.moveTo(p.x,p.y));
-        ctx2d.closePath(); ctx2d.stroke();
-        // offsets
-        ctx2d.strokeStyle = '#00cc66';
-        for(const off of group.offsets){
-          ctx2d.beginPath();
-          off.forEach((p,i)=> i?ctx2d.lineTo(p.x,p.y):ctx2d.moveTo(p.x,p.y));
-          ctx2d.closePath(); ctx2d.stroke();
-        }
-      }
-      // draw infill
-      ctx2d.strokeStyle = '#999999';
-      ctx2d.lineWidth = 1;
-      for(const path of infillPaths){
-        for(const seg of path){
-          ctx2d.beginPath();
-          ctx2d.moveTo(seg[0].x, seg[0].y);
-          for(let i=1;i<seg.length;i++) ctx2d.lineTo(seg[i].x, seg[i].y);
-          ctx2d.stroke();
-        }
-      }
-    }
-
-    // ---------- Generate G-code from perimeters + infill with Z from heatmap ----------
-    genGBtn.addEventListener('click', ()=>{
-      if((!perimeters || perimeters.length===0) && (!infillPaths || infillPaths.length===0))
-        return notify('لا مسارات. أنشئ المسارات أولاً.');
-      const lines = [];
-      // header
-      lines.push('; CNC AI — Generated G-code (from contours & heatmap)');
-      lines.push('G21 ; mm');
-      lines.push('G90 ; absolute');
-      lines.push('G0 Z5.000 ; safe');
-      const feed = parseFloat(feedRateEl.value) || 800;
-      const startFromEdges = startFromEdgesEl.checked;
-      // helper to emit path (array of points in canvas coords)
-      function emitPathPts(pts, rapidToStart=true){
-        if(!pts || pts.length===0) return;
-        const first = canvasToMM(pts[0], preview2d);
-        if(rapidToStart){
-          lines.push(`G0 X${first.X.toFixed(3)} Y${first.Y.toFixed(3)} Z5.000`);
-        } else {
-          lines.push(`G1 X${first.X.toFixed(3)} Y${first.Y.toFixed(3)} F${feed}`);
-        }
-        // then plunge to Z using sampled Z from heatmap for each point
-        for(let i=0;i<pts.length;i++){
-          const p = pts[i];
-          const z = sampleZAtCanvasXY(p.x, p.y);
-          const mm = canvasToMM(p, preview2d);
-          // ensure small decimals
-          lines.push(`G1 X${mm.X.toFixed(3)} Y${mm.Y.toFixed(3)} Z-${z.toFixed(3)} F${feed}`);
-        }
-        // retract
-        lines.push('G0 Z5.000');
-      }
-
-      // Order: perimeters (optionally start from outer perimeter edge)
-      if(usePerimetersEl.checked){
-        for(const group of perimeters){
-          // base then offsets
-          const sequences = [group.base].concat(group.offsets);
-          // optionally reverse orientation so starting point is on edge (approx)
-          for(const seq of sequences){
-            // convert seq to point objects in preview coords (already)
-            emitPathPts(seq, true);
-          }
-        }
-      }
-
-      // infill (optionally start after perimeters)
-      if(useInfillEl.checked && infillPaths.length){
-        // flatten infillPaths (each path is array-of-segments)
-        for(const seg of infillPaths){
-          for(const pts of seg){
-            // optionally reverse alternate rows for less travel
-            emitPathPts(pts, true);
-          }
-        }
-      }
-
-      lines.push('G0 X0 Y0 ; home (approx)');
-      lines.push('M30');
-      const gtext = lines.join('\n');
-      gcodeOutput.textContent = gtext;
-      notify('G-code generated');
-    });
-
-    downloadGBtn.addEventListener('click', ()=>{
-      const txt = gcodeOutput.textContent || '';
-      if(!txt) return notify('لا G-code للحفظ');
-      const blob = new Blob([txt], {type:'text/plain'});
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'cnc_ai_contours.nc';
-      document.body.appendChild(a); a.click(); a.remove();
-    });
-
-    clearAllBtn.addEventListener('click', ()=>{
-      contours=[]; perimeters=[]; infillPaths=[];
-      ctx2d.clearRect(0,0,preview2d.width,preview2d.height);
-      if(loadedImage) ctx2d.drawImage(loadedImage,0,0,preview2d.width,preview2d.height);
-      gcodeOutput.textContent = '';
-      contCountEl.textContent = '0'; firstLenEl.textContent = '0';
-    });
-
-    simulateBtn.addEventListener('click', ()=>{
-      const lines = (gcodeOutput.textContent || '').split('\n').length;
-      notify('Simulate: lines=' + lines);
-      alert('محاكاة: تم توليد ' + lines + ' سطرًا (عرض تقريبي)');
-    });
-
-    // ------------- 3D preview بسيط (نموذجي) -------------
-    btn3D.addEventListener('click', ()=>{
-      if(!heatmapData) return notify('احتاج heatmap للعرض الثلاثي');
-      // سريعة: نولد شبكة ثلاثية الأبعاد في نافذة جديدة مستخدمين قيم brightness كـ height
-      const w = heatmap.width, h = heatmap.height;
-      let html = '<!doctype html><html><head><meta charset="utf-8"><title>3D Preview</title></head><body style="margin:0">';
-      html += '<script src="https://unpkg.com/three@0.156.0/build/three.min.js"></script>';
-      html += '<div id="c"></div><script>';
-      html += 'const scene=new THREE.Scene();const cam=new THREE.PerspectiveCamera(45,window.innerWidth/window.innerHeight,.1,2000);cam.position.set(0,100,200);';
-      html += 'const renderer=new THREE.WebGLRenderer();renderer.setSize(window.innerWidth,window.innerHeight);document.body.appendChild(renderer.domElement);';
-      html += 'const light=new THREE.DirectionalLight(0xffffff,1);light.position.set(0,1,1);scene.add(light);';
-      // pass heightmap data as array literal (could be heavy for big images; we assume small)
-      const arr = [];
-      for(let i=0;i<w*h;i++){
-        const idx=i*4; arr.push(Math.round(heatmapData.data[idx]*0.34 + heatmapData.data[idx+1]*0.5 + heatmapData.data[idx+2]*0.16));
-      }
-      html += 'const hdata = ' + JSON.stringify({w,h,arr}) + '.arr;';
-      html += `const geometry=new THREE.PlaneGeometry(120,120,${w-1},${h-1});let verts=geometry.attributes.position.array;let k=0;for(let yy=0;yy<${h};yy++){for(let xx=0;xx<${w};xx++){const br=hdata[yy*${w}+xx];const z=(1-br/255)*10;verts[k+2]=z;k+=3;}}geometry.computeVertexNormals();const mat=new THREE.MeshStandardMaterial({color:0x999999,side:THREE.DoubleSide});const mesh=new THREE.Mesh(geometry,mat);mesh.rotation.x=-Math.PI/2;scene.add(mesh);function loop(){requestAnimationFrame(loop);mesh.rotation.z+=0.002;renderer.render(scene,cam);}loop();</script></body></html>`;
-      const wnd = window.open();
-      wnd.document.write(html);
-      wnd.document.close();
-    });
-
-    // --- انتهاء self-invoking
-  })();
-  </script>
+})();
+</script>
 </body>
 </html>
