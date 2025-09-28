@@ -96,10 +96,10 @@
         <div class="card" style="margin-top:12px">
           <h3>⚙️ أدوات الصورة</h3>
           <div class="controls">
-            <button class="btn secondary small" onclick="applyEnhancement('grayscale')">تدرج رمادي</button>
-            <button class="btn secondary small" onclick="applyEnhancement('sharpen')">حدة</button>
-            <button class="btn secondary small" onclick="applyEnhancement('smooth')">نعومة</button>
-            <button class="btn small" onclick="resetImage()">🔁 إعادة الصورة الأصلية</button>
+            <button class="btn secondary small" id="grayscaleBtn">تدرج رمادي</button>
+            <button class="btn secondary small" id="sharpenBtn">حدة</button>
+            <button class="btn secondary small" id="smoothBtn">نعومة</button>
+            <button class="btn small" id="resetBtn">🔁 إعادة الصورة الأصلية</button>
           </div>
           <p class="info">التعديل يُطبّق على نسخة العمل وليس على الملف الأصلي.</p>
         </div>
@@ -117,8 +117,8 @@
             <label class="small">زوم
               <input id="zoomControl" type="range" min="50" max="800" step="10" value="200">
             </label>
-            <button class="btn small" onclick="toggleToolpath()">عرض/إخفاء ToolPath</button>
-            <button class="btn secondary small" onclick="rebuild3D()">إعادة توليد 3D</button>
+            <button class="btn small" id="toggleToolpathBtn">عرض/إخفاء ToolPath</button>
+            <button class="btn secondary small" id="rebuild3DBtn">إعادة توليد 3D</button>
           </div>
         </div>
 
@@ -136,9 +136,9 @@
           </div>
 
           <div class="controls" style="margin-top:8px">
-            <button class="btn small" onclick="extractEdges()">🔍 استخراج الحواف</button>
-            <button class="btn small" onclick="generateGcode()">⚡ توليد G-code</button>
-            <button class="btn secondary small" onclick="downloadGcode()">💾 حفظ</button>
+            <button class="btn small" id="extractEdgesBtn">🔍 استخراج الحواف</button>
+            <button class="btn small" id="generateGcodeBtn">⚡ توليد G-code</button>
+            <button class="btn secondary small" id="downloadGcodeBtn">💾 حفظ</button>
           </div>
 
           <div style="margin-top:10px">
@@ -181,6 +181,17 @@
   const edgeAlgorithm = document.getElementById('edgeAlgorithm');
   const gcodeOutput = document.getElementById('gcodeOutput');
   const notif = document.getElementById('notif');
+
+  // أزرار التحكم
+  const grayscaleBtn = document.getElementById('grayscaleBtn');
+  const sharpenBtn = document.getElementById('sharpenBtn');
+  const smoothBtn = document.getElementById('smoothBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const toggleToolpathBtn = document.getElementById('toggleToolpathBtn');
+  const rebuild3DBtn = document.getElementById('rebuild3DBtn');
+  const extractEdgesBtn = document.getElementById('extractEdgesBtn');
+  const generateGcodeBtn = document.getElementById('generateGcodeBtn');
+  const downloadGcodeBtn = document.getElementById('downloadGcodeBtn');
 
   let baseImageData = null;     // original (work) image data
   let currentImageData = null;  // after enhancements
@@ -339,6 +350,10 @@
     document.getElementById('edgePoints').textContent = 0;
     document.getElementById('edgeCount').textContent = 0;
     document.getElementById('edgeLength').textContent = 0;
+    
+    // إعادة بناء العرض 3D
+    rebuild3D();
+    
     showNotification('تم تحديث خريطة الارتفاعات');
   }
 
@@ -456,7 +471,7 @@
     document.getElementById('edgeLength').textContent = Math.round(calculateEdgeLength(edgePaths));
 
     showNotification('تم استخراج الحواف');
-    rebuild3D(); // نعرض ToolPath على 3D بعد الاستخراج
+    drawToolpathOn3D(); // نعرض ToolPath على 3D بعد الاستخراج
   }
 
   /* ============================
@@ -647,196 +662,190 @@
 
   /* ==================================================
      Three.js — معاينة 3D مع تحسينات استهلاك الذاكرة
-     - نعيد استخدام المشهد ونعالج إعادة الإنشاء بأمان
      ================================================== */
-  let scene, camera, renderer, mesh3d = null, toolpathGroup = null;
-  let animId = null;
-  let showToolPathFlag = true;
-  let rotationSpeed = parseFloat(rotationSpeedInput.value);
+  let scene, camera, renderer, mesh, toolpath = null;
+  let rotationSpeed = 0.01;
+  let zoomLevel = 200;
+  let showToolpath = true;
 
   function initThree(){
     const container = document.getElementById('preview3d');
-    // تنظيف أي Renderer سابق
-    if (renderer && renderer.domElement && container.contains(renderer.domElement)){
-      container.removeChild(renderer.domElement);
-      try { renderer.dispose(); } catch(e){}
-    }
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf7f9fb);
-    camera = new THREE.PerspectiveCamera(45, container.clientWidth / Math.max(1, container.clientHeight), 0.1, 2000);
-    camera.position.set(0, Math.max(originalWidth, originalHeight) * 0.6 + 50, Math.max(originalWidth, originalHeight) * 0.6 + 50);
-    camera.lookAt(0,0,0);
-    renderer = new THREE.WebGLRenderer({antialias:true,alpha:true});
+    camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+    renderer = new THREE.WebGLRenderer({antialias:true});
     renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setClearColor(0xf0f0f0);
+    container.innerHTML = '';
     container.appendChild(renderer.domElement);
 
-    // lights
-    scene.add(new THREE.AmbientLight(0x666666, 1.0));
-    const dl = new THREE.DirectionalLight(0xffffff, 0.9);
-    dl.position.set(200,400,200);
-    scene.add(dl);
-    scene.add(new THREE.GridHelper(Math.max(originalWidth,originalHeight)*1.2, 20));
+    // إضاءة
+    const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambient);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(1,1,1);
+    scene.add(dirLight);
 
-    // groups
-    toolpathGroup = new THREE.Group();
-    scene.add(toolpathGroup);
+    // شبكة مساعدة
+    const grid = new THREE.GridHelper(100, 10, 0x888888, 0xcccccc);
+    scene.add(grid);
 
-    // start animate
-    if (animId) cancelAnimationFrame(animId);
-    animId = requestAnimationFrame(animate);
-  }
+    // كاميرا
+    camera.position.set(0, -zoomLevel/2, zoomLevel/2);
+    camera.lookAt(0,0,0);
 
-  function animate(){
-    animId = requestAnimationFrame(animate);
-    if (mesh3d) mesh3d.rotation.y += rotationSpeed;
-    renderer.render(scene, camera);
-  }
-
-  function rebuild3D(){
-    if (!heightMapData) { showNotification('حمّل صورة أولاً',1600); return; }
-    if (!renderer) initThree();
-
-    // تنظيف mesh القديم
-    if (mesh3d){
-      try {
-        mesh3d.geometry.dispose();
-        if (Array.isArray(mesh3d.material)){
-          mesh3d.material.forEach(m => m.dispose && m.dispose());
-        } else {
-          mesh3d.material.dispose && mesh3d.material.dispose();
-        }
-        scene.remove(mesh3d);
-        mesh3d = null;
-      } catch(e){}
+    // دوران تلقائي
+    function animate(){
+      requestAnimationFrame(animate);
+      if (mesh) mesh.rotation.y += rotationSpeed;
+      renderer.render(scene, camera);
     }
-    // Texture من الـ heatmap
-    const texture = new THREE.CanvasTexture(heatmap);
-    texture.needsUpdate = true;
-    // هندسة Plane مع تبسيط عدد القطع حسب maxSegments لتوفير الموارد
-    const maxSegments = 220;
-    const segX = Math.min(Math.max(1, originalWidth - 1), maxSegments);
-    const segY = Math.min(Math.max(1, originalHeight - 1), maxSegments);
+    animate();
 
-    const geometry = new THREE.PlaneGeometry(originalWidth, originalHeight, segX, segY);
-    const pos = geometry.attributes.position.array;
-    // assign z from heightMapData (scaled)
+    // تحجيم عند تغيير حجم النافذة
+    window.addEventListener('resize', ()=>{
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    });
+  }
+
+  /* ============================
+     إعادة بناء 3D من heightMapData
+     - نستخدم PlaneGeometry مع تعديل قيم vertices Z
+     - نضيف لوناً حسب الارتفاع
+     ============================ */
+  function rebuild3D(){
+    if (!heightMapData || !scene) return;
+    // إزالة الـ mesh القديم
+    if (mesh) scene.remove(mesh);
+    if (toolpath) scene.remove(toolpath);
+
+    const w = originalWidth, h = originalHeight;
+    const geometry = new THREE.PlaneGeometry(w, h, w-1, h-1);
+    const vertices = geometry.attributes.position.array;
     const zScale = Number(heightIntensity.value || 80);
-    let vIndex = 0;
-    const vertsPerRow = segX + 1, vertsPerCol = segY + 1;
-    for (let row=0; row<vertsPerCol; row++){
-      for (let col=0; col<vertsPerRow; col++){
-        const ix = Math.floor(col * (originalWidth - 1) / (vertsPerRow - 1));
-        const iy = Math.floor(row * (originalHeight - 1) / (vertsPerCol - 1));
-        const idx = iy * originalWidth + ix;
-        const h = (heightMapData[idx] || 0) * zScale;
-        pos[vIndex*3 + 2] = h;
-        vIndex++;
+
+    // تعديل Z لكل vertex
+    for (let i=0;i<vertices.length/3;i++){
+      const x = Math.round(vertices[i*3] + w/2);
+      const y = Math.round(vertices[i*3+1] + h/2);
+      if (x>=0 && x<w && y>=0 && y<h){
+        const z = heightMapData[y*w + x] * zScale;
+        vertices[i*3+2] = z;
       }
     }
     geometry.computeVertexNormals();
-    const material = new THREE.MeshPhongMaterial({ map: texture, side: THREE.DoubleSide });
-    mesh3d = new THREE.Mesh(geometry, material);
-    mesh3d.rotation.x = -Math.PI / 2;
-    // center
-    mesh3d.position.set(0,0,0);
-    scene.add(mesh3d);
 
-    // draw toolpath if present
-    drawToolpathOn3D();
-
-    showNotification('تم تحديث المعاينة 3D');
-  }
-
-  function drawToolpathOn3D(){
-    if (!scene) initThree();
-    // تنظيف المجموعة
-    if (toolpathGroup) {
-      toolpathGroup.clear();
-      // dispose geometries if any
-    }
-    if (!edgePaths || !edgePaths.length) return;
-
-    if (!showToolPathFlag) return;
-
-    const material = new THREE.LineBasicMaterial({ color: 0xff5722, linewidth: 1 });
-    for (const path of edgePaths){
-      const pts = [];
-      for (const p of path){
-        const x = p.x - originalWidth/2;
-        const z = (sampleHeightAtPixel(Math.round(p.x), Math.round(p.y)) || 0) * Number(heightIntensity.value || 80);
-        const y = z; // y is elevation after rotating plane
-        const y3 = y;
-        const z3 = p.y - originalHeight/2;
-        pts.push(new THREE.Vector3(x, y3, z3));
-      }
-      if (pts.length < 2) continue;
-      const geom = new THREE.BufferGeometry().setFromPoints(pts);
-      const line = new THREE.Line(geom, material);
-      toolpathGroup.add(line);
-    }
-  }
-
-  function toggleToolpath(){
-    showToolPathFlag = !showToolPathFlag;
-    drawToolpathOn3D();
-  }
-
-  /* ============================
-     مساعدة: تبعية عناصر التحكم
-     ============================ */
-  heightIntensity.addEventListener('input', ()=>{ heightValue.textContent = heightIntensity.value; rebuild3D(); });
-  rotationSpeedInput.addEventListener('input', ()=> { rotationSpeed = parseFloat(rotationSpeedInput.value); });
-  zoomControl.addEventListener('input', ()=> {
-    if (camera) camera.position.z = parseInt(zoomControl.value);
-  });
-
-  window.addEventListener('resize', ()=>{
-    const container = document.getElementById('preview3d');
-    if (renderer && camera){
-      camera.aspect = container.clientWidth / Math.max(1, container.clientHeight);
-      camera.updateProjectionMatrix();
-      renderer.setSize(container.clientWidth, container.clientHeight);
-    }
-  });
-
-  /* ============================
-     دوال مساعدة إضافية
-     ============================ */
-  function sampleHeightAtPixel(x,y){ // إعادة تعريف محلي (المرجع السابق)
-    if (!heightMapData) return 0;
-    x = Math.max(0, Math.min(originalWidth-1, x));
-    y = Math.max(0, Math.min(originalHeight-1, y));
-    return heightMapData[y * originalWidth + x] || 0;
-  }
-
-  /* ============================
-     ربط الأزرار (الحفظ، توليد، استخراج)
-     ============================ */
-  // دوال مرتبطة بعناصر HTML تم تعريفها أعلاه
-  // extractEdges() تم تعريفها
-  // generateGcode() تم تعريفها
-  // downloadGcode() تم تعريفها
-
-  /* ============================
-     بدء: نهيّئ Three.js ولكن ننشئ mesh عند توفر الصورة
-     ============================ */
-  initThree(); // تجهز المشهد
-  // لكن لن ننشئ mesh حتى تحميل الصورة
-
-  /* ============================
-     دوال مساعدة نهائية: عدم تحطم عند استدعاءات خاطئة
-     ============================ */
-  function rebuild3DIfReady(){
-    if (heightMapData) rebuild3D();
-  }
-
-  // ربط عناصر التحكم البسيطة التي يمكن ملاحظتها فورًا
-  document.querySelectorAll('.tab').forEach(tab=>{
-    tab.addEventListener('click', ()=> {
-      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-      tab.classList.add('active');
-      // يبقى التصميم كما هو؛ التبويبات تغير الواجهة بصريًا فقط
+    // مادة مع تدرج لوني
+    const material = new THREE.MeshLambertMaterial({
+      color: 0x4a90e2,
+      vertexColors: true,
+      wireframe: false,
+      side: THREE.DoubleSide
     });
+
+    // vertex colors حسب الارتفاع
+    const colors = [];
+    for (let i=0;i<vertices.length/3;i++){
+      const z = vertices[i*3+2] / zScale; // normalize
+      const c = colorFromJet(z);
+      colors.push(c.r/255, c.g/255, c.b/255);
+    }
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+    mesh = new THREE.Mesh(geometry, material);
+    mesh.rotation.x = -Math.PI/2;
+    scene.add(mesh);
+
+    // إعادة رسم ToolPath إذا كان مفعّلاً
+    if (showToolpath) drawToolpathOn3D();
+  }
+
+  /* ============================
+     رسم ToolPath (مسار الحواف) على المشهد 3D
+     ============================ */
+  function drawToolpathOn3D(){
+    if (!scene || !edgePaths.length) return;
+    // إزالة القديم
+    if (toolpath) scene.remove(toolpath);
+
+    const points = [];
+    const colors = [];
+    const zScale = Number(heightIntensity.value || 80);
+
+    for (const path of edgePaths){
+      for (let i=1;i<path.length;i++){
+        const p0 = path[i-1], p1 = path[i];
+        const x0 = p0.x - originalWidth/2, y0 = p0.y - originalHeight/2;
+        const x1 = p1.x - originalWidth/2, y1 = p1.y - originalHeight/2;
+        const z0 = sampleHeightAtPixel(Math.round(p0.x), Math.round(p0.y)) * zScale;
+        const z1 = sampleHeightAtPixel(Math.round(p1.x), Math.round(p1.y)) * zScale;
+
+        points.push(x0, z0, y0);
+        points.push(x1, z1, y1);
+        colors.push(1,0,0, 1,0,0); // أحمر
+      }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    const material = new THREE.LineBasicMaterial({vertexColors: true, linewidth: 2});
+    toolpath = new THREE.LineSegments(geometry, material);
+    scene.add(toolpath);
+  }
+
+  /* ============================
+     تهيئة الأحداث
+     ============================ */
+  function initEvents(){
+    // أزرار التحسينات
+    grayscaleBtn.addEventListener('click', ()=> applyEnhancement('grayscale'));
+    sharpenBtn.addEventListener('click', ()=> applyEnhancement('sharpen'));
+    smoothBtn.addEventListener('click', ()=> applyEnhancement('smooth'));
+    resetBtn.addEventListener('click', resetImage);
+
+    // شريط Z
+    heightIntensity.addEventListener('input', ()=>{
+      heightValue.textContent = heightIntensity.value;
+      rebuild3D();
+    });
+
+    // شريط السرعة والزوم
+    rotationSpeedInput.addEventListener('input', ()=> rotationSpeed = parseFloat(rotationSpeedInput.value));
+    zoomControl.addEventListener('input', ()=>{
+      zoomLevel = parseFloat(zoomControl.value);
+      camera.position.set(0, -zoomLevel/2, zoomLevel/2);
+      camera.lookAt(0,0,0);
+    });
+
+    // أزرار الحواف وG-code
+    extractEdgesBtn.addEventListener('click', extractEdges);
+    generateGcodeBtn.addEventListener('click', generateGcode);
+    downloadGcodeBtn.addEventListener('click', downloadGcode);
+
+    // 3D controls
+    toggleToolpathBtn.addEventListener('click', ()=>{
+      showToolpath = !showToolpath;
+      if (toolpath) toolpath.visible = showToolpath;
+      showNotification(showToolpath ? 'تم إظهار مسار الأداة' : 'تم إخفاء مسار الأداة');
+    });
+    rebuild3DBtn.addEventListener('click', rebuild3D);
+
+    // تبديل الثيم (خفيف)
+    document.getElementById('themeToggle').addEventListener('click', ()=>{
+      document.body.classList.toggle('dark');
+      showNotification(document.body.classList.contains('dark') ? 'الوضع الليلي' : 'الوضع النهاري');
+    });
+  }
+
+  /* ============================
+     تهيئة التطبيق
+     ============================ */
+  window.addEventListener('load', ()=>{
+    initThree();
+    initEvents();
+    showNotification('تم تحميل CNC AI بنجاح');
   });
   </script>
 </body>
