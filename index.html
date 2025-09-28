@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CNC AI - النسخة النهائية المصححة</title>
+  <title>CNC AI - النسخة المصححة والمحسنة</title>
 
   <!-- مكتبات خارجية -->
   <script src="https://cdn.jsdelivr.net/npm/clipper-lib@6.4.2/clipper.js"></script>
@@ -112,6 +112,17 @@
       background: #f8d7da;
       color: #721c24;
     }
+    .preview-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .preview-box {
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 10px;
+      background: #fff;
+    }
     @media (max-width: 900px) {
       .container {
         grid-template-columns: 1fr;
@@ -120,7 +131,7 @@
   </style>
 </head>
 <body>
-<header>🛠 CNC AI - النسخة النهائية المصححة</header>
+<header>🛠 CNC AI - النسخة المصححة والمحسنة</header>
 
 <div class="container">
   <!-- يسار -->
@@ -131,20 +142,28 @@
     <div id="statusArea"></div>
 
     <div>
-      <button id="btnAnalyze" class="btn btn-primary">كشف الحواف</button>
+      <button id="btnAnalyze" class="btn btn-primary" disabled>كشف الحواف</button>
       <button id="btnGeneratePaths" class="btn" disabled>توليد المحيطات</button>
       <button id="btnGenGcode" class="btn" disabled>توليد G-code</button>
       <button id="btnDownload" class="btn" disabled>تحميل G-code</button>
     </div>
 
-    <label>معاينة 2D</label>
-    <canvas id="preview2d" width="600" height="400"></canvas>
+    <div class="preview-container">
+      <div class="preview-box">
+        <label>معاينة 2D</label>
+        <canvas id="preview2d" width="600" height="400"></canvas>
+      </div>
 
-    <label>Heatmap (للـ Z)</label>
-    <canvas id="heatmap" width="300" height="200"></canvas>
+      <div class="preview-box">
+        <label>Heatmap (للـ Z)</label>
+        <canvas id="heatmap" width="300" height="200"></canvas>
+      </div>
 
-    <label>معاينة 3D</label>
-    <div id="preview3d" style="width:100%;height:300px;background:#eee;border-radius:6px"></div>
+      <div class="preview-box">
+        <label>معاينة 3D</label>
+        <div id="preview3d" style="width:100%;height:300px;background:#eee;border-radius:6px"></div>
+      </div>
+    </div>
   </div>
 
   <!-- يمين -->
@@ -192,11 +211,13 @@ const heatmap = document.getElementById('heatmap');
 const ctxHeat = heatmap.getContext('2d');
 const gcodeOutput = document.getElementById('gcodeOutput');
 const statusArea = document.getElementById('statusArea');
+const btnAnalyze = document.getElementById('btnAnalyze');
 const btnGeneratePaths = document.getElementById('btnGeneratePaths');
 const btnGenGcode = document.getElementById('btnGenGcode');
 const btnDownload = document.getElementById('btnDownload');
 
 let loadedImage = null;
+let originalImageData = null;
 let contours = [];
 let perimeters = [];
 let heatmapData = null;
@@ -210,10 +231,29 @@ fileInput.addEventListener('change', e => {
   const img = new Image();
   img.onload = () => {
     loadedImage = img;
-    // ضبط أبعاد المعاينة
-    preview2d.width = img.width > 800 ? 800 : img.width;
-    preview2d.height = img.height * (preview2d.width / img.width);
-    ctx2d.drawImage(img, 0, 0, preview2d.width, preview2d.height);
+    
+    // ضبط أبعاد المعاينة 2D
+    const maxWidth = 600;
+    const maxHeight = 400;
+    let width = img.width;
+    let height = img.height;
+    
+    if (width > maxWidth) {
+      height = (maxWidth / width) * height;
+      width = maxWidth;
+    }
+    
+    if (height > maxHeight) {
+      width = (maxHeight / height) * width;
+      height = maxHeight;
+    }
+    
+    preview2d.width = width;
+    preview2d.height = height;
+    ctx2d.drawImage(img, 0, 0, width, height);
+    
+    // حفظ بيانات الصورة الأصلية للمعالجة
+    originalImageData = ctx2d.getImageData(0, 0, width, height);
 
     // توليد Heatmap مصغرة
     heatmap.width = 300;
@@ -224,7 +264,7 @@ fileInput.addEventListener('change', e => {
     showStatus('تم تحميل الصورة بنجاح', 'success');
     
     // تفعيل زر كشف الحواف
-    document.getElementById('btnAnalyze').disabled = false;
+    btnAnalyze.disabled = false;
     
     // إعادة تعيين الحالة
     contours = [];
@@ -233,6 +273,11 @@ fileInput.addEventListener('change', e => {
     btnGenGcode.disabled = true;
     btnDownload.disabled = true;
     gcodeOutput.textContent = '';
+    
+    // إعادة تعيين معاينة 3D
+    const preview3d = document.getElementById('preview3d');
+    preview3d.innerHTML = '';
+    preview3d.style.background = '#eee';
   };
   
   img.onerror = () => {
@@ -251,14 +296,14 @@ function showStatus(message, type) {
 }
 
 /* كشف الحواف */
-document.getElementById('btnAnalyze').addEventListener('click', () => {
-  if (!heatmapData) return showStatus('حمّل صورة أولاً', 'error');
+btnAnalyze.addEventListener('click', () => {
+  if (!originalImageData) return showStatus('حمّل صورة أولاً', 'error');
   
   showStatus('جاري كشف الحواف...', 'success');
   
   // استخدام setTimeout لتجنب تجميد المتصفح
   setTimeout(() => {
-    contours = detectEdges(heatmapData);
+    contours = detectEdges(originalImageData);
     drawContours();
     showStatus('تم كشف الحواف بنجاح', 'success');
     btnGeneratePaths.disabled = false;
@@ -274,9 +319,7 @@ function drawContours() {
   contours.forEach(cont => {
     ctx2d.beginPath();
     cont.forEach((p, i) => {
-      const x = (p.x / heatmap.width) * preview2d.width;
-      const y = (p.y / heatmap.height) * preview2d.height;
-      if (i === 0) ctx2d.moveTo(x, y); else ctx2d.lineTo(x, y);
+      if (i === 0) ctx2d.moveTo(p.x, p.y); else ctx2d.lineTo(p.x, p.y);
     });
     ctx2d.closePath();
     ctx2d.stroke();
@@ -377,7 +420,7 @@ function perpendicularDist(p, a, b) {
 }
 
 /* توليد المحيطات باستخدام Clipper */
-document.getElementById('btnGeneratePaths').addEventListener('click', () => {
+btnGeneratePaths.addEventListener('click', () => {
   if (contours.length === 0) return showStatus('لا توجد حواف', 'error');
   
   showStatus('جاري توليد المحيطات...', 'success');
@@ -415,9 +458,7 @@ function drawPerimeters() {
   perimeters.forEach(poly => {
     ctx2d.beginPath();
     poly.forEach((p, i) => {
-      const x = (p.x / heatmap.width) * preview2d.width;
-      const y = (p.y / heatmap.height) * preview2d.height;
-      if (i === 0) ctx2d.moveTo(x, y); else ctx2d.lineTo(x, y);
+      if (i === 0) ctx2d.moveTo(p.x, p.y); else ctx2d.lineTo(p.x, p.y);
     });
     ctx2d.closePath();
     ctx2d.stroke();
@@ -508,8 +549,8 @@ function getZ(x, y) {
   if (!heatmapData) return 0;
   
   const w = heatmap.width, h = heatmap.height;
-  const ix = Math.max(0, Math.min(w - 1, Math.floor(x)));
-  const iy = Math.max(0, Math.min(h - 1, Math.floor(y)));
+  const ix = Math.max(0, Math.min(w - 1, Math.floor(x * (w / preview2d.width))));
+  const iy = Math.max(0, Math.min(h - 1, Math.floor(y * (h / preview2d.height))));
   const idx = (iy * w + ix) * 4;
   const r = heatmapData.data[idx];
   const g = heatmapData.data[idx + 1];
@@ -524,13 +565,13 @@ function canvasToMM(pt) {
   const workW = parseFloat(document.getElementById('workWidth').value);
   const workH = parseFloat(document.getElementById('workHeight').value);
   return {
-    x: (pt.x / heatmap.width) * workW,
-    y: (pt.y / heatmap.height) * workH
+    x: (pt.x / preview2d.width) * workW,
+    y: (pt.y / preview2d.height) * workH
   };
 }
 
 /* توليد G-code */
-document.getElementById('btnGenGcode').addEventListener('click', () => {
+btnGenGcode.addEventListener('click', () => {
   if (perimeters.length === 0) return showStatus('لا توجد محيطات', 'error');
   
   showStatus('جاري توليد G-code...', 'success');
@@ -543,7 +584,7 @@ document.getElementById('btnGenGcode').addEventListener('click', () => {
 
     const lines = [
       '; G-code Generated by CNC AI',
-      '; النسخة النهائية المصححة',
+      '; النسخة المصححة والمحسنة',
       'G21 ; استخدام المليمترات',
       'G90 ; الوضع المطلق',
       'G17 ; مستوى XY',
@@ -576,7 +617,9 @@ document.getElementById('btnGenGcode').addEventListener('click', () => {
         lines.push(`G1 X${firstPoint.x.toFixed(2)} Y${firstPoint.y.toFixed(2)} Z-${firstZ.toFixed(2)} F${feed}`);
         
         // الانتقال إلى ارتفاع الأمان بعد كل مرور
-        lines.push(`G0 Z${safeZ}`);
+        if (pass < passes) {
+          lines.push(`G0 Z${safeZ}`);
+        }
       }
     });
 
@@ -590,7 +633,7 @@ document.getElementById('btnGenGcode').addEventListener('click', () => {
 });
 
 /* تحميل G-code */
-document.getElementById('btnDownload').addEventListener('click', () => {
+btnDownload.addEventListener('click', () => {
   if (!gcodeOutput.textContent) return showStatus('لا يوجد G-code لتحميله', 'error');
   
   const blob = new Blob([gcodeOutput.textContent], { type: 'text/plain' });
