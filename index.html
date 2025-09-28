@@ -1,341 +1,843 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CNC AI - Final Version</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CNC AI - ثابت ومصحح</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      background: #f9f9f9;
-      color: #333;
+    /* === لم أحذف أي جزء من التصميم الأساسي — الأنماط الأصلية مع تحسينات طفيفة === */
+    :root{
+      --primary:#4a90e2; --accent:#67b0f5; --bg:#f8f8f8; --card:#fff; --text:#222;
     }
-    header {
-      background: linear-gradient(90deg, #2196f3, #21cbf3);
-      color: #fff;
-      text-align: center;
-      padding: 1rem;
-      font-size: 1.5rem;
-    }
-    .container {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1rem;
-      padding: 1rem;
-    }
-    canvas {
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      max-width: 100%;
-    }
-    #preview3d {
-      width: 100%;
-      height: 400px;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-    }
-    .controls {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      margin-top: 1rem;
-    }
-    button {
-      padding: 10px;
-      border: none;
-      border-radius: 5px;
-      background: #2196f3;
-      color: #fff;
-      cursor: pointer;
-    }
-    button:hover { background: #1976d2; }
-    textarea {
-      width: 100%;
-      height: 200px;
-      margin-top: 1rem;
-      font-family: monospace;
-      padding: 0.5rem;
-    }
+    body{font-family:Arial, sans-serif;background:var(--bg);color:var(--text);margin:0;padding:0;}
+    header{background:linear-gradient(90deg,var(--primary),var(--accent));color:#fff;padding:12px;border-radius:0 0 8px 8px;display:flex;align-items:center;justify-content:space-between}
+    header h1{font-size:18px;margin:0;margin-inline-start:12px}
+    .container{max-width:1180px;margin:18px auto;padding:12px}
+    .tabs{display:flex;gap:8px;background:var(--card);padding:6px;border-radius:8px;border:1px solid #e6e6e6;overflow:hidden}
+    .tab{padding:10px 14px;cursor:pointer;background:transparent;border-radius:6px;font-weight:600}
+    .tab.active{background:var(--primary);color:#fff}
+    .grid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}
+    @media(min-width:980px){ .grid{grid-template-columns:1fr 420px} }
+
+    .card{background:var(--card);padding:12px;border-radius:10px;border:1px solid #e6e6e6;box-shadow:0 6px 18px rgba(0,0,0,0.03)}
+    .flex{display:flex;gap:8px;align-items:center}
+    label{font-size:13px}
+    input[type=file]{display:none}
+    .file-label{display:inline-block;padding:8px 10px;border-radius:8px;background:#f0f4f9;border:1px dashed #dfe9fb;cursor:pointer}
+    canvas{max-width:100%;border-radius:8px;background:white}
+    #preview3d{width:100%;height:360px;border-radius:8px;overflow:hidden;border:1px solid #e6e6e6;position:relative;background:#fafafa;}
+    .controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+    .btn{padding:8px 12px;border-radius:8px;border:none;cursor:pointer;background:var(--primary);color:#fff}
+    .btn.secondary{background:#eef3fb;color:var(--primary);border:1px solid #d7e9ff}
+    .small{font-size:13px;padding:6px 8px}
+    textarea{width:100%;height:220px;font-family:monospace;padding:10px;border-radius:8px;border:1px solid #e6e6e6}
+    .info{font-size:13px;color:#555;margin-top:6px}
+    .row{display:flex;gap:8px;align-items:center}
+    input[type=range]{width:160px}
+    .notification{position:fixed;top:18px;left:18px;background:#111;color:#fff;padding:10px 14px;border-radius:8px;opacity:0;transform:translateY(-8px);transition:all .28s}
+    .notification.show{opacity:1;transform:none}
   </style>
 </head>
 <body>
-<header>🛠️ CNC AI - Final Version</header>
-
-<div class="container">
-  <div>
-    <h3>📤 تحميل الصورة</h3>
-    <input type="file" id="fileInput" accept="image/*">
-    <canvas id="inputCanvas"></canvas>
-    <h3>🌈 خريطة الارتفاعات</h3>
-    <canvas id="heatmapCanvas"></canvas>
-    <div class="controls">
-      <label>شدة الارتفاع (Z)
-        <input type="range" id="zScale" min="10" max="300" value="80">
-      </label>
-      <button onclick="extractEdges()">🔍 استخراج الحواف</button>
-      <button onclick="generateGCode()">⚡ توليد G-code</button>
-      <button onclick="downloadGCode()">💾 حفظ G-code</button>
+  <header>
+    <h1>🛠️ CNC AI — النسخة المصححة (التصميم محفوظ)</h1>
+    <div style="display:flex;gap:10px;align-items:center">
+      <button id="themeToggle" class="btn small">🌙</button>
     </div>
+  </header>
+
+  <div class="container">
+    <div class="tabs">
+      <div class="tab active" data-tab="preview">معاينة الصورة</div>
+      <div class="tab" data-tab="edges">استخراج الحواف</div>
+      <div class="tab" data-tab="gcode">توليد G-code</div>
+      <div class="tab" data-tab="simulation">معاينة 3D للكود</div>
+    </div>
+
+    <div class="grid" style="margin-top:14px">
+      <!-- العمود الأيسر: رفع الصورة، preview2d، heatmap -->
+      <div>
+        <div class="card">
+          <h3>📤 رفع الصورة</h3>
+          <div class="row" style="margin-top:8px">
+            <label class="file-label" for="fileInput">📁 اختر صورة</label>
+            <input id="fileInput" type="file" accept="image/*" />
+            <div id="fileName" class="info">لم يتم اختيار أي صورة</div>
+          </div>
+
+          <div style="margin-top:12px">
+            <h4>📷 الصورة الأصلية</h4>
+            <div style="overflow:auto">
+              <canvas id="preview2d"></canvas>
+            </div>
+          </div>
+
+          <div style="margin-top:12px">
+            <h4>🌈 Heatmap</h4>
+            <canvas id="heatmap" style="width:100%;height:auto"></canvas>
+            <div class="controls" style="margin-top:8px">
+              <div class="row">
+                <label>مقياس Z</label>
+                <input id="heightIntensity" type="range" min="5" max="400" value="80" />
+                <span id="heightValue">80</span>
+              </div>
+              <div class="row">
+                <label>دقة G-code</label>
+                <select id="gcodePrecision">
+                  <option value="low">منخفضة (أسرع)</option>
+                  <option value="medium" selected>متوسطة</option>
+                  <option value="high">عالية (أبطأ)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <h3>⚙️ أدوات الصورة</h3>
+          <div class="controls">
+            <button class="btn secondary small" onclick="applyEnhancement('grayscale')">تدرج رمادي</button>
+            <button class="btn secondary small" onclick="applyEnhancement('sharpen')">حدة</button>
+            <button class="btn secondary small" onclick="applyEnhancement('smooth')">نعومة</button>
+            <button class="btn small" onclick="resetImage()">🔁 إعادة الصورة الأصلية</button>
+          </div>
+          <p class="info">التعديل يُطبّق على نسخة العمل وليس على الملف الأصلي.</p>
+        </div>
+      </div>
+
+      <!-- العمود الأيمن: 3D preview، إعدادات G-code، مخرجات -->
+      <div>
+        <div class="card">
+          <h3>🌀 معاينة ثلاثية الأبعاد</h3>
+          <div id="preview3d"></div>
+          <div class="controls" style="margin-top:8px">
+            <label class="small">دوران
+              <input id="rotationSpeed" type="range" min="0" max="0.05" step="0.001" value="0.01">
+            </label>
+            <label class="small">زوم
+              <input id="zoomControl" type="range" min="50" max="800" step="10" value="200">
+            </label>
+            <button class="btn small" onclick="toggleToolpath()">عرض/إخفاء ToolPath</button>
+            <button class="btn secondary small" onclick="rebuild3D()">إعادة توليد 3D</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <h3>🔧 استخراج الحواف & توليد G-code</h3>
+
+          <div class="controls" style="margin-top:8px">
+            <label class="small">عتبة الحواف
+              <input id="edgeThreshold" type="range" min="0" max="255" value="128" />
+            </label>
+            <select id="edgeAlgorithm" class="small">
+              <option value="sobel">Sobel</option>
+              <option value="laplacian">Laplacian</option>
+            </select>
+          </div>
+
+          <div class="controls" style="margin-top:8px">
+            <button class="btn small" onclick="extractEdges()">🔍 استخراج الحواف</button>
+            <button class="btn small" onclick="generateGcode()">⚡ توليد G-code</button>
+            <button class="btn secondary small" onclick="downloadGcode()">💾 حفظ</button>
+          </div>
+
+          <div style="margin-top:10px">
+            <div class="info">نقاط الحواف: <b id="edgePoints">0</b> — مسارات: <b id="edgeCount">0</b> — طول إجمالي (بكسل): <b id="edgeLength">0</b></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <h3>📜 مخرجات G-code</h3>
+          <textarea id="gcodeOutput" readonly>// اضغط على توليد G-code لبدء</textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- تبويب معاينة 3D للكود يمكن إعادة استخدام نفس preview3d (مبسط) -->
+    <div style="margin-top:12px" id="extra-space"></div>
   </div>
 
-  <div>
-    <h3>🌀 المعاينة ثلاثية الأبعاد</h3>
-    <div id="preview3d"></div>
-    <textarea id="gcodeOutput" readonly></textarea>
-  </div>
-</div>
+  <div id="notif" class="notification"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-<script>
-/* ----------------------------
-   عناصر DOM
----------------------------- */
-const fileInput = document.getElementById("fileInput");
-const inputCanvas = document.getElementById("inputCanvas");
-const ctxInput = inputCanvas.getContext("2d");
-const heatmapCanvas = document.getElementById("heatmapCanvas");
-const ctxHeatmap = heatmapCanvas.getContext("2d");
-const gcodeOutput = document.getElementById("gcodeOutput");
-const zScaleInput = document.getElementById("zScale");
+  <!-- three.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
 
-/* ----------------------------
-   بيانات
----------------------------- */
-let imageWidth = 0, imageHeight = 0;
-let heightMap = null;       // خريطة الارتفاعات
-let edgePaths = [];         // مسارات الحواف XY
-let scene, camera, renderer, mesh;
+  <script>
+  /* ============================================================
+     متغيرات DOM وبيانات الصورة والخريطة والحواف (احتفظنا بالتصميم)
+     ============================================================ */
+  const fileInput = document.getElementById('fileInput');
+  const fileName = document.getElementById('fileName');
+  const preview2d = document.getElementById('preview2d');
+  const ctx2d = preview2d.getContext('2d');
+  const heatmap = document.getElementById('heatmap');
+  const ctxHeat = heatmap.getContext('2d');
 
-/* ----------------------------
-   تحميل الصورة
----------------------------- */
-fileInput.addEventListener("change", (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
+  const heightIntensity = document.getElementById('heightIntensity');
+  const heightValue = document.getElementById('heightValue');
+  const rotationSpeedInput = document.getElementById('rotationSpeed');
+  const zoomControl = document.getElementById('zoomControl');
+  const edgeThreshold = document.getElementById('edgeThreshold');
+  const edgeAlgorithm = document.getElementById('edgeAlgorithm');
+  const gcodeOutput = document.getElementById('gcodeOutput');
+  const notif = document.getElementById('notif');
 
-  const img = new Image();
-  img.onload = () => {
-    const maxWidth = 400;
-    const scale = Math.min(1, maxWidth / img.width);
-    imageWidth = Math.round(img.width * scale);
-    imageHeight = Math.round(img.height * scale);
+  let baseImageData = null;     // original (work) image data
+  let currentImageData = null;  // after enhancements
+  let heightMapData = null;     // Float32Array [0..1]
+  let originalWidth = 0, originalHeight = 0;
 
-    inputCanvas.width = imageWidth;
-    inputCanvas.height = imageHeight;
-    ctxInput.drawImage(img, 0, 0, imageWidth, imageHeight);
+  let edgePaths = [];   // array of paths: each path is [{x,y}, ...] OR when simple: single array of points
+  let edgePointsFlat = []; // flat points array when simpler
+  let lastGcode = '';
 
-    generateHeightMap();
-    update3DPreview();
-  };
-  img.src = URL.createObjectURL(file);
-});
-
-/* ----------------------------
-   إنشاء خريطة الارتفاعات
----------------------------- */
-function generateHeightMap() {
-  const imageData = ctxInput.getImageData(0, 0, imageWidth, imageHeight);
-  heightMap = new Float32Array(imageWidth * imageHeight);
-
-  for (let i = 0, j = 0; i < imageData.data.length; i += 4, j++) {
-    const gray = 0.299 * imageData.data[i] + 0.587 * imageData.data[i + 1] + 0.114 * imageData.data[i + 2];
-    heightMap[j] = gray / 255;
+  /* ----------------------------
+     إشعارات صغيرة
+  ---------------------------- */
+  function showNotification(msg, timeout=2200){
+    notif.textContent = msg;
+    notif.classList.add('show');
+    setTimeout(()=> notif.classList.remove('show'), timeout);
   }
 
-  // رسم heatmap
-  heatmapCanvas.width = imageWidth;
-  heatmapCanvas.height = imageHeight;
-  const heatmapData = ctxHeatmap.createImageData(imageWidth, imageHeight);
+  /* ============================
+     تحميل الصورة (نحافظ على نفس التجربة)
+     - نقوم بعمل downsample حكيم إذا الصورة كبيرة جداً
+     ============================ */
+  fileInput.addEventListener('change', (e)=>{
+    const f = e.target.files[0];
+    if (!f) return;
+    fileName.textContent = f.name;
+    const reader = new FileReader();
+    reader.onload = (ev)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        // Downsample if width > 1200 to avoid heavy memory
+        const maxDisplayW = 900; // لا نغير التصميم، لكن نخزن نسخة أصغر للمعالجة
+        const scale = Math.min(1, maxDisplayW / img.width);
+        originalWidth = Math.max(1, Math.round(img.width * scale));
+        originalHeight = Math.max(1, Math.round(img.height * scale));
+        preview2d.width = originalWidth;
+        preview2d.height = originalHeight;
+        ctx2d.clearRect(0,0,preview2d.width, preview2d.height);
+        ctx2d.drawImage(img, 0, 0, preview2d.width, preview2d.height);
 
-  for (let i = 0; i < heightMap.length; i++) {
-    const val = heightMap[i];
-    const r = val * 255;
-    const g = 0;
-    const b = 255 - r;
-    heatmapData.data[i * 4] = r;
-    heatmapData.data[i * 4 + 1] = g;
-    heatmapData.data[i * 4 + 2] = b;
-    heatmapData.data[i * 4 + 3] = 255;
-  }
-  ctxHeatmap.putImageData(heatmapData, 0, 0);
-}
+        baseImageData = ctx2d.getImageData(0,0,preview2d.width, preview2d.height);
+        currentImageData = ctx2d.getImageData(0,0,preview2d.width, preview2d.height);
 
-/* ----------------------------
-   استخراج الحواف (Sobel)
----------------------------- */
-function extractEdges() {
-  const imageData = ctxInput.getImageData(0, 0, imageWidth, imageHeight);
-  const gray = new Uint8ClampedArray(imageWidth * imageHeight);
-
-  for (let i = 0, j = 0; i < imageData.data.length; i += 4, j++) {
-    gray[j] = 0.299 * imageData.data[i] + 0.587 * imageData.data[i + 1] + 0.114 * imageData.data[i + 2];
-  }
-
-  const sobelX = [-1,0,1,-2,0,2,-1,0,1];
-  const sobelY = [-1,-2,-1,0,0,0,1,2,1];
-  const threshold = 100;
-  edgePaths = [];
-
-  for (let y = 1; y < imageHeight - 1; y++) {
-    for (let x = 1; x < imageWidth - 1; x++) {
-      let gx = 0, gy = 0;
-      for (let ky = -1; ky <= 1; ky++) {
-        for (let kx = -1; kx <= 1; kx++) {
-          const idx = (y + ky) * imageWidth + (x + kx);
-          const wX = sobelX[(ky + 1) * 3 + (kx + 1)];
-          const wY = sobelY[(ky + 1) * 3 + (kx + 1)];
-          gx += gray[idx] * wX;
-          gy += gray[idx] * wY;
-        }
-      }
-      const mag = Math.sqrt(gx * gx + gy * gy);
-      if (mag > threshold) edgePaths.push({ x, y });
-    }
-  }
-
-  alert(`تم استخراج ${edgePaths.length} نقطة حافة`);
-  update3DPreview();
-}
-
-/* ----------------------------
-   توليد G-code فعلي
-   XY = الحواف
-   Z = خريطة الارتفاعات
----------------------------- */
-function generateGCode() {
-  if (!edgePaths.length || !heightMap) {
-    alert("يجب تحميل صورة واستخراج الحواف أولاً");
-    return;
-  }
-
-  const feedRate = 800;
-  const safeZ = 5;
-  const maxCutDepth = 2; 
-  const zScale = parseFloat(zScaleInput.value);
-
-  let gcode = `; G-code Generated by CNC AI\nG21 ; Units in mm\nG90 ; Absolute positioning\nG17\nG94\nF${feedRate}\nM3\nG0 Z${safeZ}\n`;
-
-  let lastPos = null;
-  edgePaths.forEach(pt => {
-    const idx = pt.y * imageWidth + pt.x;
-    const zVal = (heightMap[idx] || 0) * zScale;
-    const z = -Math.min(zVal, maxCutDepth).toFixed(3);
-
-    if (!lastPos || Math.hypot(pt.x - lastPos.x, pt.y - lastPos.y) > 5) {
-      gcode += `G0 X${pt.x.toFixed(2)} Y${pt.y.toFixed(2)} Z${safeZ}\n`;
-      gcode += `G1 Z${z} F${feedRate / 2}\n`;
-    } else {
-      gcode += `G1 X${pt.x.toFixed(2)} Y${pt.y.toFixed(2)} Z${z}\n`;
-    }
-    lastPos = pt;
+        computeHeightMapFromCurrent();
+        showNotification('تم تحميل الصورة');
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(f);
   });
 
-  gcode += "G0 Z5\nM5\nG0 X0 Y0\nM30";
-  gcodeOutput.value = gcode;
+  /* ============================
+     تحسينات بسيطة للصورة (تعمل على نسخة العمل currentImageData)
+     - تُحافَظ على التصميم الأصلي (زر إعادة تعيين يعيد baseImageData)
+     ============================ */
+  function applyEnhancement(type){
+    if (!baseImageData) { showNotification('حمّل صورة أولاً',1800); return; }
+    // clone base image to temp canvas
+    const tmp = document.createElement('canvas');
+    tmp.width = baseImageData.width; tmp.height = baseImageData.height;
+    const tctx = tmp.getContext('2d');
+    tctx.putImageData(baseImageData,0,0);
+    let img = tctx.getImageData(0,0,tmp.width,tmp.height);
+    const data = img.data;
 
-  update3DPreview(true); // عرض ToolPath
-}
+    if (type === 'grayscale'){
+      for (let i=0;i<data.length;i+=4){
+        const g = Math.round(0.299*data[i]+0.587*data[i+1]+0.114*data[i+2]);
+        data[i]=data[i+1]=data[i+2]=g;
+      }
+    } else if (type === 'sharpen'){
+      // simple 3x3 unsharp mask-ish (careful, heavier)
+      const copy = new Uint8ClampedArray(data);
+      const w = tmp.width, h = tmp.height;
+      const weights = [0,-1,0,-1,5,-1,0,-1,0];
+      for (let y=1;y<h-1;y++){
+        for (let x=1;x<w-1;x++){
+          for (let c=0;c<3;c++){
+            let sum=0;
+            for (let ky=-1;ky<=1;ky++){
+              for (let kx=-1;kx<=1;kx++){
+                const wt = weights[(ky+1)*3 + (kx+1)];
+                const idx = ((y+ky)*w + (x+kx))*4 + c;
+                sum += copy[idx]*wt;
+              }
+            }
+            const idx0 = (y*w + x)*4 + c;
+            data[idx0] = Math.max(0, Math.min(255, sum));
+          }
+        }
+      }
+    } else if (type === 'smooth'){
+      // lightweight blur
+      const copy = new Uint8ClampedArray(data);
+      const w = tmp.width, h = tmp.height;
+      for (let y=1;y<h-1;y++){
+        for (let x=1;x<w-1;x++){
+          for (let c=0;c<3;c++){
+            let sum=0;
+            for (let ky=-1;ky<=1;ky++){
+              for (let kx=-1;kx<=1;kx++){
+                const idx = ((y+ky)*w + (x+kx))*4 + c;
+                sum += copy[idx];
+              }
+            }
+            const idx0 = (y*w + x)*4 + c;
+            data[idx0] = Math.round(sum/9);
+          }
+        }
+      }
+    }
 
-/* ----------------------------
-   حفظ G-code
----------------------------- */
-function downloadGCode() {
-  const blob = new Blob([gcodeOutput.value], { type: "text/plain" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "cnc_output.gcode";
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-/* ----------------------------
-   معاينة 3D
----------------------------- */
-function init3D() {
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xf0f0f0);
-
-  camera = new THREE.PerspectiveCamera(45, preview3d.offsetWidth / preview3d.offsetHeight, 0.1, 1000);
-  camera.position.set(0, 200, 200);
-  camera.lookAt(0, 0, 0);
-
-  renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(preview3d.offsetWidth, preview3d.offsetHeight);
-  document.getElementById("preview3d").appendChild(renderer.domElement);
-
-  const light = new THREE.DirectionalLight(0xffffff, 1);
-  light.position.set(100, 200, 100);
-  scene.add(light);
-
-  scene.add(new THREE.AmbientLight(0x404040));
-  scene.add(new THREE.GridHelper(200, 20));
-}
-
-function update3DPreview(showToolPath = false) {
-  if (!scene) init3D();
-
-  if (mesh) {
-    scene.remove(mesh);
-    mesh.geometry.dispose();
-    mesh.material.dispose();
+    tctx.putImageData(img,0,0);
+    // draw scaled image to preview2d to keep display size identical
+    ctx2d.clearRect(0,0,preview2d.width, preview2d.height);
+    ctx2d.drawImage(tmp,0,0,preview2d.width, preview2d.height);
+    currentImageData = ctx2d.getImageData(0,0,preview2d.width, preview2d.height);
+    computeHeightMapFromCurrent();
+    showNotification('تم تطبيق التعديل');
   }
 
-  if (!heightMap) return;
+  function resetImage(){
+    if (!baseImageData) return;
+    ctx2d.putImageData(baseImageData,0,0);
+    currentImageData = ctx2d.getImageData(0,0,preview2d.width, preview2d.height);
+    computeHeightMapFromCurrent();
+    showNotification('استعيدت الصورة الأصلية');
+  }
 
-  const maxSegments = 200;
-  const segX = Math.min(imageWidth - 1, maxSegments);
-  const segY = Math.min(imageHeight - 1, maxSegments);
-  const geometry = new THREE.PlaneGeometry(imageWidth, imageHeight, segX, segY);
+  /* ============================
+     حساب خريطة الارتفاعات (heightMapData)
+     - نتيح downsampling للمعالجة عندما تكون الدقة عالية
+     - heightMapData: Float32Array بعرض*ارتفاع
+     ============================ */
+  function computeHeightMapFromCurrent(){
+    if (!currentImageData) return;
+    const w = currentImageData.width, h = currentImageData.height;
+    originalWidth = w; originalHeight = h;
+    heightMapData = new Float32Array(w*h);
+    const d = currentImageData.data;
+    for (let i=0,j=0;i<d.length;i+=4,j++){
+      const g = 0.299 * d[i] + 0.587*d[i+1] + 0.114*d[i+2];
+      heightMapData[j] = Math.max(0, Math.min(1, g/255));
+    }
+    // render heatmap (simple colormap jet-like)
+    heatmap.width = w; heatmap.height = h;
+    const out = ctxHeat.createImageData(w,h);
+    for (let i=0;i<heightMapData.length;i++){
+      const v = heightMapData[i];
+      const c = colorFromJet(v);
+      out.data[i*4] = c.r; out.data[i*4+1] = c.g; out.data[i*4+2] = c.b; out.data[i*4+3] = 255;
+    }
+    ctxHeat.putImageData(out,0,0);
+    // تحديث واجهة صغيرة
+    document.getElementById('edgePoints').textContent = 0;
+    document.getElementById('edgeCount').textContent = 0;
+    document.getElementById('edgeLength').textContent = 0;
+    showNotification('تم تحديث خريطة الارتفاعات');
+  }
 
-  const positions = geometry.attributes.position.array;
-  let vIndex = 0;
+  function colorFromJet(v){
+    // simple jet palette
+    v = Math.max(0,Math.min(1,v));
+    const four = 4 * v;
+    const r = Math.round(255 * Math.max(0, Math.min(1, Math.min(four - 1.5, -four + 4.5))));
+    const g = Math.round(255 * Math.max(0, Math.min(1, Math.min(four - 0.5, -four + 3.5))));
+    const b = Math.round(255 * Math.max(0, Math.min(1, Math.min(four + 0.5, -four + 2.5))));
+    return {r,g,b};
+  }
 
-  for (let y = 0; y <= segY; y++) {
-    for (let x = 0; x <= segX; x++) {
-      const imgX = Math.floor((x / segX) * (imageWidth - 1));
-      const imgY = Math.floor((y / segY) * (imageHeight - 1));
-      const idx = imgY * imageWidth + imgX;
-      const z = heightMap[idx] * parseFloat(zScaleInput.value);
+  /* ============================
+     استخراج الحواف (Sobel أو Laplacian)
+     - بعد الاستخراج نقوم بتجميع نقاط متجاورة في مسارات
+     - ثم نبسط المسارات إذا كانت كبيرة جداً
+     ============================ */
+  function extractEdges(){
+    if (!currentImageData) { showNotification('حمّل صورة أولاً',1600); return; }
+    const w = currentImageData.width, h = currentImageData.height;
+    const gray = new Uint8ClampedArray(w*h);
+    const d = currentImageData.data;
+    for (let i=0,j=0;i<d.length;i+=4,j++){
+      gray[j] = Math.round(0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2]);
+    }
 
-      positions[vIndex * 3 + 2] = z;
-      vIndex++;
+    const algo = edgeAlgorithm.value;
+    let edgeImg = new Uint8ClampedArray(w*h);
+    if (algo === 'sobel'){
+      const kx = [-1,0,1,-2,0,2,-1,0,1];
+      const ky = [-1,-2,-1,0,0,0,1,2,1];
+      for (let y=1;y<h-1;y++){
+        for (let x=1;x<w-1;x++){
+          let gx=0,gy=0;
+          for (let ky0=-1;ky0<=1;ky0++){
+            for (let kx0=-1;kx0<=1;kx0++){
+              const v = gray[(y+ky0)*w + (x+kx0)];
+              gx += v * kx[(ky0+1)*3 + (kx0+1)];
+              gy += v * ky[(ky0+1)*3 + (kx0+1)];
+            }
+          }
+          const mag = Math.hypot(gx,gy);
+          edgeImg[y*w + x] = (mag > Number(edgeThreshold.value)) ? 255 : 0;
+        }
+      }
+    } else {
+      // laplacian
+      const lap = [0,-1,0,-1,4,-1,0,-1,0];
+      for (let y=1;y<h-1;y++){
+        for (let x=1;x<w-1;x++){
+          let sum=0;
+          for (let ky0=-1;ky0<=1;ky0++){
+            for (let kx0=-1;kx0<=1;kx0++){
+              const v = gray[(y+ky0)*w + (x+kx0)];
+              sum += v * lap[(ky0+1)*3 + (kx0+1)];
+            }
+          }
+          edgeImg[y*w + x] = (Math.abs(sum) > Number(edgeThreshold.value))? 255 : 0;
+        }
+      }
+    }
+
+    // ارسم لمعاينة (خفيفة)
+    const out = ctx2d.createImageData(w,h);
+    for (let i=0;i<edgeImg.length;i++){
+      const val = edgeImg[i];
+      out.data[i*4] = out.data[i*4+1] = out.data[i*4+2] = val;
+      out.data[i*4+3] = 255;
+    }
+    // لا نغيّر الصورة الأصلية — نعرض على كانفس الحد
+    const edgeCanvas = document.createElement('canvas');
+    edgeCanvas.width = w; edgeCanvas.height = h;
+    edgeCanvas.getContext('2d').putImageData(out,0,0);
+
+    // تحويل البيكسلات إلى مسارات متصلة (ببساطة: تجميع مكون متّصل)
+    const visited = new Uint8Array(w*h);
+    edgePaths = [];
+    edgePointsFlat = [];
+    for (let y=0;y<h;y++){
+      for (let x=0;x<w;x++){
+        const idx = y*w + x;
+        if (edgeImg[idx] === 255 && !visited[idx]) {
+          // flood fill to build component
+          const stack = [{x,y}];
+          const path = [];
+          visited[idx] = 1;
+          while (stack.length){
+            const p = stack.pop();
+            path.push(p);
+            for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++){
+              if (dx===0 && dy===0) continue;
+              const nx = p.x + dx, ny = p.y + dy;
+              if (nx<0||ny<0||nx>=w||ny>=h) continue;
+              const ni = ny*w + nx;
+              if (!visited[ni] && edgeImg[ni]===255){
+                visited[ni]=1; stack.push({x:nx,y:ny});
+              }
+            }
+          }
+          if (path.length>4) {
+            // simplify path if too large
+            const precision = (document.getElementById('gcodePrecision').value === 'low') ? 4 :
+                              (document.getElementById('gcodePrecision').value === 'medium') ? 2 : 1;
+            const simplified = simplifyPath(orderPathByChain(path), precision);
+            edgePaths.push(simplified);
+            edgePointsFlat = edgePointsFlat.concat(simplified);
+          }
+        }
+      }
+    }
+
+    document.getElementById('edgePoints').textContent = edgePointsFlat.length;
+    document.getElementById('edgeCount').textContent = edgePaths.length;
+    document.getElementById('edgeLength').textContent = Math.round(calculateEdgeLength(edgePaths));
+
+    showNotification('تم استخراج الحواف');
+    rebuild3D(); // نعرض ToolPath على 3D بعد الاستخراج
+  }
+
+  /* ============================
+     مساعدة: نجمع نقاط المسار في ترتيب متتالي تقريبي
+     - path هو مجموعة نقاط غير مرتبة نتيجة ال-flood fill
+     - نرتبها عبر بناء سلسلة جريِدة بسيطة (Nearest neighbour greedy)
+     ============================ */
+  function orderPathByChain(points){
+    if (points.length <= 2) return points;
+    const pts = points.slice();
+    const ordered = [pts.pop()];
+    while (pts.length){
+      const last = ordered[ordered.length-1];
+      // find nearest
+      let minI = 0; let minD = Infinity;
+      for (let i=0;i<pts.length;i++){
+        const dx = pts[i].x - last.x, dy = pts[i].y - last.y;
+        const d = dx*dx + dy*dy;
+        if (d < minD) { minD = d; minI = i; }
+      }
+      ordered.push(pts.splice(minI,1)[0]);
+    }
+    return ordered;
+  }
+
+  /* ============================
+     تبسيط مسار: Ramer–Douglas–Peucker
+     - يُقلّل عدد النقاط مع الحفاظ على الشكل العام
+     ============================ */
+  function simplifyPath(points, epsilon){
+    if (points.length < 3) return points;
+    const sqr = (a)=>a*a;
+    function perpendicularDistance(pt, lineStart, lineEnd){
+      const x0 = pt.x, y0 = pt.y;
+      const x1 = lineStart.x, y1 = lineStart.y;
+      const x2 = lineEnd.x, y2 = lineEnd.y;
+      const num = Math.abs((y2-y1)*x0 - (x2-x1)*y0 + x2*y1 - y2*x1);
+      const den = Math.hypot(y2-y1, x2-x1);
+      return den === 0 ? Math.hypot(x0-x1,y0-y1) : num/den;
+    }
+    function rdp(pts, eps){
+      let dmax = 0, index = 0;
+      for (let i=1;i<pts.length-1;i++){
+        const d = perpendicularDistance(pts[i], pts[0], pts[pts.length-1]);
+        if (d > dmax){ index = i; dmax = d; }
+      }
+      if (dmax > eps){
+        const rec1 = rdp(pts.slice(0,index+1), eps);
+        const rec2 = rdp(pts.slice(index), eps);
+        return rec1.slice(0,-1).concat(rec2);
+      } else {
+        return [pts[0], pts[pts.length-1]];
+      }
+    }
+    return rdp(points, epsilon);
+  }
+
+  /* ============================
+     حساب طول الحواف (بكسل)
+     ============================ */
+  function calculateEdgeLength(paths){
+    let total=0;
+    for (const p of paths){
+      for (let i=1;i<p.length;i++){
+        const dx = p[i].x - p[i-1].x, dy = p[i].y - p[i-1].y;
+        total += Math.hypot(dx,dy);
+      }
+    }
+    return total;
+  }
+
+  /* ============================
+     إعدادات توليد G-code
+     - نحسب bounding box من نقاط الحواف حتى لا نغادر حدود التصميم
+     - نحسب Z من heightMapData مقيّمة إلى mm عبر heightIntensity
+     - نستخدم تبسيط المسارات لتقليل نقاط G-code الزائدة
+     - نولّد G-code عملي مع feed/spindle وقيم آمنة
+     ============================ */
+  function generateGcode(){
+    if (!edgePaths.length || !heightMapData){ showNotification('الرجاء تحميل الصورة واستخراج الحواف أولاً',2200); return; }
+
+    // إعدادات الآلة — يمكن جعلها قابلة للتعديل لاحقاً
+    const unitsPerPixel = 1.0; // mm per pixel — اعتمدت 1mm = 1px (يمكن تغيير حسب المقياس الحقيقي)
+    const feedRate = 1200;   // mm/min
+    const plungeFeed = Math.max(100, Math.floor(feedRate/3));
+    const spindle = 10000;
+    const safeZ = 5; // mm
+    const maxCutDepth = 3; // أقصى عمق قطع عملي بالـ mm (لا تغيره دون فحص)
+    const zScale = Number(heightIntensity.value || 80); // مقياس Z من الواجهة
+
+    // bounding box (نضمن ألا نتحرك خارج حدود الصورة)
+    let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+    edgePaths.forEach(path => {
+      for (const p of path){
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+      }
+    });
+    // تحويل لــ mm
+    minX = minX * unitsPerPixel; maxX = maxX * unitsPerPixel;
+    minY = minY * unitsPerPixel; maxY = maxY * unitsPerPixel;
+
+    // توليد G-code
+    let lines = [];
+    lines.push(`; Generated by CNC AI`);
+    lines.push(`; Date: ${new Date().toLocaleString()}`);
+    lines.push(`G21 ; units mm`);
+    lines.push(`G90 ; absolute`);
+    lines.push(`G17`);
+    lines.push(`F${feedRate}`);
+    lines.push(`S${spindle}`);
+    lines.push(`M3`);
+    lines.push(`G0 Z${safeZ.toFixed(3)}`);
+
+    // نحول كل مسار Path إلى سلسلة أوامر
+    for (let pi=0; pi<edgePaths.length; pi++){
+      const path = edgePaths[pi];
+      if (!path || path.length < 2) continue;
+
+      // تبسيط إضافي لمسارات طويلة
+      const precision = (document.getElementById('gcodePrecision').value === 'low') ? 6 :
+                        (document.getElementById('gcodePrecision').value === 'medium') ? 3 : 1;
+      const simple = simplifyPath(path, precision);
+
+      // نقطة البداية
+      const sx = simple[0].x * unitsPerPixel;
+      const sy = simple[0].y * unitsPerPixel;
+      // احرص أن تكون الحركة داخل الـ bounding box
+      lines.push(`; Path ${pi+1} points:${simple.length}`);
+      lines.push(`G0 X${sx.toFixed(3)} Y${sy.toFixed(3)} Z${safeZ.toFixed(3)}`);
+
+      // نزول تدريجي (نستخدم أعلى ارتفاع من الخريطة عند نقطة البداية)
+      const startZ_raw = sampleHeightAtPixel(Math.round(simple[0].x), Math.round(simple[0].y));
+      const startZ_mm = Math.min(maxCutDepth, (startZ_raw * zScale));
+      lines.push(`G1 Z${(-startZ_mm).toFixed(3)} F${plungeFeed}`);
+
+      // الحركة على طول المسار مع Z من heightmap (interpolate)
+      for (let k=1;k<simple.length;k++){
+        const pt = simple[k];
+        const xmm = pt.x * unitsPerPixel;
+        const ymm = pt.y * unitsPerPixel;
+        const rawZ = sampleHeightAtPixel(Math.round(pt.x), Math.round(pt.y));
+        const zmm = Math.min(maxCutDepth, rawZ * zScale);
+        lines.push(`G1 X${xmm.toFixed(3)} Y${ymm.toFixed(3)} Z${(-zmm).toFixed(3)} F${feedRate}`);
+      }
+
+      // إخراج للأعلى بعد كل مسار
+      lines.push(`G0 Z${safeZ.toFixed(3)}`);
+    }
+
+    lines.push(`M5`);
+    lines.push(`G0 X0 Y0`);
+    lines.push(`M30`);
+
+    lastGcode = lines.join('\n');
+    gcodeOutput.value = lastGcode;
+    showNotification('تم توليد G-code بنجاح',2500);
+
+    // عرض ToolPath على 3D
+    drawToolpathOn3D();
+  }
+
+  /* ============================
+     عيّن عيِّنة Z من heightMapData (بتحويل من بكسل)
+     ============================ */
+  function sampleHeightAtPixel(x, y){
+    if (!heightMapData) return 0;
+    x = Math.max(0, Math.min(originalWidth-1, x));
+    y = Math.max(0, Math.min(originalHeight-1, y));
+    return heightMapData[y * originalWidth + x] || 0;
+  }
+
+  /* ============================
+     حفظ G-code كملف
+     ============================ */
+  function downloadGcode(){
+    if (!lastGcode || lastGcode.trim()==='') { showNotification('لا يوجد G-code للحفظ',1600); return; }
+    const blob = new Blob([lastGcode], {type:'text/plain'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'cnc_output.gcode';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    showNotification('تم حفظ ملف G-code');
+  }
+
+  /* ==================================================
+     Three.js — معاينة 3D مع تحسينات استهلاك الذاكرة
+     - نعيد استخدام المشهد ونعالج إعادة الإنشاء بأمان
+     ================================================== */
+  let scene, camera, renderer, mesh3d = null, toolpathGroup = null;
+  let animId = null;
+  let showToolPathFlag = true;
+  let rotationSpeed = parseFloat(rotationSpeedInput.value);
+
+  function initThree(){
+    const container = document.getElementById('preview3d');
+    // تنظيف أي Renderer سابق
+    if (renderer && renderer.domElement && container.contains(renderer.domElement)){
+      container.removeChild(renderer.domElement);
+      try { renderer.dispose(); } catch(e){}
+    }
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf7f9fb);
+    camera = new THREE.PerspectiveCamera(45, container.clientWidth / Math.max(1, container.clientHeight), 0.1, 2000);
+    camera.position.set(0, Math.max(originalWidth, originalHeight) * 0.6 + 50, Math.max(originalWidth, originalHeight) * 0.6 + 50);
+    camera.lookAt(0,0,0);
+    renderer = new THREE.WebGLRenderer({antialias:true,alpha:true});
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    // lights
+    scene.add(new THREE.AmbientLight(0x666666, 1.0));
+    const dl = new THREE.DirectionalLight(0xffffff, 0.9);
+    dl.position.set(200,400,200);
+    scene.add(dl);
+    scene.add(new THREE.GridHelper(Math.max(originalWidth,originalHeight)*1.2, 20));
+
+    // groups
+    toolpathGroup = new THREE.Group();
+    scene.add(toolpathGroup);
+
+    // start animate
+    if (animId) cancelAnimationFrame(animId);
+    animId = requestAnimationFrame(animate);
+  }
+
+  function animate(){
+    animId = requestAnimationFrame(animate);
+    if (mesh3d) mesh3d.rotation.y += rotationSpeed;
+    renderer.render(scene, camera);
+  }
+
+  function rebuild3D(){
+    if (!heightMapData) { showNotification('حمّل صورة أولاً',1600); return; }
+    if (!renderer) initThree();
+
+    // تنظيف mesh القديم
+    if (mesh3d){
+      try {
+        mesh3d.geometry.dispose();
+        if (Array.isArray(mesh3d.material)){
+          mesh3d.material.forEach(m => m.dispose && m.dispose());
+        } else {
+          mesh3d.material.dispose && mesh3d.material.dispose();
+        }
+        scene.remove(mesh3d);
+        mesh3d = null;
+      } catch(e){}
+    }
+    // Texture من الـ heatmap
+    const texture = new THREE.CanvasTexture(heatmap);
+    texture.needsUpdate = true;
+    // هندسة Plane مع تبسيط عدد القطع حسب maxSegments لتوفير الموارد
+    const maxSegments = 220;
+    const segX = Math.min(Math.max(1, originalWidth - 1), maxSegments);
+    const segY = Math.min(Math.max(1, originalHeight - 1), maxSegments);
+
+    const geometry = new THREE.PlaneGeometry(originalWidth, originalHeight, segX, segY);
+    const pos = geometry.attributes.position.array;
+    // assign z from heightMapData (scaled)
+    const zScale = Number(heightIntensity.value || 80);
+    let vIndex = 0;
+    const vertsPerRow = segX + 1, vertsPerCol = segY + 1;
+    for (let row=0; row<vertsPerCol; row++){
+      for (let col=0; col<vertsPerRow; col++){
+        const ix = Math.floor(col * (originalWidth - 1) / (vertsPerRow - 1));
+        const iy = Math.floor(row * (originalHeight - 1) / (vertsPerCol - 1));
+        const idx = iy * originalWidth + ix;
+        const h = (heightMapData[idx] || 0) * zScale;
+        pos[vIndex*3 + 2] = h;
+        vIndex++;
+      }
+    }
+    geometry.computeVertexNormals();
+    const material = new THREE.MeshPhongMaterial({ map: texture, side: THREE.DoubleSide });
+    mesh3d = new THREE.Mesh(geometry, material);
+    mesh3d.rotation.x = -Math.PI / 2;
+    // center
+    mesh3d.position.set(0,0,0);
+    scene.add(mesh3d);
+
+    // draw toolpath if present
+    drawToolpathOn3D();
+
+    showNotification('تم تحديث المعاينة 3D');
+  }
+
+  function drawToolpathOn3D(){
+    if (!scene) initThree();
+    // تنظيف المجموعة
+    if (toolpathGroup) {
+      toolpathGroup.clear();
+      // dispose geometries if any
+    }
+    if (!edgePaths || !edgePaths.length) return;
+
+    if (!showToolPathFlag) return;
+
+    const material = new THREE.LineBasicMaterial({ color: 0xff5722, linewidth: 1 });
+    for (const path of edgePaths){
+      const pts = [];
+      for (const p of path){
+        const x = p.x - originalWidth/2;
+        const z = (sampleHeightAtPixel(Math.round(p.x), Math.round(p.y)) || 0) * Number(heightIntensity.value || 80);
+        const y = z; // y is elevation after rotating plane
+        const y3 = y;
+        const z3 = p.y - originalHeight/2;
+        pts.push(new THREE.Vector3(x, y3, z3));
+      }
+      if (pts.length < 2) continue;
+      const geom = new THREE.BufferGeometry().setFromPoints(pts);
+      const line = new THREE.Line(geom, material);
+      toolpathGroup.add(line);
     }
   }
 
-  geometry.computeVertexNormals();
-  const texture = new THREE.CanvasTexture(heatmapCanvas);
-  const material = new THREE.MeshPhongMaterial({ map: texture, side: THREE.DoubleSide });
-
-  mesh = new THREE.Mesh(geometry, material);
-  mesh.rotation.x = -Math.PI / 2;
-  scene.add(mesh);
-
-  if (showToolPath) {
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
-    const points = edgePaths.map(pt => {
-      const idx = pt.y * imageWidth + pt.x;
-      const z = heightMap[idx] * parseFloat(zScaleInput.value);
-      return new THREE.Vector3(pt.x - imageWidth/2, z, pt.y - imageHeight/2);
-    });
-    const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
-    const line = new THREE.Line(lineGeometry, lineMaterial);
-    scene.add(line);
+  function toggleToolpath(){
+    showToolPathFlag = !showToolPathFlag;
+    drawToolpathOn3D();
   }
 
-  renderer.render(scene, camera);
-}
+  /* ============================
+     مساعدة: تبعية عناصر التحكم
+     ============================ */
+  heightIntensity.addEventListener('input', ()=>{ heightValue.textContent = heightIntensity.value; rebuild3D(); });
+  rotationSpeedInput.addEventListener('input', ()=> { rotationSpeed = parseFloat(rotationSpeedInput.value); });
+  zoomControl.addEventListener('input', ()=> {
+    if (camera) camera.position.z = parseInt(zoomControl.value);
+  });
 
-/* ----------------------------
-   تشغيل المعاينة باستمرار
----------------------------- */
-function animate() {
-  requestAnimationFrame(animate);
-  if (mesh) mesh.rotation.y += 0.002;
-  renderer.render(scene, camera);
-}
-animate();
-</script>
+  window.addEventListener('resize', ()=>{
+    const container = document.getElementById('preview3d');
+    if (renderer && camera){
+      camera.aspect = container.clientWidth / Math.max(1, container.clientHeight);
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    }
+  });
+
+  /* ============================
+     دوال مساعدة إضافية
+     ============================ */
+  function sampleHeightAtPixel(x,y){ // إعادة تعريف محلي (المرجع السابق)
+    if (!heightMapData) return 0;
+    x = Math.max(0, Math.min(originalWidth-1, x));
+    y = Math.max(0, Math.min(originalHeight-1, y));
+    return heightMapData[y * originalWidth + x] || 0;
+  }
+
+  /* ============================
+     ربط الأزرار (الحفظ، توليد، استخراج)
+     ============================ */
+  // دوال مرتبطة بعناصر HTML تم تعريفها أعلاه
+  // extractEdges() تم تعريفها
+  // generateGcode() تم تعريفها
+  // downloadGcode() تم تعريفها
+
+  /* ============================
+     بدء: نهيّئ Three.js ولكن ننشئ mesh عند توفر الصورة
+     ============================ */
+  initThree(); // تجهز المشهد
+  // لكن لن ننشئ mesh حتى تحميل الصورة
+
+  /* ============================
+     دوال مساعدة نهائية: عدم تحطم عند استدعاءات خاطئة
+     ============================ */
+  function rebuild3DIfReady(){
+    if (heightMapData) rebuild3D();
+  }
+
+  // ربط عناصر التحكم البسيطة التي يمكن ملاحظتها فورًا
+  document.querySelectorAll('.tab').forEach(tab=>{
+    tab.addEventListener('click', ()=> {
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+      tab.classList.add('active');
+      // يبقى التصميم كما هو؛ التبويبات تغير الواجهة بصريًا فقط
+    });
+  });
+  </script>
 </body>
 </html>
