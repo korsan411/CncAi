@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CNC AI — مصحح ومحسّن</title>
+
+  <!-- Clipper.js (عن طريق jsDelivr) -->
+  <script src="https://cdn.jsdelivr.net/npm/clipper-lib@6.4.2/clipper_unminified.js"></script>
+
+  <!-- Three.js + OrbitControls (non-module) -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.156.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.156.0/examples/js/controls/OrbitControls.js"></script>
+
+  <style>
+    :root{--primary:#1f78d1;--bg:#f4f6fa;--card:#fff;--muted:#666}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Tahoma,Arial,Helvetica,sans-serif;background:var(--bg);color:#222}
+    header{background:linear-gradient(90deg,var(--primary),#5aa6f7);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
+    header h1{margin:0;font-size:18px}
+    .container{max-width:1300px;margin:14px auto;padding:12px;display:grid;grid-template-columns:1fr 420px;gap:14px}
+    .panel{background:var(--card);padding:12px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.06)}
+    label{font-weight:600;display:block;margin-top:8px}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .btn{padding:8px 12px;border-radius:8px;border:0;cursor:pointer}
+    .btn-primary{background:var(--primary);color:#fff}
+    canvas{background:#fff;border:1px solid #e6eefc;border-radius:6px;max-width:100%}
+    .gcode-output{height:220px;overflow:auto;background:#0b1220;color:#cfe8ff;padding:8px;border-radius:6px;font-family:monospace;font-size:13px}
+    .small{font-size:13px;color:var(--muted)}
+    input[type=range]{width:160px}
+    @media (max-width:980px){ .container{grid-template-columns:1fr} }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🧰 CNC AI — مصحح ومحسّن</h1>
+    <div class="small">رفع → تحليل (Worker) → محيطات دقيقة → G-code</div>
+  </header>
+
+  <main class="container">
+    <!-- اليسار -->
+    <section class="panel">
+      <label>رفع صورة (JPEG/PNG)</label>
+      <input id="fileInput" type="file" accept="image/*">
+
+      <div class="row" style="margin-top:8px">
+        <button id="btnAnalyze" class="btn btn-primary">كشف الحواف وتحليل (Worker)</button>
+        <button id="btnPreview2D" class="btn">عرض 2D</button>
+        <button id="btnHeatmap" class="btn">عرض Heatmap</button>
+        <button id="btn3D" class="btn">معاينة 3D</button>
+      </div>
+
+      <hr>
+
+      <label>إعدادات الماكينة و workspace</label>
+      <div class="row">
+        <div>عرض العمل (X mm): <input id="workW" type="number" value="300" step="1" style="width:90px"></div>
+        <div>عمق العمل (Y mm): <input id="workH" type="number" value="200" step="1" style="width:90px"></div>
+      </div>
+
+      <div class="row">
+        <div>قطر الأداة (mm): <input id="toolDia" type="number" value="3" step="0.1" style="width:90px"></div>
+        <div>Stepover (%): <input id="stepover" type="number" value="40" step="1" style="width:90px"></div>
+        <div>أقصى عمق (mm): <input id="maxDepth" type="number" value="3" step="0.1" style="width:90px"></div>
+        <div>عمق كل مرور (mm): <input id="passDepth" type="number" value="0.5" step="0.1" style="width:90px"></div>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <label><input id="startFromEdges" type="checkbox" checked> بدء من الحواف</label>
+        <label><input id="usePerimeters" type="checkbox" checked> استخدم محيطات (Perimeters)</label>
+        <label><input id="useInfill" type="checkbox" checked> استخدم تعبئة داخلية</label>
+        <label>نوع التعبئة:
+          <select id="infillType">
+            <option value="lines">خطوط</option>
+            <option value="zigzag">zigzag</option>
+            <option value="grid">شبكة</option>
+          </select>
+        </label>
+      </div>
+
+      <hr>
+
+      <label>معاينة 2D</label>
+      <canvas id="preview2d" width="800" height="450"></canvas>
+
+      <label style="margin-top:8px">Heatmap (مصغّرة — تستخدم للـ Z)</label>
+      <canvas id="heatmap" width="320" height="180" style="display:block;margin-top:6px"></canvas>
+
+    </section>
+
+    <!-- اليمين -->
+    <aside class="panel">
+      <h3>G-code ونتائج</h3>
+
+      <div class="row">
+        <button id="generatePaths" class="btn btn-primary">توليد المحيطات وInfill</button>
+        <button id="genG" class="btn">توليد G-code</button>
+        <button id="downloadG" class="btn">تحميل G-code</button>
+      </div>
+
+      <label style="margin-top:8px">Feed rate (mm/min)</label>
+      <input id="feedRate" type="number" value="800" step="1">
+
+      <label style="margin-top:8px">إحصائيات</label>
+      <div class="small">محيطات مكتشفة: <span id="contCount">0</span></div>
+      <div class="small">أطول محيط - نقاط: <span id="firstLen">0</span></div>
+
+      <label style="margin-top:8px">G-code Output</label>
+      <div id="gcodeOutput" class="gcode-output">// G-code سيظهر هنا</div>
+
+      <div class="row" style="margin-top:8px">
+        <button id="clearAll" class="btn">مسح</button>
+        <button id="simulate" class="btn">محاكاة (سطرية)</button>
+      </div>
+
+      <hr>
+
+      <div class="small">ملاحظات: تأكد من التحقق من الإحداثيات وتهيئة ماكينة CNC قبل التشغيل.</div>
+    </aside>
+  </main>
+
+  <!-- 3D preview في نافذة منبثقة لتبسيط التنفيذ -->
+  <script>
+  (function(){
+    // DOM
+    const fileInput = document.getElementById('fileInput');
+    const preview2d = document.getElementById('preview2d');
+    const ctx2d = preview2d.getContext('2d');
+    const heatmap = document.getElementById('heatmap');
+    const ctxHeat = heatmap.getContext('2d');
+
+    const btnAnalyze = document.getElementById('btnAnalyze');
+    const btnPreview2D = document.getElementById('btnPreview2D');
+    const btnHeatmap = document.getElementById('btnHeatmap');
+    const btn3D = document.getElementById('btn3D');
+
+    const generatePathsBtn = document.getElementById('generatePaths');
+    const genGBtn = document.getElementById('genG');
+    const downloadGBtn = document.getElementById('downloadG');
+    const contCountEl = document.getElementById('contCount');
+    const firstLenEl = document.getElementById('firstLen');
+    const gcodeOutput = document.getElementById('gcodeOutput');
+
+    const workWEl = document.getElementById('workW');
+    const workHEl = document.getElementById('workH');
+    const toolDiaEl = document.getElementById('toolDia');
+    const stepoverEl = document.getElementById('stepover');
+    const maxDepthEl = document.getElementById('maxDepth');
+    const passDepthEl = document.getElementById('passDepth');
+    const startFromEdgesEl = document.getElementById('startFromEdges');
+    const usePerimetersEl = document.getElementById('usePerimeters');
+    const useInfillEl = document.getElementById('useInfill');
+    const infillTypeEl = document.getElementById('infillType');
+    const feedRateEl = document.getElementById('feedRate');
+
+    const clearAllBtn = document.getElementById('clearAll');
+    const simulateBtn = document.getElementById('simulate');
+
+    // State
+    let loadedImage = null;
+    let heatmapData = null; // ImageData for heatmap canvas
+    let contours = [];      // contours in heatmap coords [{x,y},...]
+    let contoursCanvas = []; // contours scaled to preview2d coords
+    let perimeters = [];    // perimeters in canvas coords
+    let infillSegments = []; // infill segments in canvas coords (pairs)
+
+    // Worker (inline)
+    let worker = null;
+    function createWorker(){
+      if(worker) { worker.terminate(); worker = null; }
+      const wCode = `
+        // Worker: receives {cmd:'process', img:{width,height,dataUint8ClampedArray}}
+        self.onmessage = function(e){
+          const msg = e.data;
+          if(msg.cmd === 'process'){
+            const w = msg.img.width, h = msg.img.height;
+            const u8 = msg.img.data; // Uint8ClampedArray RGBA
+            // convert to gray
+            const gray = new Float32Array(w*h);
+            for(let i=0;i<w*h;i++){
+              const j=i*4;
+              gray[i] = 0.34*u8[j] + 0.5*u8[j+1] + 0.16*u8[j+2];
+            }
+            // sobel
+            const sob = new Float32Array(w*h);
+            const kx = [-1,0,1,-2,0,2,-1,0,1];
+            const ky = [-1,-2,-1,0,0,0,1,2,1];
+            for(let y=1;y<h-1;y++){
+              for(let x=1;x<w-1;x++){
+                let gx=0, gy=0, idx=0;
+                for(let yy=-1; yy<=1; yy++){
+                  for(let xx=-1; xx<=1; xx++){
+                    const v = gray[(y+yy)*w + (x+xx)];
+                    gx += v * kx[idx];
+                    gy += v * ky[idx];
+                    idx++;
+                  }
+                }
+                sob[y*w + x] = Math.hypot(gx, gy);
+              }
+            }
+            // normalize to 0..255
+            let min=Infinity, max=-Infinity;
+            for(let i=0;i<sob.length;i++){ if(sob[i]<min) min=sob[i]; if(sob[i]>max) max=sob[i]; }
+            const denom = (max - min) || 1;
+            const sobU8 = new Uint8ClampedArray(w*h);
+            for(let i=0;i<w*h;i++) sobU8[i] = Math.round(255*(sob[i]-min)/denom);
+            // threshold: mean + 0.3*std
+            let sum=0;
+            for(let i=0;i<sobU8.length;i++) sum += sobU8[i];
+            const mean = sum / sobU8.length;
+            let varsum=0;
+            for(let i=0;i<sobU8.length;i++){ const d=sobU8[i]-mean; varsum += d*d; }
+            const std = Math.sqrt(varsum / sobU8.length);
+            const thresh = Math.max(20, Math.min(220, Math.round(mean + std*0.25)));
+            // binary
+            const bin = new Uint8Array(w*h);
+            for(let i=0;i<w*h;i++) bin[i] = sobU8[i] >= thresh ? 1 : 0;
+            // simple contour tracing (Moore neighbor boundary following)
+            const visited = new Uint8Array(w*h);
+            const contours = [];
+            const dirs = [[1,0],[1,-1],[0,-1],[-1,-1],[-1,0],[-1,1],[0,1],[1,1]];
+            function trace(sx, sy){
+              let x = sx, y = sy;
+              let startDir = 0;
+              const contour = [];
+              let safety = 0;
+              do {
+                contour.push({x:x, y:y});
+                visited[y*w + x] = 1;
+                let found=false;
+                // search 8 neighbors
+                for(let i=0;i<8;i++){
+                  const d = (startDir + i) % 8;
+                  const nx = x + dirs[d][0], ny = y + dirs[d][1];
+                  if(nx >=0 && nx < w && ny >=0 && ny < h && bin[ny*w + nx]){
+                    // move
+                    x = nx; y = ny;
+                    // next search starts from (d+5)%8 as per Moore
+                    startDir = (d + 5) % 8;
+                    found = true;
+                    break;
+                  }
+                }
+                if(!found) break;
+                safety++; if(safety > w*h*4) break;
+              } while(!(x === sx && y === sy));
+              return contour;
+            }
+            for(let y=1;y<h-1;y++){
+              for(let x=1;x<w-1;x++){
+                const idx = y*w + x;
+                if(bin[idx] && !visited[idx]){
+                  const c = trace(x,y);
+                  if(c && c.length > 6) contours.push(c);
+                }
+              }
+            }
+            // RDP simplification (epsilon relative to diag)
+            function pointLineDistance(pt, v, w){
+              const l2 = (v.x - w.x)*(v.x - w.x) + (v.y - w.y)*(v.y - w.y);
+              if(l2 === 0) return Math.hypot(pt.x - v.x, pt.y - v.y);
+              let t = ((pt.x - v.x)*(w.x - v.x) + (pt.y - v.y)*(w.y - v.y)) / l2;
+              t = Math.max(0, Math.min(1, t));
+              const projx = v.x + t*(w.x - v.x), projy = v.y + t*(w.y - v.y);
+              return Math.hypot(pt.x - projx, pt.y - projy);
+            }
+            function rdp(points, eps){
+              if(points.length < 3) return points.slice();
+              let dmax=0, idx=0;
+              const start = points[0], end = points[points.length-1];
+              for(let i=1;i<points.length-1;i++){
+                const d = pointLineDistance(points[i], start, end);
+                if(d > dmax){ dmax = d; idx = i; }
+              }
+              if(dmax > eps){
+                const left = rdp(points.slice(0, idx+1), eps);
+                const right = rdp(points.slice(idx), eps);
+                return left.slice(0,-1).concat(right);
+              } else {
+                return [start, end];
+              }
+            }
+            // simplify each contour
+            const outContours = [];
+            const diag = Math.hypot(w,h);
+            const eps = Math.max(0.5, diag*0.0025);
+            for(const c of contours){
+              // convert to floats
+              const pts = c.map(p=>({x:p.x, y:p.y}));
+              const simp = rdp(pts, eps);
+              if(simp.length > 5) outContours.push(simp);
+            }
+            self.postMessage({ cmd:'result', contours: outContours });
+          }
+        };
+      `;
+      const blob = new Blob([wCode], {type:'application/javascript'});
+      const url = URL.createObjectURL(blob);
+      worker = new Worker(url);
+      worker.onmessage = function(evt){
+        const msg = evt.data;
+        if(msg.cmd === 'result'){
+          // return contours are in heatmap pixel coords
+          handleWorkerContours(msg.contours);
+        }
+      };
+    }
+
+    // file input -> load image, prepare preview and heatmap
+    fileInput.addEventListener('change', (ev)=>{
+      const f = ev.target.files && ev.target.files[0];
+      if(!f) return alert('اختر ملف صورة');
+      const reader = new FileReader();
+      reader.onload = function(e){
+        const img = new Image();
+        img.onload = function(){
+          loadedImage = img;
+          // scale preview to max width for performance
+          const maxW = 1000;
+          let w = img.width, h = img.height;
+          if(w > maxW){ h = Math.round(h*(maxW/w)); w = maxW; }
+          preview2d.width = w; preview2d.height = h;
+          ctx2d.clearRect(0,0,w,h);
+          ctx2d.drawImage(img, 0, 0, w, h);
+          // heatmap: smaller copy for fast processing and Z sampling
+          const hmW = Math.min(512, w);
+          const scale = hmW / w;
+          heatmap.width = Math.round(w * scale);
+          heatmap.height = Math.round(h * scale);
+          ctxHeat.clearRect(0,0,heatmap.width, heatmap.height);
+          ctxHeat.drawImage(img, 0, 0, heatmap.width, heatmap.height);
+          heatmapData = ctxHeat.getImageData(0,0,heatmap.width,heatmap.height);
+          // create worker lazily
+          createWorker();
+          notify('تم تحميل الصورة. اضغط "كشف الحواف وتحليل" للبدء.');
+        };
+        img.onerror = function(){ alert('فشل في تحميل الصورة'); };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(f);
+    });
+
+    // notify helper
+    function notify(msg){ console.log('[CNC AI] ' + msg); }
+
+    // Analyze button -> send heatmap image data to worker
+    btnAnalyze.addEventListener('click', ()=>{
+      if(!heatmapData) return alert('ارفع صورة أولاً');
+      if(!worker) createWorker();
+      // send copy of image data to worker (structured clone)
+      worker.postMessage({ cmd:'process', img:{ width:heatmapData.width, height:heatmapData.height, data: heatmapData.data }});
+      notify('تم إرسال البيانات للمعالجة في Worker...');
+    });
+
+    // handle contours from worker
+    function handleWorkerContours(wContours){
+      contours = wContours; // coords in heatmap pixels
+      // map to preview canvas coords
+      const scaleX = preview2d.width / heatmap.width;
+      const scaleY = preview2d.height / heatmap.height;
+      contoursCanvas = contours.map(ct => ct.map(p => ({ x: p.x * scaleX, y: p.y * scaleY })));
+      contCountEl.textContent = contoursCanvas.length;
+      firstLenEl.textContent = contoursCanvas[0] ? contoursCanvas[0].length : 0;
+      redrawPreviewWithContours();
+      notify('وصلت محيطات من الـ Worker وتم رسمها.');
+    }
+
+    // redraw preview + overlays
+    function redrawPreviewWithContours(){
+      ctx2d.clearRect(0,0,preview2d.width,preview2d.height);
+      if(loadedImage) ctx2d.drawImage(loadedImage, 0, 0, preview2d.width, preview2d.height);
+      // overlay heatmap semi-transparent
+      ctx2d.globalAlpha = 0.45;
+      ctx2d.drawImage(heatmap, 0, 0, preview2d.width, preview2d.height);
+      ctx2d.globalAlpha = 1;
+      // draw contours (red)
+      ctx2d.lineWidth = 2;
+      ctx2d.strokeStyle = '#ff3300';
+      for(const c of contoursCanvas){
+        ctx2d.beginPath();
+        for(let i=0;i<c.length;i++){
+          const p = c[i];
+          if(i===0) ctx2d.moveTo(p.x, p.y); else ctx2d.lineTo(p.x, p.y);
+        }
+        ctx2d.closePath();
+        ctx2d.stroke();
+      }
+    }
+
+    btnPreview2D.addEventListener('click', ()=>{
+      if(!loadedImage) return alert('لا توجد صورة');
+      ctx2d.clearRect(0,0,preview2d.width,preview2d.height);
+      ctx2d.drawImage(loadedImage, 0, 0, preview2d.width, preview2d.height);
+    });
+
+    btnHeatmap.addEventListener('click', ()=>{
+      if(!heatmapData) return alert('لا توجد Heatmap');
+      // عرض Heatmap (المصغرة)
+      const w = heatmap.width, h = heatmap.height;
+      // (HeatmapData هي صورة ملونة حالياً، نعرضها)
+      ctxHeat.putImageData(heatmapData, 0, 0);
+      alert('عرضت Heatmap المصغرة (تستخدم للاشتقاقات والـ Z)');
+    });
+
+    // helper: sample Z (mm) at preview canvas coords
+    function sampleZAtCanvasXY(xCanvas, yCanvas){
+      if(!heatmapData) return 0;
+      const hmW = heatmap.width, hmH = heatmap.height;
+      const scaleX = hmW / preview2d.width;
+      const scaleY = hmH / preview2d.height;
+      let hx = Math.floor(xCanvas * scaleX);
+      let hy = Math.floor(yCanvas * scaleY);
+      hx = Math.max(0, Math.min(hmW-1, hx));
+      hy = Math.max(0, Math.min(hmH-1, hy));
+      const idx = (hy * hmW + hx) * 4;
+      const r = heatmapData.data[idx], g = heatmapData.data[idx+1], b = heatmapData.data[idx+2];
+      const bright = 0.34*r + 0.5*g + 0.16*b; // 0..255
+      const maxDepth = parseFloat(maxDepthEl.value) || 3; // mm
+      // map: bright 255 -> 0 mm (top), dark 0 -> maxDepth
+      const z = (1 - (bright / 255)) * maxDepth;
+      return z;
+    }
+
+    // generate perimeters using Clipper (in canvas pixel units)
+    generatePathsBtn.addEventListener('click', ()=>{
+      if(!contoursCanvas || contoursCanvas.length === 0) return alert('لا محيطات — شغّل التحليل أولاً');
+      perimeters = [];
+      infillSegments = [];
+      // pixel <-> mm conversions
+      const workWmm = parseFloat(workWEl.value) || 300;
+      const workHmm = parseFloat(workHEl.value) || 200;
+      const canvasW = preview2d.width, canvasH = preview2d.height;
+      // tool in pixels
+      const toolDiaMm = parseFloat(toolDiaEl.value) || 3;
+      const toolDiaPx = (toolDiaMm / workWmm) * canvasW;
+      const stepoverPct = parseFloat(stepoverEl.value) || 40;
+      const stepPx = toolDiaPx * (stepoverPct/100);
+      // Clipper scaling factor (to integer)
+      const clipperScale = 100; // scaling to preserve decimals
+      // prepare Clipper
+      if(typeof ClipperLib === 'undefined'){ alert('ClipperLib غير محمّل — تحقق من اتصال الإنترنت'); return; }
+      // for each contour, create inward offsets: first offset = tool radius, then additional according to stepover
+      for(const base of contoursCanvas){
+        // convert to Clipper path
+        const path = base.map(p => ({ X: Math.round(p.x * clipperScale), Y: Math.round(p.y * clipperScale) }));
+        const co = new ClipperLib.ClipperOffset();
+        // number of offsets: compute until shape vanishes or until N
+        const maxOffsets = Math.max(1, Math.ceil((Math.max(canvasW, canvasH) / toolDiaPx) * 0.8));
+        // we will compute progressive offsets (inward) as negative deltas
+        // start with tool radius inward to generate first inner perimeter
+        const offsetsGroup = [];
+        for(let i=0; i< Math.min(10, maxOffsets); i++){
+          const deltaPx = - (toolDiaPx/2 + i * stepPx); // negative -> inward
+          const deltaClipper = Math.round(deltaPx * clipperScale);
+          const solution = new ClipperLib.Paths();
+          co.Clear();
+          co.AddPath(path, ClipperLib.JoinType.jtRound, ClipperLib.EndType.etClosedPolygon);
+          try {
+            co.Execute(solution, deltaClipper);
+          } catch(err){
+            // sometimes Clipper fails for degenerate shapes
+            break;
+          }
+          if(!solution || solution.length===0) break;
+          // take the largest polygon in solution for this offset
+          // convert back to canvas coords and store
+          for(const sol of solution){
+            const poly = sol.map(pt => ({ x: pt.X / clipperScale, y: pt.Y / clipperScale }));
+            if(poly.length >= 4) offsetsGroup.push(poly);
+          }
+          // prepare for next offset: path remains the original base (ClipperOffset computes offsets from base each time)
+        }
+        // store group: base + offsets
+        perimeters.push({ base: base, offsets: offsetsGroup });
+      }
+
+      // generate infill (simple scanline) for the largest contour only (for performance)
+      if(useInfillEl.checked){
+        // choose largest area contour as main
+        let main = contoursCanvas[0];
+        for(const c of contoursCanvas){
+          if(polygonArea(c) > polygonArea(main)) main = c;
+        }
+        const bounds = polygonBounds(main);
+        const step = Math.max(2, Math.round(stepPx)); // px
+        const segments = [];
+        for(let y = Math.ceil(bounds.minY + step/2); y <= bounds.maxY; y += step){
+          // find intersections of horizontal line y with polygon edges
+          const xs = [];
+          for(let i=0;i<main.length;i++){
+            const a = main[i], b = main[(i+1)%main.length];
+            // ignore horizontal edges
+            if((a.y < y && b.y < y) || (a.y > y && b.y > y) || (a.y === b.y)) continue;
+            // compute x intersection
+            const t = (y - a.y) / (b.y - a.y);
+            if(t >= 0 && t <= 1){
+              const x = a.x + t * (b.x - a.x);
+              xs.push(x);
+            }
+          }
+          xs.sort((a,b)=>a-b);
+          for(let i=0;i+1<xs.length;i+=2){
+            const x1 = xs[i], x2 = xs[i+1];
+            if(x2 - x1 > 2){ segments.push([ {x:x1,y:y}, {x:x2,y:y} ]); }
+          }
+        }
+        infillSegments = segments;
+      }
+
+      // draw perimeters and infill on preview
+      drawPerimetersAndInfill();
+      notify('تم توليد المحيطات وInfill (تقريبي)');
+    });
+
+    // polygon helpers
+    function polygonArea(poly){
+      let area = 0;
+      for(let i=0;i<poly.length;i++){
+        const a=poly[i], b=poly[(i+1)%poly.length];
+        area += (a.x*b.y - b.x*a.y);
+      }
+      return Math.abs(area) / 2;
+    }
+    function polygonBounds(poly){
+      let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+      for(const p of poly){ if(p.x<minX) minX=p.x; if(p.x>maxX) maxX=p.x; if(p.y<minY) minY=p.y; if(p.y>maxY) maxY=p.y; }
+      return {minX,minY,maxX,maxY};
+    }
+
+    function drawPerimetersAndInfill(){
+      // base image
+      ctx2d.clearRect(0,0,preview2d.width, preview2d.height);
+      if(loadedImage) ctx2d.drawImage(loadedImage, 0, 0, preview2d.width, preview2d.height);
+      // overlay heatmap a bit
+      ctx2d.globalAlpha = 0.35;
+      ctx2d.drawImage(heatmap, 0, 0, preview2d.width, preview2d.height);
+      ctx2d.globalAlpha = 1;
+
+      // draw base contours (red)
+      ctx2d.lineWidth = 2;
+      ctx2d.strokeStyle = '#ff3300';
+      for(const c of contoursCanvas){
+        ctx2d.beginPath();
+        for(let i=0;i<c.length;i++){ const p=c[i]; if(i===0) ctx2d.moveTo(p.x,p.y); else ctx2d.lineTo(p.x,p.y); }
+        ctx2d.closePath(); ctx2d.stroke();
+      }
+      // draw perimeters (blue/green)
+      for(const group of perimeters){
+        // base (cyan)
+        ctx2d.strokeStyle = '#00aaff';
+        ctx2d.lineWidth = 1.5;
+        const base = group.base;
+        ctx2d.beginPath();
+        for(let i=0;i<base.length;i++){ const p=base[i]; if(i===0) ctx2d.moveTo(p.x,p.y); else ctx2d.lineTo(p.x,p.y); }
+        ctx2d.closePath(); ctx2d.stroke();
+        // offsets (green)
+        ctx2d.strokeStyle = '#00cc66';
+        for(const off of group.offsets){
+          ctx2d.beginPath();
+          for(let i=0;i<off.length;i++){ const p=off[i]; if(i===0) ctx2d.moveTo(p.x,p.y); else ctx2d.lineTo(p.x,p.y); }
+          ctx2d.closePath(); ctx2d.stroke();
+        }
+      }
+      // draw infill (gray)
+      ctx2d.strokeStyle = '#888';
+      ctx2d.lineWidth = 1;
+      for(const seg of infillSegments){
+        ctx2d.beginPath();
+        ctx2d.moveTo(seg[0].x, seg[0].y);
+        ctx2d.lineTo(seg[1].x, seg[1].y);
+        ctx2d.stroke();
+      }
+    }
+
+    // Generate G-code
+    genGBtn.addEventListener('click', ()=>{
+      const lines = [];
+      lines.push('; G-code generated by CNC AI (approx)');
+      lines.push('G21 ; mm');
+      lines.push('G90 ; absolute');
+      const safeZ = 5.0;
+      lines.push(`G0 Z${safeZ.toFixed(3)} ; safe`);
+      const feed = parseFloat(feedRateEl.value) || 800;
+      const workWmm = parseFloat(workWEl.value) || 300;
+      const canvasW = preview2d.width;
+      // helper to convert canvas x,y to machine mm coordinates
+      function canvasToMM(pt){
+        const X = (pt.x / canvasW) * workWmm;
+        const Y = (pt.y / preview2d.height) * parseFloat(workHEl.value || 200);
+        return { X, Y };
+      }
+      // emit a single path with stepdowns based on sampled Z
+      function emitPathWithStepdowns(pts){
+        if(!pts || pts.length<2) return;
+        // compute per-point sampled Zs
+        const zs = pts.map(p => sampleZAtCanvasXY(p.x, p.y)); // mm
+        const maxZ = Math.max(...zs);
+        if(maxZ <= 0.0001){
+          // nothing to cut (flat)
+          return;
+        }
+        const passDepth = parseFloat(passDepthEl.value) || 0.5;
+        // number of passes
+        const numPasses = Math.max(1, Math.ceil(maxZ / passDepth));
+        // starting point: rapid to first XY at safeZ
+        const firstMM = canvasToMM(pts[0]);
+        lines.push(`G0 X${firstMM.X.toFixed(3)} Y${firstMM.Y.toFixed(3)} Z${safeZ.toFixed(3)}`);
+        // for each pass depth
+        for(let pass=1; pass<=numPasses; pass++){
+          const targetDepth = Math.min(pass * passDepth, maxZ);
+          // plunge to target depth at first point
+          lines.push(`G1 Z-${targetDepth.toFixed(3)} F${Math.max(100, Math.round(feed/4))}`);
+          // follow path
+          for(let i=0;i<pts.length;i++){
+            const p = pts[i];
+            const mm = canvasToMM(p);
+            // ensure we don't cut deeper than this point's requested depth
+            const localZ = Math.min(sampleZAtCanvasXY(p.x,p.y), targetDepth);
+            lines.push(`G1 X${mm.X.toFixed(3)} Y${mm.Y.toFixed(3)} Z-${localZ.toFixed(3)} F${feed}`);
+          }
+          // retract a bit between passes
+          lines.push(`G0 Z${Math.max(1, safeZ/2).toFixed(3)}`);
+        }
+        // final retract
+        lines.push(`G0 Z${safeZ.toFixed(3)}`);
+      }
+
+      // Order: perimeters (outer groups)
+      if(usePerimetersEl.checked){
+        for(const group of perimeters){
+          // base first then offsets
+          const sequences = [group.base].concat(group.offsets);
+          for(const seq of sequences){
+            emitPathWithStepdowns(seq);
+          }
+        }
+      }
+
+      // Infill
+      if(useInfillEl.checked && infillSegments.length){
+        for(const seg of infillSegments){
+          // build path endpoints (we'll travel across the segment)
+          const path = [ seg[0], seg[1] ];
+          emitPathWithStepdowns(path);
+        }
+      }
+
+      lines.push('G0 X0 Y0 ; move home approx');
+      lines.push('M30');
+      gcodeOutput.textContent = lines.join('\\n');
+      alert('تم توليد G-code (افحصه قبل الإرسال للماكينة)');
+    });
+
+    downloadGBtn.addEventListener('click', ()=>{
+      const txt = gcodeOutput.textContent || '';
+      if(!txt) return alert('لا يوجد G-code للحفظ');
+      const blob = new Blob([txt], { type:'text/plain' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'cnc_ai_output.nc';
+      document.body.appendChild(a); a.click(); a.remove();
+    });
+
+    // 3D preview (مبسط، نافذة منفصلة)
+    btn3D.addEventListener('click', ()=>{
+      if(!heatmapData) return alert('لا توجد Heatmap');
+      // create new window and draw mesh using Three.js
+      const w = heatmap.width, h = heatmap.height;
+      // pack brightness array (small)
+      const arr = [];
+      for(let y=0;y<h;y++){
+        for(let x=0;x<w;x++){
+          const idx = (y*w + x) * 4;
+          const r = heatmapData.data[idx], g = heatmapData.data[idx+1], b = heatmapData.data[idx+2];
+          const br = Math.round(0.34*r + 0.5*g + 0.16*b);
+          arr.push(br);
+        }
+      }
+      const wnd = window.open('', '_blank', 'width=1000,height=700');
+      if(!wnd) return alert('النافذة منبثقة محظورة — سمح للنافذة المنبثقة ثم أعد المحاولة');
+      // build HTML
+      const html = `
+<!doctype html><html lang="ar"><head><meta charset="utf-8"><title>3D Preview</title>
+<style>body{margin:0;overflow:hidden}</style>
+</head><body>
+<script src="https://cdn.jsdelivr.net/npm/three@0.156.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.156.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const w = ${w}, h = ${h}, arr = ${JSON.stringify(arr)};
+const container = document.body;
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+container.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 2000);
+camera.position.set(0, 80, 140);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+const light = new THREE.DirectionalLight(0xffffff, 1);
+light.position.set(0,100,100); scene.add(light);
+const ambient = new THREE.AmbientLight(0x808080); scene.add(ambient);
+
+// geometry
+const geom = new THREE.PlaneGeometry(120, 120, w-1, h-1);
+const verts = geom.attributes.position.array;
+let k=0;
+for(let yy=0; yy<h; yy++){
+  for(let xx=0; xx<w; xx++){
+    const br = arr[yy*w + xx];
+    const z = (1 - br/255) * 12; // height scale
+    verts[k+2] = z;
+    k+=3;
+  }
+}
+geom.computeVertexNormals();
+const mat = new THREE.MeshStandardMaterial({color:0xdeb887, metalness:0.1, roughness:0.7});
+const mesh = new THREE.Mesh(geom, mat);
+mesh.rotation.x = -Math.PI/2;
+scene.add(mesh);
+
+function loop(){ requestAnimationFrame(loop); renderer.render(scene, camera); }
+loop();
+</script>
+</body></html>
+      `;
+      wnd.document.open();
+      wnd.document.write(html);
+      wnd.document.close();
+    });
+
+    // clear
+    clearAllBtn.addEventListener('click', ()=>{
+      contours = []; contoursCanvas = []; perimeters = []; infillSegments = []; gcodeOutput.textContent = '';
+      contCountEl.textContent = '0'; firstLenEl.textContent = '0';
+      if(loadedImage) ctx2d.drawImage(loadedImage, 0, 0, preview2d.width, preview2d.height); else ctx2d.clearRect(0,0,preview2d.width,preview2d.height);
+    });
+
+    simulateBtn.addEventListener('click', ()=>{
+      const lines = (gcodeOutput.textContent || '').split('\\n').length;
+      alert('محاكاة: سطور G-code = ' + lines);
+    });
+
+    // initial small guidance
+    notify('جاهز. ارفع صورة ثم اضغط "كشف الحواف وتحليل (Worker)".');
+
+  })();
+  </script>
+</body>
+</html>
