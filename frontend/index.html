@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CNC AI — كشف الحواف والمسارات (نسخة كاملة)</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #0b1220;
+      --muted: #94a3b8;
+      --accent: #06b6d4;
+      --card: #0b1220;
+      --success: #10b981;
+    }
+    html,body { height:100%; margin:0; font-family: "Segoe UI", Tahoma, Arial, sans-serif; background: linear-gradient(180deg,#071024 0%, #07172a 100%); color:#e6eef6; }
+    .container { max-width:1200px; margin:24px auto; padding:18px; background:rgba(255,255,255,0.02); border-radius:12px; box-shadow: 0 6px 30px rgba(2,6,23,0.6); }
+    header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px; }
+    header h1 { margin:0; font-size:20px; }
+    .controls { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    .card { background:rgba(255,255,255,0.02); padding:12px; border-radius:10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.02); }
+    label { display:block; font-size:13px; color:var(--muted); margin-bottom:6px; }
+    input[type="file"] { color:var(--muted); }
+    input[type="number"], input[type="range"], select { background:transparent; border:1px solid rgba(255,255,255,0.06); padding:6px 8px; color: #e6eef6; border-radius:6px; }
+    button { background:var(--accent); color:#042; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:600; }
+    button.secondary { background: transparent; border:1px solid rgba(255,255,255,0.06); color:var(--muted); }
+    .layout { display:grid; grid-template-columns: 1fr 380px; gap:14px; align-items:start; }
+    .preview { background:#071223; padding:12px; border-radius:10px; display:flex; flex-direction:column; gap:10px; align-items:center; }
+    canvas { background:#0b1220; border:1px solid rgba(255,255,255,0.03); }
+    #preview-overlay { position:fixed; right:20px; bottom:20px; z-index:9999; border:2px solid rgba(255,255,255,0.06); background:#021024; padding:8px; border-radius:8px; display:flex; gap:8px; align-items:center; }
+    #preview-overlay img { max-width:220px; max-height:220px; display:block; border-radius:4px; }
+    #preview-overlay button { background:transparent; color:#fff; border:0; font-size:18px; padding:4px 8px; cursor:pointer; }
+    textarea { width:100%; height:240px; background:#021024; color:#cfeaf2; border-radius:8px; padding:8px; border:1px solid rgba(255,255,255,0.03); resize:vertical; font-family: monospace; font-size:12px; }
+    .small { font-size:12px; color:var(--muted); }
+    .footer { margin-top:12px; display:flex; gap:8px; align-items:center; justify-content:space-between; }
+    .toast { position:fixed; left:20px; bottom:20px; background:rgba(0,0,0,0.6); color:#fff; padding:10px 12px; border-radius:8px; z-index:99999; }
+    @media (max-width:900px){ .layout{ grid-template-columns: 1fr; } #preview-overlay{ right:10px; bottom:80px; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>كشف الحواف والمسارات — CNC AI</h1>
+      <div class="controls">
+        <label class="card small" style="padding:8px;">
+          <div class="small">رفع صورة</div>
+          <input id="fileInput" type="file" accept="image/*">
+        </label>
+        <button id="btnDetect">كشف الحواف والمسارات</button>
+        <button id="btnDownloadG" class="secondary">تحميل G-code</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <div class="preview card">
+        <div style="display:flex;gap:12px;width:100%;align-items:center;justify-content:space-between;">
+          <div>
+            <div class="small">معاينة 2D</div>
+            <div class="small" id="imageInfo">لم تُحمّل صورة بعد</div>
+          </div>
+          <div style="text-align:left;">
+            <div class="small">إعدادات سريعة</div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <label class="small">عتبة <input id="threshold" type="range" min="10" max="200" value="60"></label>
+              <input id="thresholdNum" type="number" min="0" max="255" value="60" style="width:70px;">
+            </div>
+          </div>
+        </div>
+
+        <canvas id="preview2d" width="800" height="600" style="max-width:100%; height:auto; border-radius:8px;"></canvas>
+
+        <div style="display:flex;gap:8px;width:100%;align-items:center;justify-content:space-between;">
+          <div style="flex:1;">
+            <label class="small">Feed Rate (mm/min)</label>
+            <input id="feedRate" type="number" value="800" min="10" style="width:120px;">
+          </div>
+          <div style="flex:1;">
+            <label class="small">Spindle (RPM)</label>
+            <input id="spindleSpeed" type="number" value="10000" min="100" style="width:120px;">
+          </div>
+          <div style="flex:1;">
+            <label class="small">عرض العمل الحقيقي (مم)</label>
+            <input id="realWidthMm" type="number" value="200" min="1" style="width:120px;">
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-top:8px;width:100%;">
+          <div style="flex:1;">
+            <label class="small">خطوة الأوفست (مم - تقريب)</label>
+            <input id="offsetStepMm" type="number" value="2" min="0.1" step="0.1" style="width:120px;">
+          </div>
+          <div style="flex:1;">
+            <label class="small">قطر الأداة (مم)</label>
+            <input id="toolDia" type="number" value="2" min="0.1" step="0.1" style="width:120px;">
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="padding:12px;">
+        <h3 style="margin:0 0 8px 0;">ناتج G-code وملخص</h3>
+        <div class="small" style="margin-bottom:8px;">يمكن تحميل G-code أو نسخه. زر "كشف الحواف" يولّد المسارات ويعرض معاينة صغيرة.</div>
+        <textarea id="gcodeOutput" placeholder="G-code سيظهر هنا بعد التشغيل..." readonly></textarea>
+        <div class="footer">
+          <div id="summary" class="small">لم يتم التشغيل بعد</div>
+          <div>
+            <button id="btnCopy" class="secondary">نسخ إلى الحافظة</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- عناصر مساعدة -->
+  <div id="preview-overlay" style="display:none;">
+    <img id="overlayImg" src="" alt="overlay">
+    <button id="closeOverlay">×</button>
+  </div>
+
+  <div id="toast" class="toast" style="display:none;"></div>
+
+  <script>
+    // ------------------ متغيرات عامة وتهيئة ------------------
+    let canvas2d = document.getElementById('preview2d');
+    let ctx2d = canvas2d.getContext('2d');
+    let gcodeOutput = document.getElementById('gcodeOutput');
+    let generatedGcode = '';
+    const toast = document.getElementById('toast');
+
+    // helper notifications
+    function showNotification(text, ms = 2500) {
+      toast.textContent = text;
+      toast.style.display = 'block';
+      clearTimeout(toast._t);
+      toast._t = setTimeout(()=> toast.style.display = 'none', ms);
+    }
+
+    // ضبط قيمة العتبة المتزامنة بين range والعدد
+    const thrRange = document.getElementById('threshold');
+    const thrNum = document.getElementById('thresholdNum');
+    thrRange.addEventListener('input', ()=> { thrNum.value = thrRange.value; });
+    thrNum.addEventListener('input', ()=> { thrRange.value = thrNum.value; });
+
+    // تحميل صورة من الملف وعرضها
+    const fileInput = document.getElementById('fileInput');
+    const imageInfo = document.getElementById('imageInfo');
+
+    let lastImage = new Image();
+    function drawImageToCanvas(img) {
+      // resize canvas to fit image (max width)
+      const maxW = 1200;
+      const maxH = 900;
+      let w = img.width, h = img.height;
+      const ratio = Math.min(maxW / w, maxH / h, 1);
+      w = Math.round(w * ratio);
+      h = Math.round(h * ratio);
+      canvas2d.width = w; canvas2d.height = h;
+      ctx2d.clearRect(0,0,w,h);
+      ctx2d.drawImage(img, 0, 0, w, h);
+      imageInfo.textContent = `أبعاد الصورة: ${img.width}×${img.height} -> معالجة بمقياس ${w}×${h}`;
+    }
+
+    fileInput.addEventListener('change', (ev) => {
+      const f = ev.target.files[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          lastImage = img;
+          drawImageToCanvas(img);
+          showNotification('تم رفع الصورة وجاهزة للمعالجة');
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(f);
+    });
+
+    // تحميل صورة افتراضية صغيرة إذا لم يقم المستخدم بتحميل
+    (function loadDefaultImage(){
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => { lastImage = img; drawImageToCanvas(img); };
+      // صورة افتراضية بسيطة (يمكن استبدالها)
+      img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="100%" height="100%" fill="%230b1220"/><circle cx="200" cy="200" r="120" fill="%2306b6d4"/><rect x="320" y="120" width="300" height="250" fill="%23f59e0b" rx="20"/></svg>';
+    })();
+
+    // ------------------ دوال معالجة الصور والحواف ------------------
+    const MAX_PROC_SIZE = 700; // حجم معالجة (بيكسل) لتفادي تجمّد المتصفح
+    const RDP_EPSILON = 2.0;
+
+    function toGrayscale(imageData) {
+      const w = imageData.width, h = imageData.height;
+      const gray = new Float32Array(w*h);
+      const d = imageData.data;
+      for (let i=0; i<w*h; i++){
+        const r = d[i*4], g = d[i*4+1], b = d[i*4+2];
+        gray[i] = 0.299*r + 0.587*g + 0.114*b;
+      }
+      return {data:gray, width:w, height:h};
+    }
+
+    function sobelMagnitude(gray, w, h) {
+      const mag = new Float32Array(w*h);
+      const gxKernel = [-1,0,1,-2,0,2,-1,0,1];
+      const gyKernel = [-1,-2,-1,0,0,0,1,2,1];
+      for (let y=1; y<h-1; y++){
+        for (let x=1; x<w-1; x++){
+          let gx=0, gy=0, k=0;
+          for (let ky=-1; ky<=1; ky++){
+            for (let kx=-1; kx<=1; kx++){
+              const val = gray[(y+ky)*w + (x+kx)];
+              gx += gxKernel[k] * val;
+              gy += gyKernel[k] * val;
+              k++;
+            }
+          }
+          mag[y*w + x] = Math.hypot(gx, gy);
+        }
+      }
+      return mag;
+    }
+
+    function thresholdBinary(mag, w, h, thr) {
+      const bin = new Uint8Array(w*h);
+      for (let i=0;i<w*h;i++) bin[i] = (mag[i] >= thr) ? 1 : 0;
+      return bin;
+    }
+
+    function traceContours(binary, w, h) {
+      const visited = new Uint8Array(w*h);
+      const contours = [];
+      const dirs = [
+        {dx:1,dy:0},{dx:1,dy:-1},{dx:0,dy:-1},{dx:-1,dy:-1},
+        {dx:-1,dy:0},{dx:-1,dy:1},{dx:0,dy:1},{dx:1,dy:1}
+      ];
+      const index = (x,y)=> y*w + x;
+      for (let y=1;y<h-1;y++){
+        for (let x=1;x<w-1;x++){
+          const idx = index(x,y);
+          if (binary[idx] && !visited[idx]) {
+            const contour = [];
+            let cx = x, cy = y;
+            let prevDir = 0;
+            let start = true;
+            let loopGuard = 0;
+            do {
+              contour.push({x:cx, y:cy});
+              visited[index(cx,cy)] = 1;
+              let found=false;
+              for (let i=0;i<8;i++){
+                const di = (prevDir + i) % 8;
+                const nx = cx + dirs[di].dx;
+                const ny = cy + dirs[di].dy;
+                if (nx<=0||ny<=0||nx>=w-1||ny>=h-1) continue;
+                if (binary[index(nx,ny)]) {
+                  cx = nx; cy = ny;
+                  prevDir = (di + 6) % 8;
+                  found = true;
+                  break;
+                }
+              }
+              if (!found) break;
+              if (!start && cx === x && cy === y) break;
+              start = false;
+              loopGuard++; if (loopGuard > w*h) break;
+            } while(true);
+            if (contour.length >= 6) contours.push(contour);
+          }
+        }
+      }
+      return contours;
+    }
+
+    // Ramer-Douglas-Peucker
+    function rdp(points, eps) {
+      if (points.length < 3) return points.slice();
+      function pointLineDistance(p, a, b){
+        const A = p.x - a.x, B = p.y - a.y;
+        const C = b.x - a.x, D = b.y - a.y;
+        const dot = A*C + B*D;
+        const len_sq = C*C + D*D || 1;
+        const param = Math.max(0, Math.min(1, dot / len_sq));
+        const xx = a.x + param * C;
+        const yy = a.y + param * D;
+        const dx = p.x - xx, dy = p.y - yy;
+        return Math.hypot(dx, dy);
+      }
+      function dmaxIndex(pts, a, b) {
+        let maxDist = -1, idx = -1;
+        for (let i=a+1;i<b;i++){
+          const d = pointLineDistance(pts[i], pts[a], pts[b]);
+          if (d > maxDist) { maxDist = d; idx = i; }
+        }
+        return {maxDist, idx};
+      }
+      function recurse(pts, a, b, eps, out) {
+        const {maxDist, idx} = dmaxIndex(pts, a, b);
+        if (maxDist > eps) {
+          recurse(pts, a, idx, eps, out);
+          recurse(pts, idx, b, eps, out);
+        } else {
+          out.push(pts[a]);
+        }
+      }
+      const out = [];
+      recurse(points, 0, points.length-1, eps, out);
+      out.push(points[points.length-1]);
+      return out;
+    }
+
+    // offset polygon (مبسطة) - نتيجة عملية تقريبية وعملية لمشروعات CNC الخشبي
+    function offsetPolygon(polygon, offsetPx) {
+      const n = polygon.length;
+      if (n < 3) return [];
+      const out = [];
+      for (let i=0;i<n;i++){
+        const prev = polygon[(i-1+n)%n];
+        const cur  = polygon[i];
+        const next = polygon[(i+1)%n];
+
+        const v1 = {x: cur.x - prev.x, y: cur.y - prev.y};
+        const v2 = {x: next.x - cur.x, y: next.y - cur.y};
+        const len1 = Math.hypot(v1.x, v1.y) || 1;
+        const len2 = Math.hypot(v2.x, v2.y) || 1;
+        v1.x/=len1; v1.y/=len1; v2.x/=len2; v2.y/=len2;
+
+        const n1 = {x: -v1.y, y: v1.x};
+        const n2 = {x: -v2.y, y: v2.x};
+
+        let ax = (n1.x + n2.x)/2;
+        let ay = (n1.y + n2.y)/2;
+        const alen = Math.hypot(ax, ay) || 1;
+        ax/=alen; ay/=alen;
+
+        out.push({x: cur.x + ax * (-offsetPx), y: cur.y + ay * (-offsetPx)});
+      }
+      // تنظيف نقاط متقاربة
+      const cleaned = [];
+      for (let p of out) {
+        if (!cleaned.length) cleaned.push(p);
+        else {
+          const last = cleaned[cleaned.length-1];
+          if (Math.hypot(last.x - p.x, last.y - p.y) > 0.5) cleaned.push(p);
+        }
+      }
+      if (cleaned.length>2 && Math.hypot(cleaned[0].x - cleaned[cleaned.length-1].x, cleaned[0].y - cleaned[cleaned.length-1].y) < 0.5) cleaned.pop();
+      return cleaned;
+    }
+
+    function polygonArea(poly) {
+      let a = 0;
+      for (let i=0;i<poly.length;i++){
+        const j=(i+1)%poly.length;
+        a += poly[i].x*poly[j].y - poly[j].x*poly[i].y;
+      }
+      return a/2;
+    }
+
+    function generateInsetPaths(polygon, stepPx, maxLoops=50) {
+      const paths = [];
+      let current = polygon.slice();
+      for (let loop=0; loop<maxLoops; loop++){
+        if (current.length < 3) break;
+        current = rdp(current, 0.5);
+        paths.push(current.slice());
+        const next = offsetPolygon(current, stepPx);
+        if (!next || next.length < 3) break;
+        const area = Math.abs(polygonArea(next));
+        if (area < 20) break;
+        current = next;
+      }
+      return paths;
+    }
+
+    function pxToMm(px, imagePixelWidth, realWidthMm) {
+      return (px / imagePixelWidth) * realWidthMm;
+    }
+
+    function pathsToGcode(paths, imageWidthPx, realWidthMm, feedRate = 800, spindle = 10000) {
+      let g = '; Generated by CNC AI edge-paths\nG21\nG90\nM3 S' + spindle + '\nG0 Z5\n';
+      for (const path of paths) {
+        if (!path || path.length===0) continue;
+        const sx = pxToMm(path[0].x, imageWidthPx, realWidthMm);
+        const sy = pxToMm(path[0].y, imageWidthPx, realWidthMm);
+        g += `G0 X${(sx).toFixed(3)} Y${(sy).toFixed(3)}\n`;
+        g += `G1 Z0 F${feedRate}\n`;
+        for (let i=0;i<path.length;i++){
+          const p = path[i];
+          const x = pxToMm(p.x, imageWidthPx, realWidthMm);
+          const y = pxToMm(p.y, imageWidthPx, realWidthMm);
+          g += `G1 X${x.toFixed(3)} Y${y.toFixed(3)} F${feedRate}\n`;
+        }
+        g += `G0 Z5\n`;
+      }
+      g += 'M5\nG0 X0 Y0\nM30\n';
+      return g;
+    }
+
+    // رسم overlay صغير وإظهار صورة overlay
+    function drawContoursOverlay(targetCanvas, contours, paths, procW, procH) {
+      // نرسم على كانفاس مؤقت بمقاس المعالجة (procW/procH) ثم نوسع إلى مقاس targetCanvas للمعاينة الصغيرة
+      const overlay = document.createElement('canvas');
+      overlay.width = procW; overlay.height = procH;
+      const octx = overlay.getContext('2d');
+
+      // draw white background for contrast (اختياري)
+      octx.fillStyle = '#081220';
+      octx.fillRect(0,0,overlay.width, overlay.height);
+
+      // draw paths in red (نستخدم المسارات التي تُعطى)
+      octx.lineWidth = Math.max(1, Math.round(Math.min(procW, procH) * 0.002));
+      octx.strokeStyle = 'rgba(255,60,60,0.95)';
+      for (const p of paths) {
+        if (!p || p.length<2) continue;
+        octx.beginPath();
+        octx.moveTo(p[0].x, p[0].y);
+        for (let i=1;i<p.length;i++) octx.lineTo(p[i].x, p[i].y);
+        octx.closePath();
+        octx.stroke();
+      }
+
+      // scale overlay to fit preview overlay image
+      const dataUrl = overlay.toDataURL();
+      const overlayImg = document.getElementById('overlayImg');
+      overlayImg.src = dataUrl;
+      const node = document.getElementById('preview-overlay');
+      node.style.display = 'flex';
+    }
+
+    document.getElementById('closeOverlay').addEventListener('click', ()=> {
+      document.getElementById('preview-overlay').style.display = 'none';
+    });
+
+    // ------------------ الدالة الرئيسية: كشف الحواف + استخراج المسارات + G-code ------------------
+    async function detectEdgesAndPaths() {
+      if (!canvas2d) { showNotification('لا توجد معاينة للمعالجة'); return; }
+      // إعدادات من الواجهة
+      const thr = parseInt(document.getElementById('threshold').value || 60);
+      const feedRate = parseInt(document.getElementById('feedRate').value || 800);
+      const spindle = parseInt(document.getElementById('spindleSpeed').value || 10000);
+      const realWidthMm = parseFloat(document.getElementById('realWidthMm').value || 200);
+      const offsetStepMm = parseFloat(document.getElementById('offsetStepMm').value || 2);
+      const toolDia = parseFloat(document.getElementById('toolDia').value || 2);
+
+      // استنساخ الصورة إلى canvas معالجة (مقياس)
+      const srcW = canvas2d.width, srcH = canvas2d.height;
+      const scale = Math.min(1, MAX_PROC_SIZE / Math.max(srcW, srcH));
+      const procW = Math.max(10, Math.round(srcW * scale));
+      const procH = Math.max(10, Math.round(srcH * scale));
+      const temp = document.createElement('canvas');
+      temp.width = procW; temp.height = procH;
+      const tctx = temp.getContext('2d');
+      tctx.drawImage(canvas2d, 0, 0, procW, procH);
+      const imgData = tctx.getImageData(0,0,procW,procH);
+
+      // grayscale -> sobel -> normalize -> binary -> contours
+      const g = toGrayscale(imgData);
+      const mag = sobelMagnitude(g.data, g.width, g.height);
+      let maxM = 0; for (let i=0;i<mag.length;i++) if (mag[i] > maxM) maxM = mag[i];
+      const normMag = new Float32Array(mag.length);
+      for (let i=0;i<mag.length;i++) normMag[i] = (mag[i] / (maxM || 1)) * 255;
+      const binary = thresholdBinary(normMag, g.width, g.height, thr);
+      const contours = traceContours(binary, g.width, g.height);
+
+      // تبسيط الحواف وفلاتر حسب المساحة
+      const simplified = contours.map(c => rdp(c, RDP_EPSILON)).filter(c => Math.abs(polygonArea(c)) > 30);
+
+      // تحويل خطوة الأوفست من مم إلى بيكسل بالنسبة لصورة المعالجة
+      const stepPx = (offsetStepMm / realWidthMm) * procW;
+
+      // تجميع جميع المسارات (inset) من كل مضلع
+      const allPaths = [];
+      for (const poly of simplified) {
+        // generate inset paths in pixels
+        const insetPaths = generateInsetPaths(poly, stepPx, 200);
+        // flatten and add
+        for (const p of insetPaths) {
+          if (p && p.length>=3) allPaths.push(p);
+        }
+      }
+
+      // رسم overlay صغير للمعاينة
+      drawContoursOverlay(canvas2d, simplified, allPaths, procW, procH);
+
+      // توليد G-code -- ملاحظة: نحول px -> mm باستخدام realWidthMm ونفترض نفس نسبة المحورين
+      const gcode = pathsToGcode(allPaths, procW, realWidthMm, feedRate, spindle);
+      gcodeOutput.value = gcode;
+      generatedGcode = gcode;
+
+      // ملخص
+      document.getElementById('summary').textContent = `اكتُشفت ${simplified.length} حواف → توليد ${allPaths.length} مسار. (معالجة ${procW}×${procH})`;
+      showNotification('انتهى كشف الحواف وتوليد المسارات');
+    }
+
+    // ربط أزرار الواجهة
+    document.getElementById('btnDetect').addEventListener('click', detectEdgesAndPaths);
+
+    // تحميل G-code
+    document.getElementById('btnDownloadG').addEventListener('click', ()=> {
+      if (!generatedGcode) { showNotification('لا يوجد G-code ليتم تحميله'); return; }
+      const blob = new Blob([generatedGcode], {type:'text/plain'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'paths.nc';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showNotification('تم تحميل ملف G-code');
+    });
+
+    // نسخ G-code
+    document.getElementById('btnCopy').addEventListener('click', async ()=> {
+      if (!generatedGcode) { showNotification('لا يوجد شيء للنسخ'); return; }
+      try {
+        await navigator.clipboard.writeText(generatedGcode);
+        showNotification('تم النسخ إلى الحافظة');
+      } catch(e) {
+        showNotification('فشل النسخ — استخدم Ctrl+C يدوياً');
+      }
+    });
+
+    // تهيئة: ضبط قيم أولية
+    window.addEventListener('load', ()=> {
+      thrRange.value = 60; thrNum.value = 60;
+    });
+  </script>
+</body>
+</html>
