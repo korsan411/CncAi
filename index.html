@@ -1,529 +1,531 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<!doctype html>
+<html lang="en" dir="ltr">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>CNC AI — كشف الحواف والمسارات (نسخة كاملة)</title>
-  <style>
-    :root {
-      --bg: #0f172a;
-      --panel: #0b1220;
-      --muted: #94a3b8;
-      --accent: #06b6d4;
-      --card: #0b1220;
-      --success: #10b981;
-    }
-    html,body { height:100%; margin:0; font-family: "Segoe UI", Tahoma, Arial, sans-serif; background: linear-gradient(180deg,#071024 0%, #07172a 100%); color:#e6eef6; }
-    .container { max-width:1200px; margin:24px auto; padding:18px; background:rgba(255,255,255,0.02); border-radius:12px; box-shadow: 0 6px 30px rgba(2,6,23,0.6); }
-    header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px; }
-    header h1 { margin:0; font-size:20px; }
-    .controls { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-    .card { background:rgba(255,255,255,0.02); padding:12px; border-radius:10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.02); }
-    label { display:block; font-size:13px; color:var(--muted); margin-bottom:6px; }
-    input[type="file"] { color:var(--muted); }
-    input[type="number"], input[type="range"], select { background:transparent; border:1px solid rgba(255,255,255,0.06); padding:6px 8px; color: #e6eef6; border-radius:6px; }
-    button { background:var(--accent); color:#042; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:600; }
-    button.secondary { background: transparent; border:1px solid rgba(255,255,255,0.06); color:var(--muted); }
-    .layout { display:grid; grid-template-columns: 1fr 380px; gap:14px; align-items:start; }
-    .preview { background:#071223; padding:12px; border-radius:10px; display:flex; flex-direction:column; gap:10px; align-items:center; }
-    canvas { background:#0b1220; border:1px solid rgba(255,255,255,0.03); }
-    #preview-overlay { position:fixed; right:20px; bottom:20px; z-index:9999; border:2px solid rgba(255,255,255,0.06); background:#021024; padding:8px; border-radius:8px; display:flex; gap:8px; align-items:center; }
-    #preview-overlay img { max-width:220px; max-height:220px; display:block; border-radius:4px; }
-    #preview-overlay button { background:transparent; color:#fff; border:0; font-size:18px; padding:4px 8px; cursor:pointer; }
-    textarea { width:100%; height:240px; background:#021024; color:#cfeaf2; border-radius:8px; padding:8px; border:1px solid rgba(255,255,255,0.03); resize:vertical; font-family: monospace; font-size:12px; }
-    .small { font-size:12px; color:var(--muted); }
-    .footer { margin-top:12px; display:flex; gap:8px; align-items:center; justify-content:space-between; }
-    .toast { position:fixed; left:20px; bottom:20px; background:rgba(0,0,0,0.6); color:#fff; padding:10px 12px; border-radius:8px; z-index:99999; }
-    @media (max-width:900px){ .layout{ grid-template-columns: 1fr; } #preview-overlay{ right:10px; bottom:80px; } }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>CNC AI — 2D/3D G-code from Image + Heatmap (OpenCV.js + Three.js)</title>
+
+<!-- OpenCV.js -->
+<script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+<!-- three.js -->
+<script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.158.0/examples/js/controls/OrbitControls.js"></script>
+
+<style>
+  :root{
+    --bg:#071022; --panel:#0b1320; --muted:#92a6bf; --accent:#06b6d4;
+  }
+  body{margin:0;font-family:Inter,Segoe UI,Arial;background:linear-gradient(180deg,#041022,#071022);color:#e6eef6;}
+  .app{max-width:1200px;margin:18px auto;padding:16px;}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+  header h1{margin:0;font-size:18px;color:var(--accent)}
+  .grid{display:grid;grid-template-columns:1fr 420px;gap:12px}
+  .panel{background:var(--panel);padding:12px;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,0.5)}
+  canvas#preview{width:100%;height:auto;border-radius:6px;background:#000}
+  label{display:block;font-size:13px;color:var(--muted);margin-top:8px}
+  input,select,button{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:#e6eef6}
+  input[type=file]{padding:6px}
+  input[type=range]{width:100%}
+  button.primary{background:var(--accent);color:#042;font-weight:700;border:none;cursor:pointer}
+  .row{display:flex;gap:8px}
+  .row > *{flex:1}
+  textarea{width:100%;height:220px;border-radius:8px;padding:8px;background:#021024;color:#cfeaf2;border:1px solid rgba(255,255,255,0.03);font-family:monospace}
+  #threeContainer{width:100%;height:360px;background:#081224;border-radius:8px}
+  #overlayBox{position:fixed;right:16px;bottom:16px;background:rgba(1,6,12,0.95);padding:8px;border-radius:8px;display:none;z-index:9999;border:1px solid rgba(6,182,212,0.12)}
+  #overlayBox img{max-width:260px;max-height:260px}
+  #toast{position:fixed;left:16px;bottom:16px;background:rgba(0,0,0,0.8);padding:8px 10px;border-radius:8px;color:#fff;display:none;z-index:10000}
+  .small{font-size:12px;color:var(--muted)}
+  @media(max-width:980px){.grid{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
-  <div class="container">
+  <div class="app">
     <header>
-      <h1>كشف الحواف والمسارات — CNC AI</h1>
-      <div class="controls">
-        <label class="card small" style="padding:8px;">
-          <div class="small">رفع صورة</div>
-          <input id="fileInput" type="file" accept="image/*">
-        </label>
-        <button id="btnDetect">كشف الحواف والمسارات</button>
-        <button id="btnDownloadG" class="secondary">تحميل G-code</button>
-      </div>
+      <h1>CNC AI — 2D & 3D (Heatmap → Z) G-code</h1>
+      <div class="small">OpenCV.js + Three.js integrated</div>
     </header>
 
-    <div class="layout">
-      <div class="preview card">
-        <div style="display:flex;gap:12px;width:100%;align-items:center;justify-content:space-between;">
-          <div>
-            <div class="small">معاينة 2D</div>
-            <div class="small" id="imageInfo">لم تُحمّل صورة بعد</div>
-          </div>
-          <div style="text-align:left;">
-            <div class="small">إعدادات سريعة</div>
-            <div style="display:flex;gap:8px;align-items:center;">
-              <label class="small">عتبة <input id="threshold" type="range" min="10" max="200" value="60"></label>
-              <input id="thresholdNum" type="number" min="0" max="255" value="60" style="width:70px;">
-            </div>
+    <div class="grid">
+      <!-- left: preview + 3D -->
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="small">Preview (2D)</div>
+          <div style="width:320px">
+            <input id="fileInput" type="file" accept="image/*">
           </div>
         </div>
 
-        <canvas id="preview2d" width="800" height="600" style="max-width:100%; height:auto; border-radius:8px;"></canvas>
+        <canvas id="preview" width="900" height="600"></canvas>
 
-        <div style="display:flex;gap:8px;width:100%;align-items:center;justify-content:space-between;">
-          <div style="flex:1;">
-            <label class="small">Feed Rate (mm/min)</label>
-            <input id="feedRate" type="number" value="800" min="10" style="width:120px;">
-          </div>
-          <div style="flex:1;">
-            <label class="small">Spindle (RPM)</label>
-            <input id="spindleSpeed" type="number" value="10000" min="100" style="width:120px;">
-          </div>
-          <div style="flex:1;">
-            <label class="small">عرض العمل الحقيقي (مم)</label>
-            <input id="realWidthMm" type="number" value="200" min="1" style="width:120px;">
-          </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button id="btnDetect" class="primary">Detect contours & generate</button>
+          <button id="btnPreview3D">Show 3D Preview</button>
         </div>
 
-        <div style="display:flex;gap:8px;margin-top:8px;width:100%;">
-          <div style="flex:1;">
-            <label class="small">خطوة الأوفست (مم - تقريب)</label>
-            <input id="offsetStepMm" type="number" value="2" min="0.1" step="0.1" style="width:120px;">
-          </div>
-          <div style="flex:1;">
-            <label class="small">قطر الأداة (مم)</label>
-            <input id="toolDia" type="number" value="2" min="0.1" step="0.1" style="width:120px;">
-          </div>
-        </div>
+        <div id="threeContainer" style="margin-top:12px"></div>
+        <div class="small" style="margin-top:8px">Tip: use <b>ε slider</b> to control simplification. Increase <b>procRes</b> to improve 3D detail (but CPU cost increases).</div>
       </div>
 
-      <div class="card" style="padding:12px;">
-        <h3 style="margin:0 0 8px 0;">ناتج G-code وملخص</h3>
-        <div class="small" style="margin-bottom:8px;">يمكن تحميل G-code أو نسخه. زر "كشف الحواف" يولّد المسارات ويعرض معاينة صغيرة.</div>
-        <textarea id="gcodeOutput" placeholder="G-code سيظهر هنا بعد التشغيل..." readonly></textarea>
-        <div class="footer">
-          <div id="summary" class="small">لم يتم التشغيل بعد</div>
-          <div>
-            <button id="btnCopy" class="secondary">نسخ إلى الحافظة</button>
-          </div>
+      <!-- right: controls & output -->
+      <div class="panel">
+        <h3 style="margin:0 0 8px 0">Controls</h3>
+
+        <label>Canny low threshold
+          <input id="cannyLow" type="number" value="50" min="0" max="255">
+        </label>
+        <label>Canny high threshold
+          <input id="cannyHigh" type="number" value="150" min="0" max="255">
+        </label>
+
+        <label>Approx epsilon (fraction of contour perimeter)
+          <input id="epsilon" type="range" min="0.005" max="0.05" step="0.001" value="0.01">
+          <div class="small" id="epsDisplay">ε = 1.00%</div>
+        </label>
+
+        <label>Processing resolution for 3D preview (px, max dimension)
+          <input id="procRes" type="number" value="200" min="80" max="800" step="10">
+        </label>
+
+        <label>Max depth (mm) — depth for white pixel (positive number, used as engraving depth)
+          <input id="maxDepth" type="number" value="5" min="0.1" step="0.1">
+        </label>
+
+        <label>Real work width (mm) — map px → mm horizontally (image width → this mm)
+          <input id="realWidth" type="number" value="200" min="1" step="1">
+        </label>
+
+        <label>Feed rate (mm/min)
+          <input id="feedRate" type="number" value="800" min="10">
+        </label>
+
+        <label>Spindle RPM
+          <input id="spindle" type="number" value="10000" min="100">
+        </label>
+
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <select id="gcodeMode">
+            <option value="2d">2D (Z0 / Cut)</option>
+            <option value="3d">3D Relief (Z from heatmap)</option>
+          </select>
+          <button id="btnGen" class="primary">Generate G-code</button>
         </div>
+
+        <label style="margin-top:10px">Generated G-code</label>
+        <textarea id="gcodeOut" placeholder="G-code will appear here..." readonly></textarea>
+
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button id="btnDownload" class="primary">Download G-code</button>
+          <button id="btnCopy">Copy</button>
+          <button id="btnClear">Clear</button>
+        </div>
+
+        <div id="summary" class="small" style="margin-top:8px">Status: idle</div>
       </div>
     </div>
   </div>
 
-  <!-- عناصر مساعدة -->
-  <div id="preview-overlay" style="display:none;">
-    <img id="overlayImg" src="" alt="overlay">
-    <button id="closeOverlay">×</button>
-  </div>
+  <div id="overlayBox"><img id="overlayImg" alt="overlay"></div>
+  <div id="toast"></div>
 
-  <div id="toast" class="toast" style="display:none;"></div>
+<script>
+/* ----------------------------------------------------------
+  Helper UI & readiness for OpenCV
+-----------------------------------------------------------*/
+const toast = document.getElementById('toast');
+function showToast(msg, ms=3000){
+  toast.textContent = msg; toast.style.display='block';
+  clearTimeout(toast._t); toast._t = setTimeout(()=> toast.style.display='none', ms);
+}
 
-  <script>
-    // ------------------ متغيرات عامة وتهيئة ------------------
-    let canvas2d = document.getElementById('preview2d');
-    let ctx2d = canvas2d.getContext('2d');
-    let gcodeOutput = document.getElementById('gcodeOutput');
-    let generatedGcode = '';
-    const toast = document.getElementById('toast');
+let cvReady = false;
+function markCvReady(){ cvReady = true; showToast('OpenCV ready'); console.log('OpenCV ready'); }
+function waitForCv(){
+  if(window.cv && cv.getBuildInformation) markCvReady();
+  else if(window.cv) { cv['onRuntimeInitialized']=markCvReady; }
+  else setTimeout(waitForCv, 200);
+}
+waitForCv();
+setTimeout(()=> { if(!cvReady) showToast('OpenCV loading — wait a few seconds'); }, 12000);
 
-    // helper notifications
-    function showNotification(text, ms = 2500) {
-      toast.textContent = text;
-      toast.style.display = 'block';
-      clearTimeout(toast._t);
-      toast._t = setTimeout(()=> toast.style.display = 'none', ms);
+/* ----------------------------------------------------------
+  DOM refs & state
+-----------------------------------------------------------*/
+const fileInput = document.getElementById('fileInput');
+const preview = document.getElementById('preview');
+const pctx = preview.getContext('2d');
+const btnDetect = document.getElementById('btnDetect');
+const btnGen = document.getElementById('btnGen');
+const btnPreview3D = document.getElementById('btnPreview3D');
+const gcodeOut = document.getElementById('gcodeOut');
+const btnDownload = document.getElementById('btnDownload');
+const btnCopy = document.getElementById('btnCopy');
+const btnClear = document.getElementById('btnClear');
+const summary = document.getElementById('summary');
+
+const epsSlider = document.getElementById('epsilon');
+const epsDisplay = document.getElementById('epsDisplay');
+epsDisplay.textContent = `ε = ${(parseFloat(epsSlider.value)*100).toFixed(2)}%`;
+epsSlider.addEventListener('input', ()=> { epsDisplay.textContent = `ε = ${(parseFloat(epsSlider.value)*100).toFixed(2)}%`; });
+
+let img = new Image();
+let originalImage = null; // hold full-size image object
+let processedPaths = [];   // array of paths (arrays of {x,y} in px space of processed image)
+let procImageSize = {w:0,h:0}; // processed canvas size used for path detection
+let grayMatForZ = null; // OpenCV Mat grayscale used for sampling Z (resized to procRes)
+let lastProcRes = 200;
+
+/* ----------------------------------------------------------
+  Load image preview
+-----------------------------------------------------------*/
+fileInput.addEventListener('change', (e)=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  const url = URL.createObjectURL(f);
+  img = new Image();
+  img.onload = ()=>{
+    originalImage = img;
+    // draw scaled to preview canvas (fit width 900)
+    const maxW = 900, maxH = 600;
+    const ratio = Math.min(maxW/img.width, maxH/img.height, 1);
+    preview.width = Math.round(img.width*ratio);
+    preview.height = Math.round(img.height*ratio);
+    pctx.clearRect(0,0,preview.width,preview.height);
+    pctx.drawImage(img,0,0, preview.width, preview.height);
+    summary.textContent = `Image: ${img.width}×${img.height} — preview: ${preview.width}×${preview.height}`;
+  };
+  img.src = url;
+});
+
+/* ----------------------------------------------------------
+  OpenCV: detect contours, simplify, store paths
+  - This uses the preview canvas as input (already scaled).
+  - We also create a gray Mat at procRes for Z generation (resized).
+-----------------------------------------------------------*/
+function detectContoursAndPaths(){
+  if(!cvReady) { showToast('OpenCV not ready'); return; }
+  if(!originalImage) { showToast('Please load an image'); return; }
+
+  showToast('Processing contours...');
+  // operate on preview canvas (fast). If preview is small enough, use it; otherwise use downscale
+  const canW = preview.width, canH = preview.height;
+  // read image into cv.Mat
+  let src = cv.imread(preview); // rgba
+  let gray = new cv.Mat();
+  cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+  // blur -> canny
+  let blurred = new cv.Mat();
+  cv.GaussianBlur(gray, blurred, new cv.Size(3,3), 0, 0, cv.BORDER_DEFAULT);
+
+  const low = parseInt(document.getElementById('cannyLow').value||50);
+  const high = parseInt(document.getElementById('cannyHigh').value||150);
+  let edges = new cv.Mat();
+  cv.Canny(blurred, edges, low, high);
+
+  // find contours
+  let contours = new cv.MatVector();
+  let hierarchy = new cv.Mat();
+  cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+  // prepare output display mat
+  let disp = new cv.Mat.zeros(edges.rows, edges.cols, cv.CV_8UC3);
+
+  processedPaths = [];
+  const epsilonFactor = parseFloat(epsSlider.value||0.01);
+
+  for(let i=0;i<contours.size();i++){
+    let cnt = contours.get(i);
+    const area = Math.abs(cv.contourArea(cnt));
+    if(area < 10){ cnt.delete(); continue; } // filter small noise
+    const peri = cv.arcLength(cnt, true);
+    const eps = Math.max(1.0, epsilonFactor * peri);
+    let approx = new cv.Mat();
+    cv.approxPolyDP(cnt, approx, eps, true);
+
+    // draw with random color
+    const color = new cv.Scalar(Math.random()*255, Math.random()*255, Math.random()*255);
+    let mv = new cv.MatVector(); mv.push_back(approx);
+    cv.drawContours(disp, mv, -1, color, 1, cv.LINE_8);
+
+    // extract points
+    if(approx.data32S && approx.data32S.length >= 6){
+      const path = [];
+      for(let k=0;k<approx.data32S.length;k+=2){
+        path.push({ x: approx.data32S[k], y: approx.data32S[k+1] });
+      }
+      if(path.length>2) processedPaths.push(path);
     }
 
-    // ضبط قيمة العتبة المتزامنة بين range والعدد
-    const thrRange = document.getElementById('threshold');
-    const thrNum = document.getElementById('thresholdNum');
-    thrRange.addEventListener('input', ()=> { thrNum.value = thrRange.value; });
-    thrNum.addEventListener('input', ()=> { thrRange.value = thrNum.value; });
+    mv.delete(); approx.delete(); cnt.delete();
+  }
 
-    // تحميل صورة من الملف وعرضها
-    const fileInput = document.getElementById('fileInput');
-    const imageInfo = document.getElementById('imageInfo');
+  // show overlay preview image (disp) in overlay box
+  const dispCanvas = document.createElement('canvas');
+  dispCanvas.width = disp.cols; dispCanvas.height = disp.rows;
+  cv.imshow(dispCanvas, disp);
+  document.getElementById('overlayImg').src = dispCanvas.toDataURL();
+  document.getElementById('overlayBox').style.display = 'block';
 
-    let lastImage = new Image();
-    function drawImageToCanvas(img) {
-      // resize canvas to fit image (max width)
-      const maxW = 1200;
-      const maxH = 900;
-      let w = img.width, h = img.height;
-      const ratio = Math.min(maxW / w, maxH / h, 1);
-      w = Math.round(w * ratio);
-      h = Math.round(h * ratio);
-      canvas2d.width = w; canvas2d.height = h;
-      ctx2d.clearRect(0,0,w,h);
-      ctx2d.drawImage(img, 0, 0, w, h);
-      imageInfo.textContent = `أبعاد الصورة: ${img.width}×${img.height} -> معالجة بمقياس ${w}×${h}`;
+  // cleanup
+  src.delete(); gray.delete(); blurred.delete(); edges.delete();
+  contours.delete(); hierarchy.delete(); disp.delete();
+
+  // Prepare grayscale Mat for Z sampling:
+  const procRes = parseInt(document.getElementById('procRes').value||200);
+  lastProcRes = procRes;
+  // create an offscreen canvas sized by procRes (largest dimension)
+  const targetMax = procRes;
+  const scale = Math.min(targetMax / preview.width, targetMax / preview.height, 1);
+  const gw = Math.max(16, Math.round(preview.width * scale));
+  const gh = Math.max(16, Math.round(preview.height * scale));
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = gw; tempCanvas.height = gh;
+  const tctx = tempCanvas.getContext('2d');
+  tctx.drawImage(preview, 0, 0, gw, gh);
+
+  // read grayscale into grayMatForZ
+  if(grayMatForZ) { grayMatForZ.delete(); grayMatForZ = null; }
+  grayMatForZ = cv.imread(tempCanvas);
+  let tmpGray = new cv.Mat();
+  cv.cvtColor(grayMatForZ, tmpGray, cv.COLOR_RGBA2GRAY);
+  grayMatForZ.delete();
+  grayMatForZ = tmpGray; // single-channel 8U
+
+  // note processed image size for px->mm mapping
+  procImageSize.w = preview.width;
+  procImageSize.h = preview.height;
+
+  summary.textContent = `Found ${processedPaths.length} paths. Grayscale map: ${gw}×${gh}`;
+  showToast('Contours extracted');
+}
+
+/* ----------------------------------------------------------
+  Generate G-code 2D and 3D
+  - 2D: Z 0 for cutting/contour (with safe Z moves)
+  - 3D: sample grayMatForZ at each point to compute Z between 0 and -maxDepth
+-----------------------------------------------------------*/
+function pxToMm(px, imagePixelWidth, realWidthMm){
+  return (px / imagePixelWidth) * realWidthMm;
+}
+function pixelValueAtGrayMat(x, y){
+  // x,y are coordinates in processed preview resolution (procImageSize.w/h)
+  // Need to map to grayMatForZ resolution
+  if(!grayMatForZ) return 0;
+  const gw = grayMatForZ.cols, gh = grayMatForZ.rows;
+  const gx = Math.min(gw-1, Math.max(0, Math.round((x / procImageSize.w) * (gw-1))));
+  const gy = Math.min(gh-1, Math.max(0, Math.round((y / procImageSize.h) * (gh-1))));
+  // data is uchar in grayMatForZ.data
+  const idx = gy * gw + gx;
+  return grayMatForZ.data ? grayMatForZ.data[idx] : 0;
+}
+
+function generateGcode2D(paths){
+  const feed = parseFloat(document.getElementById('feedRate').value||800);
+  const spindle = parseInt(document.getElementById('spindle').value||10000);
+  const realW = parseFloat(document.getElementById('realWidth').value||200);
+
+  let g = `; Generated by CNC AI - 2D\nG21\nG90\nM3 S${spindle}\nG0 Z5\n`;
+  for(const path of paths){
+    if(!path || path.length<2) continue;
+    const s = path[0];
+    const sx = pxToMm(s.x, procImageSize.w, realW);
+    const sy = pxToMm(s.y, procImageSize.w, realW);
+    g += `G0 X${sx.toFixed(3)} Y${sy.toFixed(3)}\n`;
+    g += `G1 Z0 F${feed}\n`;
+    for(const p of path){
+      const x = pxToMm(p.x, procImageSize.w, realW);
+      const y = pxToMm(p.y, procImageSize.w, realW);
+      g += `G1 X${x.toFixed(3)} Y${y.toFixed(3)} F${feed}\n`;
     }
+    g += `G0 Z5\n`;
+  }
+  g += `M5\nG0 X0 Y0\nM30\n`;
+  return g;
+}
 
-    fileInput.addEventListener('change', (ev) => {
-      const f = ev.target.files[0];
-      if (!f) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        const img = new Image();
-        img.onload = () => {
-          lastImage = img;
-          drawImageToCanvas(img);
-          showNotification('تم رفع الصورة وجاهزة للمعالجة');
-        };
-        img.src = reader.result;
-      };
-      reader.readAsDataURL(f);
-    });
+function generateGcode3D(paths){
+  if(!grayMatForZ) { showToast('No heatmap prepared — run detect first'); return ''; }
+  const feed = parseFloat(document.getElementById('feedRate').value||800);
+  const spindle = parseInt(document.getElementById('spindle').value||10000);
+  const realW = parseFloat(document.getElementById('realWidth').value||200);
+  const maxDepth = parseFloat(document.getElementById('maxDepth').value||5); // mm (positive)
+  let g = `; Generated by CNC AI - 3D Relief\nG21\nG90\nM3 S${spindle}\nG0 Z5\n`;
 
-    // تحميل صورة افتراضية صغيرة إذا لم يقم المستخدم بتحميل
-    (function loadDefaultImage(){
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => { lastImage = img; drawImageToCanvas(img); };
-      // صورة افتراضية بسيطة (يمكن استبدالها)
-      img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="100%" height="100%" fill="%230b1220"/><circle cx="200" cy="200" r="120" fill="%2306b6d4"/><rect x="320" y="120" width="300" height="250" fill="%23f59e0b" rx="20"/></svg>';
-    })();
-
-    // ------------------ دوال معالجة الصور والحواف ------------------
-    const MAX_PROC_SIZE = 700; // حجم معالجة (بيكسل) لتفادي تجمّد المتصفح
-    const RDP_EPSILON = 2.0;
-
-    function toGrayscale(imageData) {
-      const w = imageData.width, h = imageData.height;
-      const gray = new Float32Array(w*h);
-      const d = imageData.data;
-      for (let i=0; i<w*h; i++){
-        const r = d[i*4], g = d[i*4+1], b = d[i*4+2];
-        gray[i] = 0.299*r + 0.587*g + 0.114*b;
-      }
-      return {data:gray, width:w, height:h};
+  for(const path of paths){
+    if(!path || path.length<2) continue;
+    // move to start fast at safe Z
+    const s = path[0];
+    const sx = pxToMm(s.x, procImageSize.w, realW);
+    const sy = pxToMm(s.y, procImageSize.w, realW);
+    g += `G0 X${sx.toFixed(3)} Y${sy.toFixed(3)}\n`;
+    // for each point in path write X Y Z where Z is mapped from grayscale
+    for(const p of path){
+      const x = pxToMm(p.x, procImageSize.w, realW);
+      const y = pxToMm(p.y, procImageSize.w, realW);
+      const pv = pixelValueAtGrayMat(p.x, p.y); // 0..255
+      const z = - (pv / 255.0) * maxDepth; // negative depth
+      g += `G1 X${x.toFixed(3)} Y${y.toFixed(3)} Z${z.toFixed(3)} F${feed}\n`;
     }
+    g += `G0 Z5\n`;
+  }
 
-    function sobelMagnitude(gray, w, h) {
-      const mag = new Float32Array(w*h);
-      const gxKernel = [-1,0,1,-2,0,2,-1,0,1];
-      const gyKernel = [-1,-2,-1,0,0,0,1,2,1];
-      for (let y=1; y<h-1; y++){
-        for (let x=1; x<w-1; x++){
-          let gx=0, gy=0, k=0;
-          for (let ky=-1; ky<=1; ky++){
-            for (let kx=-1; kx<=1; kx++){
-              const val = gray[(y+ky)*w + (x+kx)];
-              gx += gxKernel[k] * val;
-              gy += gyKernel[k] * val;
-              k++;
-            }
-          }
-          mag[y*w + x] = Math.hypot(gx, gy);
-        }
-      }
-      return mag;
+  g += `M5\nG0 X0 Y0\nM30\n`;
+  return g;
+}
+
+/* ----------------------------------------------------------
+  3D preview with Three.js: heightmap + toolpaths overlay
+  - Creates a plane geometry sized by preview dimensions but scaled for performance
+  - Samples grayscale map at lower resolution (procRes)
+-----------------------------------------------------------*/
+let threeScene, threeCamera, threeRenderer, threeControls, heightMesh, pathsGroup;
+function initThree(container){
+  if(threeRenderer) return;
+  const w = container.clientWidth, h = container.clientHeight;
+  threeRenderer = new THREE.WebGLRenderer({antialias:true,alpha:true});
+  threeRenderer.setPixelRatio(window.devicePixelRatio);
+  threeRenderer.setSize(w,h);
+  container.appendChild(threeRenderer.domElement);
+  threeScene = new THREE.Scene();
+  threeCamera = new THREE.PerspectiveCamera(45, w/h, 0.1, 1000);
+  threeCamera.position.set(0, -Math.max(w,h)/2, Math.max(w,h)/1.5);
+  threeControls = new THREE.OrbitControls(threeCamera, threeRenderer.domElement);
+  threeControls.target.set(0,0,0);
+  const light = new THREE.DirectionalLight(0xffffff, 0.9);
+  light.position.set(1,1,1);
+  threeScene.add(light);
+  const amb = new THREE.AmbientLight(0x444444); threeScene.add(amb);
+
+  window.addEventListener('resize', ()=> {
+    const cw = container.clientWidth, ch = container.clientHeight;
+    threeRenderer.setSize(cw,ch);
+    threeCamera.aspect = cw/ch;
+    threeCamera.updateProjectionMatrix();
+  });
+}
+
+function buildHeightmapAndPaths(){
+  if(!grayMatForZ) { showToast('Run detect/prepare heatmap first'); return; }
+  const container = document.getElementById('threeContainer');
+  initThree(container);
+
+  // clear previous
+  if(heightMesh){ threeScene.remove(heightMesh); heightMesh.geometry.dispose(); heightMesh.material.dispose(); heightMesh=null; }
+  if(pathsGroup){ threeScene.remove(pathsGroup); pathsGroup=null; }
+
+  const gw = grayMatForZ.cols, gh = grayMatForZ.rows;
+  const realW = parseFloat(document.getElementById('realWidth').value||200);
+  const aspect = procImageSize.h>0 ? procImageSize.h / procImageSize.w : 1;
+  const realH = realW * (procImageSize.h / procImageSize.w);
+
+  // geometry resolution equal to grayMat dimensions (or clamp)
+  const segX = gw-1, segY = gh-1;
+  const geometry = new THREE.PlaneGeometry(realW, realH, segX, segY);
+  // map z from grayMat: white->-maxDepth (we flip sign so Z up is positive)
+  const maxDepth = parseFloat(document.getElementById('maxDepth').value||5);
+
+  // plane geometry vertices are row-major: iterate and set z
+  const pos = geometry.attributes.position;
+  for(let j=0;j<=segY;j++){
+    for(let i=0;i<=segX;i++){
+      const idx = j*(segX+1) + i;
+      // sample grayscale at i,j
+      const pv = grayMatForZ.data[j*gw + i]; // 0..255
+      const z = - (pv/255.0) * maxDepth;
+      pos.setZ(idx, z);
     }
+  }
+  pos.needsUpdate = true;
+  geometry.computeVertexNormals();
 
-    function thresholdBinary(mag, w, h, thr) {
-      const bin = new Uint8Array(w*h);
-      for (let i=0;i<w*h;i++) bin[i] = (mag[i] >= thr) ? 1 : 0;
-      return bin;
+  const material = new THREE.MeshStandardMaterial({color:0x8899ff,wireframe:false,side:THREE.DoubleSide,flatShading:false,metalness:0.1,roughness:0.7});
+  heightMesh = new THREE.Mesh(geometry, material);
+  heightMesh.rotateX(-Math.PI/2); // plane to horizontal
+  // center at origin
+  heightMesh.position.set(0,0,0);
+  threeScene.add(heightMesh);
+
+  // draw toolpaths (processedPaths) as line segments overlay
+  pathsGroup = new THREE.Group();
+  const lineMat = new THREE.LineBasicMaterial({color:0xff6666,linewidth:2});
+  for(const path of processedPaths){
+    const pts = [];
+    for(const p of path){
+      // map p.x/p.y (px in preview) -> world X,Y (centered)
+      const worldX = (pxToMm(p.x, procImageSize.w, realW) - realW/2);
+      const worldY = ( (pxToMm(p.y, procImageSize.w, realW) - realH/2) );
+      // sample z from grayMatForZ (map coordinates)
+      const pv = pixelValueAtGrayMat(p.x, p.y);
+      const z = - (pv/255.0) * maxDepth;
+      pts.push(new THREE.Vector3(worldX, z, worldY)); // note y-axis used for z
     }
-
-    function traceContours(binary, w, h) {
-      const visited = new Uint8Array(w*h);
-      const contours = [];
-      const dirs = [
-        {dx:1,dy:0},{dx:1,dy:-1},{dx:0,dy:-1},{dx:-1,dy:-1},
-        {dx:-1,dy:0},{dx:-1,dy:1},{dx:0,dy:1},{dx:1,dy:1}
-      ];
-      const index = (x,y)=> y*w + x;
-      for (let y=1;y<h-1;y++){
-        for (let x=1;x<w-1;x++){
-          const idx = index(x,y);
-          if (binary[idx] && !visited[idx]) {
-            const contour = [];
-            let cx = x, cy = y;
-            let prevDir = 0;
-            let start = true;
-            let loopGuard = 0;
-            do {
-              contour.push({x:cx, y:cy});
-              visited[index(cx,cy)] = 1;
-              let found=false;
-              for (let i=0;i<8;i++){
-                const di = (prevDir + i) % 8;
-                const nx = cx + dirs[di].dx;
-                const ny = cy + dirs[di].dy;
-                if (nx<=0||ny<=0||nx>=w-1||ny>=h-1) continue;
-                if (binary[index(nx,ny)]) {
-                  cx = nx; cy = ny;
-                  prevDir = (di + 6) % 8;
-                  found = true;
-                  break;
-                }
-              }
-              if (!found) break;
-              if (!start && cx === x && cy === y) break;
-              start = false;
-              loopGuard++; if (loopGuard > w*h) break;
-            } while(true);
-            if (contour.length >= 6) contours.push(contour);
-          }
-        }
-      }
-      return contours;
+    if(pts.length>1){
+      const g = new THREE.BufferGeometry().setFromPoints(pts);
+      const line = new THREE.Line(g, lineMat);
+      pathsGroup.add(line);
     }
+  }
+  threeScene.add(pathsGroup);
 
-    // Ramer-Douglas-Peucker
-    function rdp(points, eps) {
-      if (points.length < 3) return points.slice();
-      function pointLineDistance(p, a, b){
-        const A = p.x - a.x, B = p.y - a.y;
-        const C = b.x - a.x, D = b.y - a.y;
-        const dot = A*C + B*D;
-        const len_sq = C*C + D*D || 1;
-        const param = Math.max(0, Math.min(1, dot / len_sq));
-        const xx = a.x + param * C;
-        const yy = a.y + param * D;
-        const dx = p.x - xx, dy = p.y - yy;
-        return Math.hypot(dx, dy);
-      }
-      function dmaxIndex(pts, a, b) {
-        let maxDist = -1, idx = -1;
-        for (let i=a+1;i<b;i++){
-          const d = pointLineDistance(pts[i], pts[a], pts[b]);
-          if (d > maxDist) { maxDist = d; idx = i; }
-        }
-        return {maxDist, idx};
-      }
-      function recurse(pts, a, b, eps, out) {
-        const {maxDist, idx} = dmaxIndex(pts, a, b);
-        if (maxDist > eps) {
-          recurse(pts, a, idx, eps, out);
-          recurse(pts, idx, b, eps, out);
-        } else {
-          out.push(pts[a]);
-        }
-      }
-      const out = [];
-      recurse(points, 0, points.length-1, eps, out);
-      out.push(points[points.length-1]);
-      return out;
-    }
+  // adjust camera to fit
+  const bbox = new THREE.Box3().setFromObject(heightMesh);
+  const size = new THREE.Vector3(); bbox.getSize(size);
+  const center = new THREE.Vector3(); bbox.getCenter(center);
+  threeControls.target.copy(center);
+  threeCamera.position.set(center.x, center.y - Math.max(size.x,size.z)*1.2, Math.max(size.x,size.z));
+  threeCamera.lookAt(center);
+  threeControls.update();
 
-    // offset polygon (مبسطة) - نتيجة عملية تقريبية وعملية لمشروعات CNC الخشبي
-    function offsetPolygon(polygon, offsetPx) {
-      const n = polygon.length;
-      if (n < 3) return [];
-      const out = [];
-      for (let i=0;i<n;i++){
-        const prev = polygon[(i-1+n)%n];
-        const cur  = polygon[i];
-        const next = polygon[(i+1)%n];
+  // start render loop
+  (function animate(){ threeRenderer && threeRenderer.render(threeScene, threeCamera); requestAnimationFrame(animate); })();
+}
 
-        const v1 = {x: cur.x - prev.x, y: cur.y - prev.y};
-        const v2 = {x: next.x - cur.x, y: next.y - cur.y};
-        const len1 = Math.hypot(v1.x, v1.y) || 1;
-        const len2 = Math.hypot(v2.x, v2.y) || 1;
-        v1.x/=len1; v1.y/=len1; v2.x/=len2; v2.y/=len2;
+/* ----------------------------------------------------------
+  UI actions
+-----------------------------------------------------------*/
+btnDetect.addEventListener('click', ()=> {
+  if(!cvReady) { showToast('OpenCV is still loading...'); return; }
+  detectContoursAndPaths();
+});
 
-        const n1 = {x: -v1.y, y: v1.x};
-        const n2 = {x: -v2.y, y: v2.x};
+btnGen.addEventListener('click', ()=>{
+  const mode = document.getElementById('gcodeMode').value;
+  if(processedPaths.length===0){ showToast('No processed paths. Run Detect first.'); return; }
+  let g = '';
+  if(mode==='2d') g = generateGcode2D(processedPaths);
+  else g = generateGcode3D(processedPaths);
+  gcodeOut.value = g;
+  summary.textContent = `G-code generated (${mode}). Paths: ${processedPaths.length}`;
+  showToast('G-code ready');
+});
 
-        let ax = (n1.x + n2.x)/2;
-        let ay = (n1.y + n2.y)/2;
-        const alen = Math.hypot(ax, ay) || 1;
-        ax/=alen; ay/=alen;
+btnPreview3D.addEventListener('click', ()=>{
+  if(!grayMatForZ || processedPaths.length===0){ showToast('Run Detect first to prepare heatmap and paths'); return; }
+  buildHeightmapAndPaths();
+});
 
-        out.push({x: cur.x + ax * (-offsetPx), y: cur.y + ay * (-offsetPx)});
-      }
-      // تنظيف نقاط متقاربة
-      const cleaned = [];
-      for (let p of out) {
-        if (!cleaned.length) cleaned.push(p);
-        else {
-          const last = cleaned[cleaned.length-1];
-          if (Math.hypot(last.x - p.x, last.y - p.y) > 0.5) cleaned.push(p);
-        }
-      }
-      if (cleaned.length>2 && Math.hypot(cleaned[0].x - cleaned[cleaned.length-1].x, cleaned[0].y - cleaned[cleaned.length-1].y) < 0.5) cleaned.pop();
-      return cleaned;
-    }
+btnDownload.addEventListener('click', ()=>{
+  if(!gcodeOut.value) return showToast('No G-code to download');
+  const blob = new Blob([gcodeOut.value], {type:'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download = 'cnc_paths.ngc'; document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  showToast('G-code downloaded');
+});
+btnCopy.addEventListener('click', async ()=>{
+  if(!gcodeOut.value) return showToast('No G-code to copy');
+  try{ await navigator.clipboard.writeText(gcodeOut.value); showToast('Copied'); }
+  catch(e){ showToast('Copy failed'); }
+});
+btnClear.addEventListener('click', ()=>{ gcodeOut.value=''; showToast('Cleared'); });
 
-    function polygonArea(poly) {
-      let a = 0;
-      for (let i=0;i<poly.length;i++){
-        const j=(i+1)%poly.length;
-        a += poly[i].x*poly[j].y - poly[j].x*poly[i].y;
-      }
-      return a/2;
-    }
-
-    function generateInsetPaths(polygon, stepPx, maxLoops=50) {
-      const paths = [];
-      let current = polygon.slice();
-      for (let loop=0; loop<maxLoops; loop++){
-        if (current.length < 3) break;
-        current = rdp(current, 0.5);
-        paths.push(current.slice());
-        const next = offsetPolygon(current, stepPx);
-        if (!next || next.length < 3) break;
-        const area = Math.abs(polygonArea(next));
-        if (area < 20) break;
-        current = next;
-      }
-      return paths;
-    }
-
-    function pxToMm(px, imagePixelWidth, realWidthMm) {
-      return (px / imagePixelWidth) * realWidthMm;
-    }
-
-    function pathsToGcode(paths, imageWidthPx, realWidthMm, feedRate = 800, spindle = 10000) {
-      let g = '; Generated by CNC AI edge-paths\nG21\nG90\nM3 S' + spindle + '\nG0 Z5\n';
-      for (const path of paths) {
-        if (!path || path.length===0) continue;
-        const sx = pxToMm(path[0].x, imageWidthPx, realWidthMm);
-        const sy = pxToMm(path[0].y, imageWidthPx, realWidthMm);
-        g += `G0 X${(sx).toFixed(3)} Y${(sy).toFixed(3)}\n`;
-        g += `G1 Z0 F${feedRate}\n`;
-        for (let i=0;i<path.length;i++){
-          const p = path[i];
-          const x = pxToMm(p.x, imageWidthPx, realWidthMm);
-          const y = pxToMm(p.y, imageWidthPx, realWidthMm);
-          g += `G1 X${x.toFixed(3)} Y${y.toFixed(3)} F${feedRate}\n`;
-        }
-        g += `G0 Z5\n`;
-      }
-      g += 'M5\nG0 X0 Y0\nM30\n';
-      return g;
-    }
-
-    // رسم overlay صغير وإظهار صورة overlay
-    function drawContoursOverlay(targetCanvas, contours, paths, procW, procH) {
-      // نرسم على كانفاس مؤقت بمقاس المعالجة (procW/procH) ثم نوسع إلى مقاس targetCanvas للمعاينة الصغيرة
-      const overlay = document.createElement('canvas');
-      overlay.width = procW; overlay.height = procH;
-      const octx = overlay.getContext('2d');
-
-      // draw white background for contrast (اختياري)
-      octx.fillStyle = '#081220';
-      octx.fillRect(0,0,overlay.width, overlay.height);
-
-      // draw paths in red (نستخدم المسارات التي تُعطى)
-      octx.lineWidth = Math.max(1, Math.round(Math.min(procW, procH) * 0.002));
-      octx.strokeStyle = 'rgba(255,60,60,0.95)';
-      for (const p of paths) {
-        if (!p || p.length<2) continue;
-        octx.beginPath();
-        octx.moveTo(p[0].x, p[0].y);
-        for (let i=1;i<p.length;i++) octx.lineTo(p[i].x, p[i].y);
-        octx.closePath();
-        octx.stroke();
-      }
-
-      // scale overlay to fit preview overlay image
-      const dataUrl = overlay.toDataURL();
-      const overlayImg = document.getElementById('overlayImg');
-      overlayImg.src = dataUrl;
-      const node = document.getElementById('preview-overlay');
-      node.style.display = 'flex';
-    }
-
-    document.getElementById('closeOverlay').addEventListener('click', ()=> {
-      document.getElementById('preview-overlay').style.display = 'none';
-    });
-
-    // ------------------ الدالة الرئيسية: كشف الحواف + استخراج المسارات + G-code ------------------
-    async function detectEdgesAndPaths() {
-      if (!canvas2d) { showNotification('لا توجد معاينة للمعالجة'); return; }
-      // إعدادات من الواجهة
-      const thr = parseInt(document.getElementById('threshold').value || 60);
-      const feedRate = parseInt(document.getElementById('feedRate').value || 800);
-      const spindle = parseInt(document.getElementById('spindleSpeed').value || 10000);
-      const realWidthMm = parseFloat(document.getElementById('realWidthMm').value || 200);
-      const offsetStepMm = parseFloat(document.getElementById('offsetStepMm').value || 2);
-      const toolDia = parseFloat(document.getElementById('toolDia').value || 2);
-
-      // استنساخ الصورة إلى canvas معالجة (مقياس)
-      const srcW = canvas2d.width, srcH = canvas2d.height;
-      const scale = Math.min(1, MAX_PROC_SIZE / Math.max(srcW, srcH));
-      const procW = Math.max(10, Math.round(srcW * scale));
-      const procH = Math.max(10, Math.round(srcH * scale));
-      const temp = document.createElement('canvas');
-      temp.width = procW; temp.height = procH;
-      const tctx = temp.getContext('2d');
-      tctx.drawImage(canvas2d, 0, 0, procW, procH);
-      const imgData = tctx.getImageData(0,0,procW,procH);
-
-      // grayscale -> sobel -> normalize -> binary -> contours
-      const g = toGrayscale(imgData);
-      const mag = sobelMagnitude(g.data, g.width, g.height);
-      let maxM = 0; for (let i=0;i<mag.length;i++) if (mag[i] > maxM) maxM = mag[i];
-      const normMag = new Float32Array(mag.length);
-      for (let i=0;i<mag.length;i++) normMag[i] = (mag[i] / (maxM || 1)) * 255;
-      const binary = thresholdBinary(normMag, g.width, g.height, thr);
-      const contours = traceContours(binary, g.width, g.height);
-
-      // تبسيط الحواف وفلاتر حسب المساحة
-      const simplified = contours.map(c => rdp(c, RDP_EPSILON)).filter(c => Math.abs(polygonArea(c)) > 30);
-
-      // تحويل خطوة الأوفست من مم إلى بيكسل بالنسبة لصورة المعالجة
-      const stepPx = (offsetStepMm / realWidthMm) * procW;
-
-      // تجميع جميع المسارات (inset) من كل مضلع
-      const allPaths = [];
-      for (const poly of simplified) {
-        // generate inset paths in pixels
-        const insetPaths = generateInsetPaths(poly, stepPx, 200);
-        // flatten and add
-        for (const p of insetPaths) {
-          if (p && p.length>=3) allPaths.push(p);
-        }
-      }
-
-      // رسم overlay صغير للمعاينة
-      drawContoursOverlay(canvas2d, simplified, allPaths, procW, procH);
-
-      // توليد G-code -- ملاحظة: نحول px -> mm باستخدام realWidthMm ونفترض نفس نسبة المحورين
-      const gcode = pathsToGcode(allPaths, procW, realWidthMm, feedRate, spindle);
-      gcodeOutput.value = gcode;
-      generatedGcode = gcode;
-
-      // ملخص
-      document.getElementById('summary').textContent = `اكتُشفت ${simplified.length} حواف → توليد ${allPaths.length} مسار. (معالجة ${procW}×${procH})`;
-      showNotification('انتهى كشف الحواف وتوليد المسارات');
-    }
-
-    // ربط أزرار الواجهة
-    document.getElementById('btnDetect').addEventListener('click', detectEdgesAndPaths);
-
-    // تحميل G-code
-    document.getElementById('btnDownloadG').addEventListener('click', ()=> {
-      if (!generatedGcode) { showNotification('لا يوجد G-code ليتم تحميله'); return; }
-      const blob = new Blob([generatedGcode], {type:'text/plain'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'paths.nc';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      showNotification('تم تحميل ملف G-code');
-    });
-
-    // نسخ G-code
-    document.getElementById('btnCopy').addEventListener('click', async ()=> {
-      if (!generatedGcode) { showNotification('لا يوجد شيء للنسخ'); return; }
-      try {
-        await navigator.clipboard.writeText(generatedGcode);
-        showNotification('تم النسخ إلى الحافظة');
-      } catch(e) {
-        showNotification('فشل النسخ — استخدم Ctrl+C يدوياً');
-      }
-    });
-
-    // تهيئة: ضبط قيم أولية
-    window.addEventListener('load', ()=> {
-      thrRange.value = 60; thrNum.value = 60;
-    });
-  </script>
+/* ----------------------------------------------------------
+  Clean up on page unload
+-----------------------------------------------------------*/
+window.addEventListener('beforeunload', ()=>{
+  if(grayMatForZ) { try{ grayMatForZ.delete(); }catch(e){} grayMatForZ = null; }
+  // three cleanup if needed
+});
+</script>
 </body>
 </html>
