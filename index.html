@@ -1,21 +1,22 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>CNC AI — Advanced: OpenCV + Three.js + Clipper (Tool Comp & 3D heatmap)</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>CNC AI — معاينة المسارات 2D + 3D (محسّن)</title>
 
 <!-- OpenCV.js -->
 <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
 <!-- three.js -->
 <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
 <script src="https://unpkg.com/three@0.158.0/examples/js/controls/OrbitControls.js"></script>
-<!-- ClipperLib (for polygon offsets) -->
+<!-- ClipperLib -->
 <script src="https://unpkg.com/clipper-lib@6.4.2/clipper.js"></script>
 
 <style>
-:root{ --bg:#071022; --panel:#0b1320; --muted:#9bb0c8; --accent:#06b6d4; }
-body{margin:0;font-family:Arial,Segoe UI,Roboto;background:linear-gradient(180deg,#041022,#071022);color:#e6eef6}
+:root{ --bg:#071022; --panel:#0b1320; --muted:#9bb0c8; --accent:#06b6d4; --danger:#ff6b6b; }
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Segoe UI,system-ui;background:linear-gradient(180deg,#031022,#071022);color:#e6eef6}
 .app{max-width:1200px;margin:18px auto;padding:16px}
 header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
 h1{margin:0;color:var(--accent)}
@@ -23,12 +24,12 @@ h1{margin:0;color:var(--accent)}
 .grid{display:grid;grid-template-columns:1fr 420px;gap:12px}
 .panel{background:var(--panel);padding:12px;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,0.5)}
 canvas#preview{width:100%;height:auto;border-radius:6px;background:#000;display:block}
-#threeContainer{width:100%;height:340px;background:#081224;border-radius:8px;margin-top:10px}
+#threeBox{width:100%;height:300px;background:#081224;border-radius:8px;margin-top:10px}
 label{display:block;margin-top:8px;color:var(--muted);font-size:13px}
-input,select,button,textarea{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:#e6eef6;box-sizing:border-box}
+input,select,button,textarea{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:#e6eef6}
 input[type=file]{padding:6px}
 input[type=range]{height:4px}
-.row{display:flex;gap:8px}
+.row{display:flex;gap:8px;margin-top:8px}
 .row> *{flex:1}
 button.primary{background:var(--accent);color:#042;border:none;cursor:pointer;font-weight:700}
 button.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
@@ -36,8 +37,10 @@ textarea{height:200px;background:#021024;color:#cfeaf2;font-family:monospace}
 #overlayBox{position:fixed;right:16px;bottom:16px;background:rgba(1,6,12,0.95);padding:8px;border-radius:8px;display:none;z-index:9999;border:1px solid rgba(6,182,212,0.12)}
 #overlayBox img{max-width:260px;max-height:260px}
 #toast{position:fixed;left:16px;bottom:16px;background:rgba(0,0,0,0.85);color:#fff;padding:8px 10px;border-radius:8px;display:none;z-index:10000}
-.settings-row{display:flex;gap:8px;margin-top:6px}
-.settings-row > *{flex:1}
+.legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.legend span{font-size:12px;padding:6px;border-radius:6px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.02)}
+.badge{display:inline-block;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.02);color:var(--muted);font-size:12px}
+.marker{width:10px;height:10px;border-radius:50%;display:inline-block;margin-left:6px}
 @media(max-width:980px){.grid{grid-template-columns:1fr}}
 </style>
 </head>
@@ -45,17 +48,17 @@ textarea{height:200px;background:#021024;color:#cfeaf2;font-family:monospace}
 <div class="app">
   <header>
     <div>
-      <h1>CNC AI — متقدم (Tool Comp + Step-down + 3D)</h1>
-      <div class="small">OpenCV.js + Three.js + Clipper مدمجة</div>
+      <h1>CNC AI — معاينة المسارات (2D) و (3D)</h1>
+      <div class="small">تحميل OpenCV.js وThree.js وClipper مدمج — نسخة محسّنة لمنع التجمّد</div>
     </div>
-    <div class="small">احفظ العمل دوريًا — التغييرات تحفظ محلياً</div>
+    <div class="small">ابدأ بتحميل صورة الموبيليا ثم اضغط كشف الحواف</div>
   </header>
 
   <div class="grid">
-    <!-- LEFT: preview + 3D -->
+    <!-- اليسار: معاينة 2D + 3D أسفلها -->
     <div class="panel">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <div class="small">معاينة (2D)</div>
+        <div class="small">معاينة 2D</div>
         <div style="width:320px">
           <input id="fileInput" type="file" accept="image/*">
         </div>
@@ -63,33 +66,39 @@ textarea{height:200px;background:#021024;color:#cfeaf2;font-family:monospace}
 
       <canvas id="preview" width="900" height="600"></canvas>
 
-      <div class="settings-row" style="margin-top:8px">
-        <button id="btnDetect" class="primary">كشف الحواف و تهيئة الخريطة</button>
-        <button id="btnPreview3D" class="secondary">عرض 3D</button>
+      <div class="row" style="margin-top:8px">
+        <button id="btnDetect" class="primary">كشف الحواف وتهيئة الخريطة</button>
+        <button id="btnAuto3D" class="secondary">عرض 3D تلقائياً</button>
       </div>
 
-      <div id="threeContainer"></div>
-      <div class="small" style="margin-top:8px">ملاحظة: ابدأ بقيمة procRes = 200 للمعاينة ثم ارفعها إذا أردت تفاصيل أعلى</div>
+      <div id="threeBox"></div>
+
+      <div class="legend">
+        <span><span class="marker" style="background:#66b3ff"></span> حواف</span>
+        <span><span class="marker" style="background:#ff6b6b"></span> نقطة بداية/نهاية</span>
+        <span class="badge" id="infoPaths">المسارات: 0</span>
+        <span class="badge" id="infoHeat">خريطة ارتفاع: -</span>
+      </div>
     </div>
 
-    <!-- RIGHT: controls + output -->
+    <!-- اليمين: إعدادات ونتائج -->
     <div class="panel">
-      <h3 style="margin:0 0 8px 0">الإعدادات والتحكم</h3>
+      <h3 style="margin:0 0 8px 0">الإعدادات</h3>
 
-      <label>عتبة Canny (منخفض)
+      <label>عتبة Canny منخفض
         <input id="cannyLow" type="number" value="50" min="0" max="255">
       </label>
-      <label>عتبة Canny (مرتفع)
+      <label>عتبة Canny مرتفع
         <input id="cannyHigh" type="number" value="150" min="0" max="255">
       </label>
 
-      <label>تبسيط المسارات ε (نسبي إلى محيط)
+      <label>تبسيط المسارات ε (نسبي إلى المحيط)
         <input id="epsilon" type="range" min="0.005" max="0.05" step="0.001" value="0.01">
         <div class="small" id="epsDisplay">ε = 1.00%</div>
       </label>
 
-      <label>دقة المعالجة لملف الارتفاع (procRes, px أقصى بُعد)
-        <input id="procRes" type="number" value="200" min="80" max="1200" step="10">
+      <label>دقة Heatmap لعينات Z (الحد الأقصى لأكبر بُعد px)
+        <input id="procRes" type="number" value="220" min="80" max="800" step="10">
       </label>
 
       <label>تنعيم خريطة الارتفاع
@@ -100,56 +109,50 @@ textarea{height:200px;background:#021024;color:#cfeaf2;font-family:monospace}
         </select>
       </label>
 
-      <label>العمق الأقصى (مم) — أبيض → هذا العمق (قيمة موجبة)
+      <label>العمق الأقصى (مم) — أبيض → -depth
         <input id="maxDepth" type="number" value="5" min="0.1" step="0.1">
       </label>
 
-      <label>قطر الأداة (مم) — للتعويض الهندسي
+      <label>قطر الأداة (مم) — لتعويض الأداة
         <input id="toolDia" type="number" value="2.0" min="0.1" step="0.1">
       </label>
 
-      <div style="display:flex;gap:8px;margin-top:8px">
-        <label style="flex:1">تمكين تعويض الأداة
-          <select id="enableComp"><option value="yes">نعم</option><option value="no" selected>لا</option></select>
-        </label>
-        <label style="flex:1">اتجاه التعويض
-          <select id="compMode"><option value="outside">خارج</option><option value="inside">داخل</option></select>
-        </label>
+      <div class="row" style="margin-top:8px">
+        <select id="enableComp"><option value="no">تعويض الأداة: لا</option><option value="yes">تعويض الأداة: نعم</option></select>
+        <select id="compMode"><option value="outside">خارج</option><option value="inside">داخل</option></select>
       </div>
 
-      <label>Step-down (مم لكل خطوة) — اترك 0 إذا لا تريد Step-down
-        <input id="stepDown" type="number" value="2.0" min="0" step="0.1">
+      <label>Step-down (مم لكل خطوة) — اترك 0 لعدم التطبيق
+        <input id="stepDown" type="number" value="0" min="0" step="0.1">
       </label>
 
-      <label>خريطة اللون (معاينة ارتفاع)
-        <select id="colormap"><option value="gray">Gray</option><option value="jet">Jet</option></select>
+      <label>عرض العمل الحقيقي (مم) — تحويل px → mm افقي
+        <input id="realWidth" type="number" value="200" min="1" step="1">
       </label>
 
-      <label class="small">G-code / الماكينة</label>
-      <div class="settings-row">
-        <input id="realWidth" type="number" value="200" min="1" step="1" placeholder="عرض العمل (مم)">
-        <input id="feedRate" type="number" value="800" min="1" step="1" placeholder="Feed mm/min">
-      </div>
-      <div class="settings-row" style="margin-top:6px">
-        <input id="spindle" type="number" value="10000" min="100" step="1" placeholder="Spindle RPM">
-        <select id="gcodeMode"><option value="2d">2D (Z0 / Cut)</option><option value="3d">3D Relief (Z from heatmap)</option></select>
-      </div>
+      <label>Feed Rate (مم/دقيقة)
+        <input id="feedRate" type="number" value="800" min="1">
+      </label>
 
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <button id="btnGen" class="primary">توليد G-code (تطبق الإعدادات)</button>
-        <button id="btnSaveSettings" class="secondary">حفظ إعدادات</button>
+      <label>Spindle RPM
+        <input id="spindle" type="number" value="10000" min="100">
+      </label>
+
+      <div class="row" style="margin-top:8px">
+        <select id="gcodeMode"><option value="3d">3D Relief</option><option value="2d">2D (حواف)</option></select>
+        <button id="btnGen" class="primary">توليد G-code</button>
       </div>
 
       <label style="margin-top:10px">G-code الناتج</label>
       <textarea id="gcodeOut" placeholder="G-code سيظهر هنا..." readonly></textarea>
 
-      <div style="display:flex;gap:8px;margin-top:8px">
+      <div class="row" style="margin-top:8px">
         <button id="btnDownload" class="primary">تحميل G-code</button>
         <button id="btnCopy" class="secondary">نسخ</button>
         <button id="btnClear" class="secondary">مسح</button>
       </div>
 
-      <div id="summary" class="small" style="margin-top:8px">الحالة: في وضع الاستعداد</div>
+      <div id="summary" class="small" style="margin-top:8px">الحالة: جاهز</div>
     </div>
   </div>
 </div>
@@ -158,42 +161,46 @@ textarea{height:200px;background:#021024;color:#cfeaf2;font-family:monospace}
 <div id="toast"></div>
 
 <script>
-/* ----------------------- مساعدة واجهة ----------------------- */
+/* -------------------- عناصر DOM وحالة -------------------- */
 const toast = document.getElementById('toast');
 function showToast(msg, ms=3000){ toast.textContent = msg; toast.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>toast.style.display='none', ms); }
 
-/* ----------------------- انتظار OpenCV ----------------------- */
-let cvReady=false;
-function markCvReady(){ cvReady=true; showToast('OpenCV جاهز'); console.log('OpenCV ready'); }
-function waitForCv(){ if(window.cv && cv.getBuildInformation) markCvReady(); else if(window.cv) cv.onRuntimeInitialized = markCvReady; else setTimeout(waitForCv,200); }
-waitForCv(); setTimeout(()=>{ if(!cvReady) showToast('OpenCV لا يزال يحمل — انتظر قليلاً'); },12000);
-
-/* ----------------------- مراجع DOM وحالة ----------------------- */
 const fileInput = document.getElementById('fileInput');
 const preview = document.getElementById('preview');
 const pctx = preview.getContext('2d');
 const btnDetect = document.getElementById('btnDetect');
-const btnPreview3D = document.getElementById('btnPreview3D');
+const btnAuto3D = document.getElementById('btnAuto3D');
 const btnGen = document.getElementById('btnGen');
+const btnPreview3D = document.getElementById('btnAuto3D'); // same button
+const gcodeOut = document.getElementById('gcodeOut');
 const btnDownload = document.getElementById('btnDownload');
 const btnCopy = document.getElementById('btnCopy');
 const btnClear = document.getElementById('btnClear');
-const btnSaveSettings = document.getElementById('btnSaveSettings');
-const overlayBox = document.getElementById('overlayBox');
-const overlayImg = document.getElementById('overlayImg');
-
+const infoPaths = document.getElementById('infoPaths');
+const infoHeat = document.getElementById('infoHeat');
 const epsSlider = document.getElementById('epsilon');
 const epsDisplay = document.getElementById('epsDisplay');
+
 epsDisplay.textContent = `ε = ${(parseFloat(epsSlider.value)*100).toFixed(2)}%`;
 epsSlider.addEventListener('input', ()=> epsDisplay.textContent = `ε = ${(parseFloat(epsSlider.value)*100).toFixed(2)}%`);
 
 let originalImage = null;
-let processedPaths = []; // array of paths (each path is array of {x,y} in preview px)
+let processedPaths = []; // paths in preview px coordinates
 let procImageSize = {w:0,h:0};
-let grayMatForZ = null; // grayscale Mat (small resized for Z sampling)
-let lastProcRes = 200;
+let grayMatForZ = null;
+let cvReady = false;
 
-/* ----------------------- تحميل الصورة وعرضها ----------------------- */
+/* -------------------- انتظار OpenCV جاهز -------------------- */
+function markCvReady(){ cvReady = true; showToast('OpenCV جاهز'); console.log('OpenCV ready'); }
+function waitForCv(){
+  if(window.cv && cv.getBuildInformation) markCvReady();
+  else if(window.cv) cv.onRuntimeInitialized = markCvReady;
+  else setTimeout(waitForCv,200);
+}
+waitForCv();
+setTimeout(()=>{ if(!cvReady) showToast('OpenCV لا يزال يحمل — انتظر قليلاً'); },12000);
+
+/* -------------------- تحميل الصورة وعرضها -------------------- */
 fileInput.addEventListener('change', e=>{
   const f = e.target.files[0];
   if(!f) return;
@@ -201,6 +208,7 @@ fileInput.addEventListener('change', e=>{
   const img = new Image();
   img.onload = ()=>{
     originalImage = img;
+    // scale for preview: limit to 900x600 for display & processing speed
     const maxW = 900, maxH = 600;
     const ratio = Math.min(maxW/img.width, maxH/img.height, 1);
     preview.width = Math.round(img.width*ratio);
@@ -212,131 +220,195 @@ fileInput.addEventListener('change', e=>{
   img.src = url;
 });
 
-/* ----------------------- كشف الحواف + تبسيط + تحضير Heatmap ----------------------- */
-function detectContoursAndPrepareHeatmap(){
+/* -------------------- وظائف مساعدة OpenCV -------------------- */
+// يحول صورة preview إلى Mat، مع تصغير تلقائي إن كانت كبيرة
+function matFromPreviewWithResize(maxSize=900){
+  let src = cv.imread(preview); // rgba
+  // إذا كان الحجم كبيراً جداً نعيد تحجيم src (حماية إضافية)
+  const maxDim = Math.max(src.cols, src.rows);
+  if(maxDim > maxSize){
+    const scale = maxSize / maxDim;
+    const dsize = new cv.Size(Math.round(src.cols*scale), Math.round(src.rows*scale));
+    let resized = new cv.Mat();
+    cv.resize(src, resized, dsize, 0, 0, cv.INTER_AREA);
+    src.delete();
+    src = resized;
+  }
+  return src;
+}
+
+/* -------------------- كشف الحواف + استخراج المسارات -------------------- */
+function detectContoursAndPaths(){
   if(!cvReady) return showToast('OpenCV لا يزال يحمل');
   if(!originalImage) return showToast('حمل صورة أولاً');
 
-  showToast('جاري كشف الحواف وتحضير الخريطة...');
-  // استخدم preview canvas (سريعة). إذا أردت دقة أعلى عالِ قيم procRes.
-  const src = cv.imread(preview); // RGBA
+  showToast('جاري كشف الحواف ... (قد يستغرق ثوانٍ)');
+  // نستخدم نسخة من preview (المعاينة يمكن أن تكون أصلاً مخفضة)
+  // نقرأ Mat من canvas مباشرة
+  let src = matFromPreviewWithResize(1200); // حماية إضافية
   let gray = new cv.Mat();
   cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
-  // preprocessing for edges
-  let blur = new cv.Mat();
-  cv.GaussianBlur(gray, blur, new cv.Size(3,3), 0, 0, cv.BORDER_DEFAULT);
+  // نطبّق Gaussian blur لتقليل الضوضاء قبل Canny
+  let blurred = new cv.Mat();
+  cv.GaussianBlur(gray, blurred, new cv.Size(3,3), 0, 0, cv.BORDER_DEFAULT);
 
-  const low = parseInt(document.getElementById('cannyLow').value||50);
-  const high = parseInt(document.getElementById('cannyHigh').value||150);
+  // إذا أردنا قيم Canny ديناميكية يمكن استخدام median؛ لكن هنا نأخذ من الإدخال أولاً
+  let low = parseInt(document.getElementById('cannyLow').value || 50);
+  let high = parseInt(document.getElementById('cannyHigh').value || 150);
+
+  // حماية: إذا المستخدم لم يحدد أو القيم غير منطقية، استخدم متوسط الصورة
+  if(isNaN(low) || isNaN(high) || low <= 0 || high <= 0 || low >= high){
+    const mean = cv.mean(blurred)[0];
+    low = Math.max(10, Math.round(0.66 * mean));
+    high = Math.min(255, Math.round(1.33 * mean));
+    console.log('Auto Canny thresholds', low, high);
+  }
+
   let edges = new cv.Mat();
-  cv.Canny(blur, edges, low, high);
+  cv.Canny(blurred, edges, low, high);
 
-  // findContours
-  let contours = new cv.MatVector(), hierarchy = new cv.Mat();
-  cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+  // اجلب contours (RETR_TREE لاستخراج الهيكل كاملاً)
+  let contours = new cv.MatVector();
+  let hierarchy = new cv.Mat();
+  cv.findContours(edges, contours, hierarchy, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE);
 
-  // display mat for overlay
+  // رسم النتائج على نسخة للعرض
   let disp = new cv.Mat.zeros(edges.rows, edges.cols, cv.CV_8UC3);
+
   processedPaths = [];
-  const epsilonFactor = parseFloat(epsSlider.value||0.01);
+  const epsilonFactor = parseFloat(epsSlider.value || 0.01);
+
+  // حد أقصى لنقاط المسار (لتفادي تجمّد Clipper / الذاكرة)
+  const MAX_POINTS_PER_PATH = 5000;
 
   for(let i=0;i<contours.size();i++){
     let cnt = contours.get(i);
     const area = Math.abs(cv.contourArea(cnt));
-    if(area < 12){ cnt.delete(); continue; } // فلترة ضوضاء
+    if(area < 12){ cnt.delete(); continue; } // تجاهل الضوضاء الصغيرة
+
     const peri = cv.arcLength(cnt, true);
-    const eps = Math.max(1.0, epsilonFactor * peri);
+    const eps = Math.max(1.0, epsilonFactor * peri); // epsilon بالبيكسل
+
     let approx = new cv.Mat();
     cv.approxPolyDP(cnt, approx, eps, true);
 
-    // رسم لون عشوائي
-    const color = new cv.Scalar(Math.random()*200+20, Math.random()*200+20, Math.random()*200+20);
-    let mv = new cv.MatVector(); mv.push_back(approx);
-    cv.drawContours(disp, mv, -1, color, 1, cv.LINE_8);
-
+    // استخراج النقاط
     if(approx.data32S && approx.data32S.length >= 6){
       const path = [];
       for(let k=0;k<approx.data32S.length;k+=2){
-        path.push({x: approx.data32S[k], y: approx.data32S[k+1]});
+        path.push({ x: approx.data32S[k], y: approx.data32S[k+1] });
+        if(path.length > MAX_POINTS_PER_PATH) break;
       }
-      if(path.length>2) processedPaths.push(path);
+      if(path.length > 2 && path.length <= MAX_POINTS_PER_PATH){
+        processedPaths.push(path);
+      }
     }
 
-    mv.delete(); approx.delete(); cnt.delete();
+    // رسم contour ملون
+    const color = new cv.Scalar(102,179,255); // أزرق فاتح
+    let mv = new cv.MatVector(); mv.push_back(approx);
+    cv.drawContours(disp, mv, -1, color, 1, cv.LINE_8);
+
+    // رسم نقطة بداية/نهاية (مربع صغير أحمر)
+    if(approx.data32S && approx.data32S.length >= 2){
+      const sx = approx.data32S[0], sy = approx.data32S[1];
+      cv.circle(disp, new cv.Point(sx, sy), 3, new cv.Scalar(255,90,90), -1);
+      const ex = approx.data32S[approx.data32S.length-2], ey = approx.data32S[approx.data32S.length-1];
+      cv.circle(disp, new cv.Point(ex, ey), 3, new cv.Scalar(255,90,90), -1);
+    }
+
+    mv.delete();
+    approx.delete();
+    cnt.delete();
   }
 
-  // show overlay in small popup
+  // عرض الصورة المُعالجة (overlay) في نافذة منبثقة صغيرة
   const dispCanvas = document.createElement('canvas');
   dispCanvas.width = disp.cols; dispCanvas.height = disp.rows;
   cv.imshow(dispCanvas, disp);
-  overlayImg.src = dispCanvas.toDataURL();
-  overlayBox.style.display = 'block';
+  document.getElementById('overlayImg').src = dispCanvas.toDataURL();
+  document.getElementById('overlayBox').style.display = 'block';
 
-  // cleanup mats
-  src.delete(); gray.delete(); blur.delete(); edges.delete();
+  // تنظيف Mats المؤقتة
+  src.delete(); gray.delete(); blurred.delete(); edges.delete();
   contours.delete(); hierarchy.delete(); disp.delete();
 
-  // prepare grayscale Mat for Z sampling (procRes)
-  const procRes = parseInt(document.getElementById('procRes').value||200);
-  lastProcRes = procRes;
-  // create resized canvas to procRes max dimension
-  const targetMax = procRes;
-  const scale = Math.min(targetMax/preview.width, targetMax/preview.height, 1);
-  const gw = Math.max(16, Math.round(preview.width*scale));
-  const gh = Math.max(16, Math.round(preview.height*scale));
-  const tmpC = document.createElement('canvas'); tmpC.width=gw; tmpC.height=gh;
-  const tctx = tmpC.getContext('2d'); tctx.drawImage(preview,0,0,gw,gh);
+  // إعداد خريطة الرمادي (heatmap) للاستخدام في Z — نحول preview إلى حجم procRes
+  prepareGrayMatForZ();
 
-  // read into cv.Mat
+  // تحديث الواجهات
+  infoPaths.textContent = `المسارات: ${processedPaths.length}`;
+  infoHeat.textContent = `خريطة: ${grayMatForZ ? grayMatForZ.cols + '×' + grayMatForZ.rows : '-'}`;
+
+  showToast('انتهى استخراج المسارات — تم تحضير خريطة الارتفاع');
+  // بعد الكشف، نبني معاينة 3D تلقائياً إذا كان الزر مفعل
+  build3DPreview(); // auto display below
+}
+
+/* -------------------- تحضير خريطة الرمادي (Heatmap) -------------------- */
+function prepareGrayMatForZ(){
+  if(!originalImage) return;
+  // قراءة الحجم المستهدف من الإعدادات
+  const procRes = Math.max(16, Math.min(800, parseInt(document.getElementById('procRes').value||220)));
+  // نعمل على canvas مؤقت
+  const tmp = document.createElement('canvas');
+  // المحافظة على نسبة العرض/الارتفاع من preview
+  const previewW = preview.width, previewH = preview.height;
+  const scale = Math.min(procRes / previewW, procRes / previewH, 1);
+  const gw = Math.max(16, Math.round(previewW * scale));
+  const gh = Math.max(16, Math.round(previewH * scale));
+  tmp.width = gw; tmp.height = gh;
+  const tctx = tmp.getContext('2d');
+  tctx.drawImage(preview, 0, 0, gw, gh);
+
+  // nếu có grayMat cũ thì xóa
   if(grayMatForZ){ try{ grayMatForZ.delete(); }catch(e){} grayMatForZ=null; }
-  grayMatForZ = cv.imread(tmpC); // RGBA
-  // apply chosen smoothing then grayscale
+
+  // اقرأ كـ Mat ثم طبق smoothing إن طُلب
+  let mat = cv.imread(tmp); // RGBA
   const smoothing = document.getElementById('smoothing').value;
   if(smoothing === 'gauss'){
-    let tmp = new cv.Mat();
-    cv.GaussianBlur(grayMatForZ, tmp, new cv.Size(5,5), 0,0,cv.BORDER_DEFAULT);
-    grayMatForZ.delete(); grayMatForZ = tmp;
+    let tmpm = new cv.Mat();
+    cv.GaussianBlur(mat, tmpm, new cv.Size(5,5), 0, 0, cv.BORDER_DEFAULT);
+    mat.delete(); mat = tmpm;
   } else if(smoothing === 'bilateral'){
-    let tmp = new cv.Mat();
-    cv.cvtColor(grayMatForZ, tmp, cv.COLOR_RGBA2RGB);
-    // bilateral requires color image; adapt params
-    cv.bilateralFilter(tmp, tmp, 9, 75, 75, cv.BORDER_DEFAULT);
-    grayMatForZ.delete(); grayMatForZ = tmp;
+    // bilateral requires color work; we apply on mat then convert
+    let tmpm = new cv.Mat();
+    cv.cvtColor(mat, tmpm, cv.COLOR_RGBA2RGB);
+    cv.bilateralFilter(tmpm, tmpm, 9, 75, 75, cv.BORDER_DEFAULT);
+    mat.delete(); mat = tmpm;
   }
-  // now convert to gray single channel
-  let tmpGray = new cv.Mat();
-  cv.cvtColor(grayMatForZ, tmpGray, cv.COLOR_RGBA2GRAY);
-  grayMatForZ.delete();
-  grayMatForZ = tmpGray;
-
-  // record processed preview size
-  procImageSize.w = preview.width;
-  procImageSize.h = preview.height;
-
-  document.getElementById('summary').textContent = `تم استخراج ${processedPaths.length} مسارات. خريطة ارتفاع ${grayMatForZ.cols}×${grayMatForZ.rows}`;
-  showToast('تم تهيئة الحواف وخريطة الارتفاع');
+  let gray = new cv.Mat();
+  cv.cvtColor(mat, gray, cv.COLOR_RGBA2GRAY);
+  mat.delete();
+  grayMatForZ = gray;
+  procImageSize.w = preview.width; procImageSize.h = preview.height;
 }
 
-/* ----------------------- تعويض الأداة (Clipper) ----------------------- */
-function offsetPathWithClipper(pathPx, offsetPx, joinType = ClipperLib.JoinType.jtRound, miterLimit=2.0){
-  // pathPx: array of {x,y} in px
-  // offsetPx: positive for outward, negative for inward
-  // Clipper expects integer coordinates; scale by 100 (to keep precision)
-  const scale = 100;
-  const subj = [ pathPx.map(p => ({ X: Math.round(p.x*scale), Y: Math.round(p.y*scale) })) ];
-  const co = new ClipperLib.ClipperOffset(miterLimit, 0.25);
-  co.AddPaths(subj, joinType, ClipperLib.EndType.etClosedPolygon);
+/* -------------------- Clipper: تعويض الأداة مع حماية -------------------- */
+function offsetPathWithClipperSafe(pathPx, offsetPx){
+  if(!pathPx || pathPx.length < 3) return [];
+  // حد لأمان الحجم
+  if(pathPx.length > 5000) return [];
+  const scale = 100; // دقة
+  const subj = [ pathPx.map(p => ({ X: Math.round(p.x * scale), Y: Math.round(p.y * scale) })) ];
+  const co = new ClipperLib.ClipperOffset();
+  co.AddPaths(subj, ClipperLib.JoinType.jtRound, ClipperLib.EndType.etClosedPolygon);
   const solution = new ClipperLib.Paths();
-  co.Execute(solution, offsetPx*scale);
-  // convert back to px floats (use first polygon if multiple)
-  if(solution.length === 0) return [];
-  return solution[0].map(pt => ({ x: pt.X / scale, y: pt.Y / scale }));
+  try{
+    co.Execute(solution, offsetPx * scale);
+    if(!solution || solution.length === 0) return [];
+    // نأخذ أول مضلع حلّي
+    return solution[0].map(pt => ({ x: pt.X / scale, y: pt.Y / scale }));
+  }catch(e){
+    console.warn('Clipper offset failed:', e);
+    return [];
+  }
 }
 
-/* ----------------------- توليد G-code 2D و 3D مع Step-down ----------------------- */
-function pxToMm(px, imagePixelWidth, realWidthMm){ return (px / imagePixelWidth) * realWidthMm; }
-function sampleGrayAtPreviewXY(x,y){
+/* -------------------- sampling helper من grayMatForZ -------------------- */
+function sampleGrayAtPreviewXY(x, y){
   if(!grayMatForZ) return 0;
   const gw = grayMatForZ.cols, gh = grayMatForZ.rows;
   const gx = Math.min(gw-1, Math.max(0, Math.round((x / procImageSize.w) * (gw-1))));
@@ -345,7 +417,12 @@ function sampleGrayAtPreviewXY(x,y){
   return grayMatForZ.data ? grayMatForZ.data[idx] : 0;
 }
 
-function generateGcode(paths){
+/* -------------------- توليد G-code 2D / 3D مع Step-down -------------------- */
+function pxToMm(px, imagePixelWidth, realWidthMm){ return (px / imagePixelWidth) * realWidthMm; }
+
+function generateGcodeFromPaths(){
+  if(processedPaths.length === 0) return showToast('لا توجد مسارات — نفّذ كشف الحواف أولاً');
+
   const mode = document.getElementById('gcodeMode').value;
   const feed = parseFloat(document.getElementById('feedRate').value||800);
   const spindle = parseInt(document.getElementById('spindle').value||10000);
@@ -353,66 +430,40 @@ function generateGcode(paths){
   const maxDepth = parseFloat(document.getElementById('maxDepth').value||5);
   const toolDia = parseFloat(document.getElementById('toolDia').value||2.0);
   const enableComp = document.getElementById('enableComp').value === 'yes';
-  const compMode = document.getElementById('compMode').value; // outside/inside
+  const compMode = document.getElementById('compMode').value;
   const stepDown = parseFloat(document.getElementById('stepDown').value||0);
 
-  // prepare finalPaths after compensation if enabled
+  // prepare finalPaths (with compensation if requested)
   let finalPaths = [];
   if(enableComp && typeof ClipperLib !== 'undefined'){
-    // compute offset in px based on tool radius
     const toolRadiusPx = (toolDia/2) * (procImageSize.w / realW); // mm -> px
-    const offsetPx = (compMode === 'outside') ? toolRadiusPx : -toolRadiusPx;
-    for(const p of paths){
-      // Clipper expects polygons with coordinates in order; if path is not closed, close it
+    const offsetPx = compMode === 'outside' ? toolRadiusPx : -toolRadiusPx;
+    for(const p of processedPaths){
       const closed = p.slice();
-      // optionally close
       if(Math.hypot(closed[0].x - closed[closed.length-1].x, closed[0].y - closed[closed.length-1].y) > 0.5){
         closed.push({...closed[0]});
       }
-      try{
-        const off = offsetPathWithClipper(closed, offsetPx, ClipperLib.JoinType.jtRound);
-        if(off && off.length>2) finalPaths.push(off);
-      } catch(e){
-        // fallback: use original
-        finalPaths.push(p);
-      }
+      const off = offsetPathWithClipperSafe(closed, offsetPx);
+      if(off && off.length>2) finalPaths.push(off);
+      else finalPaths.push(p); // fallback
     }
   } else {
-    finalPaths = paths.slice();
+    finalPaths = processedPaths.slice();
   }
 
-  // If stepDown > 0 and mode is 2D or 3D, create passes
-  const passes = [];
-  if(stepDown > 0 && (mode === '2d' || mode === '3d')){
-    // determine max depth:
-    const targetDepth = (mode === '3d') ? maxDepth : maxDepth; // for 2D user may use same field
-    // generate depths [stepDown, 2*stepDown, ..., targetDepth]
-    const arr = [];
-    for(let d = stepDown; d < targetDepth; d += stepDown) arr.push(d);
-    if(arr.length===0 || arr[arr.length-1] < targetDepth) arr.push(targetDepth);
-    // store passes (each pass uses same X,Y but different Z)
-    // We'll generate G-code that loops passes outer->inner for each finalPath
-    // For 3D we need per-point Z mapping; for step-down we'll scale mapping per pass
-    passes.push(...arr);
-  } else {
-    passes.push( (mode==='3d') ? 1.0 : 1.0 ); // marker (no stepdown)
-  }
-
-  // Begin G-code
+  // generate gcode
   let g = `; CNC AI Advanced G-code\nG21\nG90\nM3 S${spindle}\nG0 Z5\n`;
 
   if(mode === '2d'){
-    // For 2D: do passes if requested (stepDown values present)
     if(stepDown > 0){
-      // compute total depth = maxDepth
-      const totalDepth = parseFloat(document.getElementById('maxDepth').value||5);
+      const totalDepth = maxDepth;
       const depths = [];
       for(let d=stepDown; d<totalDepth; d+=stepDown) depths.push(-d);
-      if(depths.length===0 || depths[depths.length-1] > -totalDepth) depths.push(-totalDepth);
+      depths.push(-totalDepth);
       for(const depth of depths){
-        g += `; pass depth ${depth.toFixed(3)} mm\n`;
+        g += `; pass depth ${depth.toFixed(3)}\n`;
         for(const path of finalPaths){
-          if(!path||path.length<2) continue;
+          if(!path || path.length < 2) continue;
           const s = path[0];
           g += `G0 X${pxToMm(s.x, procImageSize.w, realW).toFixed(3)} Y${pxToMm(s.y, procImageSize.w, realW).toFixed(3)}\n`;
           g += `G1 Z${depth.toFixed(3)} F${feed}\n`;
@@ -423,9 +474,8 @@ function generateGcode(paths){
         }
       }
     } else {
-      // single pass at Z0
       for(const path of finalPaths){
-        if(!path||path.length<2) continue;
+        if(!path || path.length < 2) continue;
         const s = path[0];
         g += `G0 X${pxToMm(s.x, procImageSize.w, realW).toFixed(3)} Y${pxToMm(s.y, procImageSize.w, realW).toFixed(3)}\n`;
         g += `G1 Z0 F${feed}\n`;
@@ -435,24 +485,21 @@ function generateGcode(paths){
         g += `G0 Z5\n`;
       }
     }
-  } else if(mode === '3d'){
-    // 3D: per point Z from sampled grayscale, optionally with stepdown scaling
-    const maxDepth = parseFloat(document.getElementById('maxDepth').value||5);
+  } else { // 3D
+    if(!grayMatForZ) showToast('لم تُجهز خريطة الارتفاع — شغّل كشف الحواف أولاً');
     const doStep = stepDown > 0;
     if(doStep){
-      // produce progressive passes by fraction of maxDepth
       const steps = [];
-      for(let d=stepDown; d < maxDepth; d+=stepDown) steps.push(d);
-      if(steps.length===0 || steps[steps.length-1]<maxDepth) steps.push(maxDepth);
+      for(let d=stepDown; d<maxDepth; d+=stepDown) steps.push(d);
+      steps.push(maxDepth);
       for(const passDepth of steps){
-        g += `; 3D pass to depth ${passDepth.toFixed(3)} mm\n`;
+        g += `; 3D pass to depth ${passDepth.toFixed(3)}\n`;
         for(const path of finalPaths){
-          if(!path||path.length<2) continue;
+          if(!path || path.length < 2) continue;
           const s = path[0];
           g += `G0 X${pxToMm(s.x, procImageSize.w, realW).toFixed(3)} Y${pxToMm(s.y, procImageSize.w, realW).toFixed(3)}\n`;
           for(const p of path){
-            const pv = sampleGrayAtPreviewXY(p.x, p.y); // 0..255
-            // scale pixel (0..255) to current pass depth: targetZ = - (pv/255) * passDepth
+            const pv = sampleGrayAtPreviewXY(p.x, p.y);
             const z = - (pv/255.0) * passDepth;
             g += `G1 X${pxToMm(p.x, procImageSize.w, realW).toFixed(3)} Y${pxToMm(p.y, procImageSize.w, realW).toFixed(3)} Z${z.toFixed(3)} F${feed}\n`;
           }
@@ -460,9 +507,8 @@ function generateGcode(paths){
         }
       }
     } else {
-      // single-pass 3D
       for(const path of finalPaths){
-        if(!path||path.length<2) continue;
+        if(!path || path.length < 2) continue;
         const s = path[0];
         g += `G0 X${pxToMm(s.x, procImageSize.w, realW).toFixed(3)} Y${pxToMm(s.y, procImageSize.w, realW).toFixed(3)}\n`;
         for(const p of path){
@@ -479,165 +525,142 @@ function generateGcode(paths){
   return g;
 }
 
-/* ----------------------- Three.js 3D Preview ----------------------- */
-let threeRenderer, threeScene, threeCamera, threeControls, heightMesh, pathsGroup;
+/* -------------------- Three.js preview (تحت معاينة 2D) -------------------- */
+let renderer, scene, camera, controls, mesh, pathsGroup;
 function initThree(container){
-  if(threeRenderer) return;
-  const w = container.clientWidth, h = container.clientHeight;
-  threeRenderer = new THREE.WebGLRenderer({antialias:true,alpha:true});
-  threeRenderer.setPixelRatio(window.devicePixelRatio);
-  threeRenderer.setSize(w,h);
-  container.appendChild(threeRenderer.domElement);
-  threeScene = new THREE.Scene();
-  threeCamera = new THREE.PerspectiveCamera(45, w/h, 0.1, 2000);
-  threeCamera.position.set(0, -300, 300);
-  threeControls = new THREE.OrbitControls(threeCamera, threeRenderer.domElement);
-  const light = new THREE.DirectionalLight(0xffffff, 0.9); light.position.set(1,1,1); threeScene.add(light);
-  threeScene.add(new THREE.AmbientLight(0x666666));
+  if(renderer) return;
+  renderer = new THREE.WebGLRenderer({antialias:true,alpha:true});
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  container.appendChild(renderer.domElement);
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(45, container.clientWidth/container.clientHeight, 0.1, 2000);
+  camera.position.set(0, -300, 300);
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  scene.add(new THREE.AmbientLight(0x666666));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.9); dir.position.set(1,1,1); scene.add(dir);
   window.addEventListener('resize', ()=> {
-    const cw = container.clientWidth, ch = container.clientHeight;
-    threeRenderer.setSize(cw,ch);
-    threeCamera.aspect = cw/ch; threeCamera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    camera.aspect = container.clientWidth/container.clientHeight;
+    camera.updateProjectionMatrix();
   });
 }
 
 function build3DPreview(){
-  if(!grayMatForZ || processedPaths.length===0) return showToast('نفّذ الكشف أولاً');
-  const container = document.getElementById('threeContainer');
+  if(!grayMatForZ || processedPaths.length === 0) return showToast('شغّل كشف الحواف أولاً لتحضير المسارات وخريطة الارتفاع');
+
+  const container = document.getElementById('threeBox');
   initThree(container);
 
-  // cleanup
-  if(heightMesh){ threeScene.remove(heightMesh); heightMesh.geometry.dispose(); heightMesh.material.dispose(); heightMesh=null; }
-  if(pathsGroup){ threeScene.remove(pathsGroup); pathsGroup=null; }
+  // إزالة المشهد السابق
+  if(mesh){ scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose(); mesh=null; }
+  if(pathsGroup){ scene.remove(pathsGroup); pathsGroup=null; }
 
   const gw = grayMatForZ.cols, gh = grayMatForZ.rows;
   const realW = parseFloat(document.getElementById('realWidth').value||200);
   const realH = realW * (procImageSize.h / procImageSize.w);
   const maxDepth = parseFloat(document.getElementById('maxDepth').value||5);
 
-  const segX = gw-1, segY = gh-1;
-  const geometry = new THREE.PlaneGeometry(realW, realH, segX, segY);
+  // التقييد: لا تسمح بمزيد من التقسيمات من 200x200 لتفادي التجمّد
+  const maxSeg = 180;
+  const segX = Math.min(maxSeg, Math.max(4, gw-1));
+  const segY = Math.min(maxSeg, Math.max(4, gh-1));
 
+  // plane geometry
+  const geometry = new THREE.PlaneGeometry(realW, realH, segX, segY);
   const pos = geometry.attributes.position;
+  // نحتاج إلى عينات من grayMatForZ بحجم gw x gh — لكن geometry vertices عددها (segX+1)*(segY+1)
   for(let j=0;j<=segY;j++){
     for(let i=0;i<=segX;i++){
       const idx = j*(segX+1) + i;
-      const pv = grayMatForZ.data[j*gw + i];
-      const z = - (pv/255.0) * maxDepth;
+      // خذ العينة من grayMatForZ بطريقة قياسية
+      const ox = Math.round((i / segX) * (gw-1));
+      const oy = Math.round((j / segY) * (gh-1));
+      const pv = grayMatForZ.data[oy*gw + ox];
+      const z = - (pv / 255.0) * maxDepth;
       pos.setZ(idx, z);
     }
   }
-  pos.needsUpdate = true; geometry.computeVertexNormals();
+  pos.needsUpdate = true;
+  geometry.computeVertexNormals();
 
-  const mat = new THREE.MeshStandardMaterial({color:0xddddff,metalness:0.05,roughness:0.8,side:THREE.DoubleSide});
-  heightMesh = new THREE.Mesh(geometry, mat);
-  heightMesh.rotateX(-Math.PI/2);
-  threeScene.add(heightMesh);
+  const material = new THREE.MeshStandardMaterial({color:0xcfcfe8,metalness:0.05,roughness:0.8,side:THREE.DoubleSide});
+  mesh = new THREE.Mesh(geometry, material);
+  mesh.rotateX(-Math.PI/2);
+  scene.add(mesh);
 
   // paths overlay
   pathsGroup = new THREE.Group();
-  const lineMat = new THREE.LineBasicMaterial({color:0xff6666});
-  for(const path of processedPaths){
+  for(let pi=0; pi<processedPaths.length; pi++){
+    const p = processedPaths[pi];
     const pts = [];
-    for(const p of path){
-      const worldX = (pxToMm(p.x, procImageSize.w, realW) - realW/2);
-      const worldY = (pxToMm(p.y, procImageSize.w, realW) - realH/2);
-      const pv = sampleGrayAtPreviewXY(p.x, p.y);
+    for(const v of p){
+      const worldX = pxToMm(v.x, procImageSize.w, realW) - realW/2;
+      const worldY = pxToMm(v.y, procImageSize.w, realW) - realH/2;
+      const pv = sampleGrayAtPreviewXY(v.x, v.y);
       const z = - (pv/255.0) * maxDepth;
       pts.push(new THREE.Vector3(worldX, z, worldY));
     }
     if(pts.length>1){
-      const g = new THREE.BufferGeometry().setFromPoints(pts);
-      const line = new THREE.Line(g, lineMat);
+      const geom = new THREE.BufferGeometry().setFromPoints(pts);
+      const mat = new THREE.LineBasicMaterial({color:0xff6666});
+      const line = new THREE.Line(geom, mat);
       pathsGroup.add(line);
+
+      // label: small sprite or point at path start
+      const start = pts[0];
+      const dotGeom = new THREE.SphereGeometry(Math.max(realW,realH)/200, 8, 8);
+      const dotMat = new THREE.MeshStandardMaterial({color:0x00ff88});
+      const dot = new THREE.Mesh(dotGeom, dotMat);
+      dot.position.set(start.x, start.y, start.z); // note that after rotateX we want (x,z,y) but we already used (x,z,y) order earlier
+      // Actually we constructed points as (x,z,y); mesh rotated; to keep dots aligned we add as is:
+      dot.position.set(start.x, start.y, start.z);
+      pathsGroup.add(dot);
     }
   }
-  threeScene.add(pathsGroup);
+  scene.add(pathsGroup);
 
-  // adjust camera
-  const bbox = new THREE.Box3().setFromObject(heightMesh);
+  // fit camera
+  const bbox = new THREE.Box3().setFromObject(mesh);
   const center = bbox.getCenter(new THREE.Vector3());
-  threeControls.target.copy(center);
-  threeCamera.position.set(center.x, center.y - Math.max(realW, realH), Math.max(realW, realH));
-  threeCamera.lookAt(center);
-  threeControls.update();
+  controls.target.copy(center);
+  camera.position.set(center.x, center.y - Math.max(realW, realH), Math.max(realW, realH));
+  camera.lookAt(center);
+  controls.update();
 
-  (function animate(){ threeRenderer && threeRenderer.render(threeScene, threeCamera); requestAnimationFrame(animate); })();
+  // start render loop
+  (function animate(){ renderer.render(scene, camera); requestAnimationFrame(animate); })();
 }
 
-/* ----------------------- أحداث واجهة ----------------------- */
-btnDetect.addEventListener('click', ()=> {
-  if(!cvReady) return showToast('OpenCV لا يزال يحمل');
-  detectContoursAndPrepareHeatmap();
-});
-btnPreview3D.addEventListener('click', ()=> build3DPreview());
-btnGen.addEventListener('click', ()=> {
-  if(processedPaths.length===0) return showToast('لم تُجهز المسارات — انقر "كشف الحواف" أولاً');
-  const g = generateGcode(processedPaths);
-  document.getElementById('gcodeOut').value = g;
-  document.getElementById('summary').textContent = `G-code جاهز — ${processedPaths.length} مسارات`;
+/* -------------------- أزرار واجهة الأحداث -------------------- */
+btnDetect.addEventListener('click', ()=> detectContoursAndPaths());
+btnAuto3D.addEventListener('click', ()=> build3DPreview());
+
+btnGen.addEventListener('click', ()=>{
+  const g = generateGcodeFromPaths();
+  gcodeOut.value = g;
+  document.getElementById('summary').textContent = `G-code جاهز — مسارات: ${processedPaths.length}`;
   showToast('تم توليد G-code');
 });
-btnDownload.addEventListener('click', ()=> {
-  const txt = document.getElementById('gcodeOut').value;
+
+btnDownload.addEventListener('click', ()=>{
+  const txt = gcodeOut.value;
   if(!txt) return showToast('لا يوجد G-code للتحميل');
   const blob = new Blob([txt], {type:'text/plain'}); const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href=url; a.download='cnc_paths.ngc'; a.click(); URL.revokeObjectURL(url);
-  showToast('تم تنزيل ملف G-code');
+  showToast('تم تنزيل G-code');
 });
-btnCopy.addEventListener('click', async ()=> {
-  const txt = document.getElementById('gcodeOut').value;
+btnCopy.addEventListener('click', async ()=>{
+  const txt = gcodeOut.value;
   if(!txt) return showToast('لا شيء للنسخ');
   try{ await navigator.clipboard.writeText(txt); showToast('تم النسخ'); } catch(e){ showToast('فشل النسخ'); }
 });
-btnClear.addEventListener('click', ()=> { document.getElementById('gcodeOut').value=''; showToast('تم المسح'); });
+btnClear.addEventListener('click', ()=>{ gcodeOut.value=''; showToast('تم المسح'); });
 
-btnSaveSettings.addEventListener('click', ()=>{
-  const s = {
-    cannyLow: document.getElementById('cannyLow').value,
-    cannyHigh: document.getElementById('cannyHigh').value,
-    epsilon: document.getElementById('epsilon').value,
-    procRes: document.getElementById('procRes').value,
-    smoothing: document.getElementById('smoothing').value,
-    maxDepth: document.getElementById('maxDepth').value,
-    toolDia: document.getElementById('toolDia').value,
-    enableComp: document.getElementById('enableComp').value,
-    compMode: document.getElementById('compMode').value,
-    stepDown: document.getElementById('stepDown').value,
-    realWidth: document.getElementById('realWidth').value,
-    feedRate: document.getElementById('feedRate').value,
-    spindle: document.getElementById('spindle').value,
-    gcodeMode: document.getElementById('gcodeMode').value
-  };
-  localStorage.setItem('cncai_settings', JSON.stringify(s));
-  showToast('تم حفظ الإعدادات محليًا');
-});
+/* اغلاق overlay */
+document.getElementById('overlayBox').addEventListener('click', ()=> document.getElementById('overlayBox').style.display='none');
 
-/* استعادة الإعدادات إن وجدت */
-(function loadSettings(){
-  try{
-    const s = JSON.parse(localStorage.getItem('cncai_settings')||'null');
-    if(s){
-      document.getElementById('cannyLow').value = s.cannyLow || 50;
-      document.getElementById('cannyHigh').value = s.cannyHigh || 150;
-      document.getElementById('epsilon').value = s.epsilon || 0.01;
-      document.getElementById('procRes').value = s.procRes || 200;
-      document.getElementById('smoothing').value = s.smoothing || 'none';
-      document.getElementById('maxDepth').value = s.maxDepth || 5;
-      document.getElementById('toolDia').value = s.toolDia || 2.0;
-      document.getElementById('enableComp').value = s.enableComp || 'no';
-      document.getElementById('compMode').value = s.compMode || 'outside';
-      document.getElementById('stepDown').value = s.stepDown || 0;
-      document.getElementById('realWidth').value = s.realWidth || 200;
-      document.getElementById('feedRate').value = s.feedRate || 800;
-      document.getElementById('spindle').value = s.spindle || 10000;
-      document.getElementById('gcodeMode').value = s.gcodeMode || '3d';
-      epsDisplay.textContent = `ε = ${(parseFloat(document.getElementById('epsilon').value)*100).toFixed(2)}%`;
-    }
-  }catch(e){}
-})();
-
-/* تنظيف عند الخروج */
+/* تنظيف عند الانتهاء */
 window.addEventListener('beforeunload', ()=>{
   if(grayMatForZ){ try{ grayMatForZ.delete(); }catch(e){} grayMatForZ=null; }
 });
