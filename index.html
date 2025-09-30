@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>CNC AI — توليد G-code مصحح</title>
+<title>CNC AI — Router / Laser / Plasma — نسخة كاملة</title>
 
 <!-- مكتبات -->
 <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
@@ -42,14 +42,14 @@ textarea{height:220px;background:#021024;color:#cfeaf2;font-family:monospace;whi
 <div class="app">
   <header>
     <div>
-      <h1>CNC AI — توليد G-code كامل (مراجعة)</h1>
-      <div class="small">XY من الحواف، Z من Heatmap أو ثابت — Step-down — تعويض أداة</div>
+      <h1>CNC AI — Router / Laser / Plasma</h1>
+      <div class="small">XY من الحواف — Z/Power من Heatmap أو ثابت — Step-down — تعويض أداة</div>
     </div>
     <div class="small" id="cvState">انتظر "OpenCV جاهز"</div>
   </header>
 
   <div class="grid">
-    <!-- يسار: معاينة -->
+    <!-- يسار -->
     <div class="panel">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div class="small">معاينة 2D</div>
@@ -63,31 +63,48 @@ textarea{height:220px;background:#021024;color:#cfeaf2;font-family:monospace;whi
 
       <div class="row" style="margin-top:8px">
         <button id="btnDetect" class="primary">كشف الحواف وتهيئة Heatmap</button>
+        <button id="btnHeatmap" class="secondary">إظهار Heatmap</button>
+      </div>
+
+      <div class="row" style="margin-top:8px">
         <button id="btnResetView" class="secondary">إعادة ضبط كاميرا 3D</button>
+        <button id="btnSnapshot" class="secondary">لقطة (Snapshot)</button>
       </div>
 
       <div id="threeContainer"></div>
       <div class="small" style="margin-top:8px">المعاينة ثلاثية الأبعاد تتحدّث تلقائياً بعد الكشف</div>
     </div>
 
-    <!-- يمين: إعدادات وتوليد -->
+    <!-- يمين -->
     <div class="panel">
       <h3 style="margin:0 0 8px 0">الإعدادات</h3>
+
+      <label>نوع الماكينة
+        <select id="machineType">
+          <option value="router">Router (CNC)</option>
+          <option value="laser">LaserCut</option>
+          <option value="plasma">Plasma</option>
+        </select>
+      </label>
 
       <label>وضع المسارات (XY)
         <select id="pathMode"><option value="all">كل المسارات</option><option value="outer">الحافة الخارجية فقط</option></select>
       </label>
 
-      <label>مصدر Z
-        <select id="zMode"><option value="heatmap">من Heatmap (3D Relief)</option><option value="fixed">قيمة ثابتة (2D)</option></select>
+      <label>مصدر Z / Power
+        <select id="zMode"><option value="heatmap">من Heatmap (3D Relief / Power)</option><option value="fixed">قيمة ثابتة</option></select>
       </label>
 
-      <label>قيمة Z الثابتة (مم) — للقطع 2D (قيمة سالبة أو صفر)
+      <label>Z ثابت (مم) — للقطع 2D (قيمة سالبة أو صفر)
         <input id="fixedZ" type="number" value="-2.000" step="0.1"/>
       </label>
 
-      <label>العمق الأقصى (مم) عند استخدام Heatmap (أسود = أعميق)
+      <label>العمق الأقصى (مم) عند استخدام Heatmap (Router / Plasma)
         <input id="maxDepth" type="number" value="5.000" step="0.1"/>
+      </label>
+
+      <label>قوة القص (Power %) — للـ Laser (0-100)
+        <input id="laserPower" type="number" value="80" min="0" max="100"/>
       </label>
 
       <label>Step-down (مم لكل تمريرة) — 0 = لا تقسيم
@@ -102,8 +119,8 @@ textarea{height:220px;background:#021024;color:#cfeaf2;font-family:monospace;whi
         <select id="compDir"><option value="none">بدون</option><option value="outside">خارجي (Cut)</option><option value="inside">داخلي (Pocket)</option></select>
       </label>
 
-      <label>قطر الأداة (مم)
-        <input id="toolDia" type="number" value="2.0" step="0.1"/>
+      <label id="spindleLabel">قطر الأداة (مم) / Spindle RPM
+        <div class="row"><input id="toolDia" type="number" value="2.0" step="0.1"/><input id="spindle" type="number" value="10000" step="10"/></div>
       </label>
 
       <label>عرض العمل الحقيقي (مم) — يربط px → mm (عرض الصورة المعروضة)
@@ -112,10 +129,6 @@ textarea{height:220px;background:#021024;color:#cfeaf2;font-family:monospace;whi
 
       <label>Feed (مم/دقيقة)
         <input id="feedRate" type="number" value="800" step="1"/>
-      </label>
-
-      <label>Spindle RPM
-        <input id="spindle" type="number" value="10000" step="10"/>
       </label>
 
       <label>Safe Z (مم) — ارتفاع آمن للحركات السريعة
@@ -162,19 +175,18 @@ textarea{height:220px;background:#021024;color:#cfeaf2;font-family:monospace;whi
 <div id="toast"></div>
 
 <script>
-/* =================== مساعدات عامة =================== */
+/* ===================== مساعدات ===================== */
 const toast = document.getElementById('toast');
 function showToast(msg, ms=2500){ toast.textContent=msg; toast.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>toast.style.display='none', ms); }
 const cvState = document.getElementById('cvState');
 
-/* ===== انتظار OpenCV ===== */
 let cvReady = false;
-function markCvReady(){ cvReady = true; cvState.textContent = 'OpenCV جاهز'; showToast('OpenCV جاهز'); console.log('OpenCV ready'); }
+function markCvReady(){ cvReady = true; cvState.textContent='OpenCV جاهز'; showToast('OpenCV جاهز'); console.log('OpenCV ready'); }
 function waitForCv(){ if(window.cv && cv.getBuildInformation) markCvReady(); else if(window.cv) cv.onRuntimeInitialized = markCvReady; else setTimeout(waitForCv,200); }
 waitForCv();
 setTimeout(()=>{ if(!cvReady) showToast('OpenCV لا يزال يحمل — انتظر قليلاً'); },12000);
 
-/* ========== DOM & حالة ========= */
+/* ========== DOM و الحالة ========== */
 const fileInput = document.getElementById('fileInput');
 const previewCanvas = document.getElementById('previewCanvas');
 const overlayCanvas = document.getElementById('overlayCanvas');
@@ -187,16 +199,43 @@ const btnDownload = document.getElementById('btnDownload');
 const btnCopy = document.getElementById('btnCopy');
 const btnClear = document.getElementById('btnClear');
 const btnResetView = document.getElementById('btnResetView');
+const btnHeatmap = document.getElementById('btnHeatmap');
+const btnSnapshot = document.getElementById('btnSnapshot');
 const closeOverlay = document.getElementById('closeOverlay');
 
+const machineTypeEl = document.getElementById('machineType');
+const laserPowerEl = document.getElementById('laserPower');
+const spindleEl = document.getElementById('spindle');
+const spindleLabel = document.getElementById('spindleLabel');
+
 let originalImage = null;
-let processedPaths = [];      // array of paths (px coordinates)
+let processedPaths = [];
 let procImageSize = {w:0,h:0};
-let grayMatForZ = null;       // single-channel grayscale small map
-
+let grayMatForZ = null; // single-channel Mat
 const MAX_POINTS = 8000;
+const MAX_SEGMENTS = 120;
 
-/* ========== تحميل الصورة ========== */
+/* ======== إعدادات افتراضية حسب الماكينة ======== */
+const machineDefaults = {
+  router:  { feed:800,  spindle:10000, safeZ:5, stepDown:1.5, laserPower:null, toolDia:2.0 },
+  laser:   { feed:1500,  spindle:null, safeZ:0, stepDown:0,   laserPower:80, toolDia:0.0 },
+  plasma:  { feed:1200, spindle:null, safeZ:0, stepDown:0,   laserPower:60, toolDia:0.0 }
+};
+function applyMachineDefaults(type){
+  const d = machineDefaults[type];
+  if(!d) return;
+  document.getElementById('feedRate').value = d.feed;
+  if(d.spindle !== null){ spindleEl.value = d.spindle; spindleLabel.style.display='block'; } else spindleLabel.style.display='none';
+  document.getElementById('safeZ').value = d.safeZ;
+  document.getElementById('stepDown').value = d.stepDown;
+  document.getElementById('laserPower').value = d.laserPower !== null ? d.laserPower : '';
+  document.getElementById('toolDia').value = d.toolDia;
+  showToast('تم ضبط الإعدادات الافتراضية لــ ' + type.toUpperCase());
+}
+machineTypeEl.addEventListener('change', e => applyMachineDefaults(e.target.value));
+applyMachineDefaults(machineTypeEl.value);
+
+/* ========== تحميل الصورة وعرضها ========== */
 fileInput.addEventListener('change', e=>{
   const f = e.target.files[0];
   if(!f) return;
@@ -204,7 +243,6 @@ fileInput.addEventListener('change', e=>{
   const img = new Image();
   img.onload = ()=>{
     originalImage = img;
-    // scale preview to fit area (max width 900, max height 600)
     const maxW = 900, maxH = 600;
     const ratio = Math.min(maxW/img.width, maxH/img.height, 1);
     previewCanvas.width = Math.round(img.width * ratio);
@@ -219,12 +257,12 @@ fileInput.addEventListener('change', e=>{
   img.src = url;
 });
 
-/* ========== تحويلات px -> mm منفصلة ========= */
+/* ========== تحويلات px→mm منفصلة ========= */
 function pxToMmX(px, imagePixelWidth, realWidthMm){ return (px / imagePixelWidth) * realWidthMm; }
 function pxToMmY(py, imagePixelHeight, realHeightMm){ return (py / imagePixelHeight) * realHeightMm; }
 function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
 
-/* ========== RDP تبسيط المسارات ========= */
+/* ========== تبسيط RDP ========= */
 function perpDist(p,a,b){
   const num = Math.abs((b.y-a.y)*p.x - (b.x-a.x)*p.y + b.x*a.y - b.y*a.x);
   const den = Math.sqrt((b.y-a.y)**2 + (b.x-a.x)**2) || 1;
@@ -232,119 +270,81 @@ function perpDist(p,a,b){
 }
 function simplifyPathRDP(points, eps){
   if(points.length < 3) return points.slice();
-  let dmax = 0, index = 0, end = points.length - 1;
+  let dmax=0, index=0, end = points.length-1;
   for(let i=1;i<end;i++){
     const d = perpDist(points[i], points[0], points[end]);
-    if(d > dmax){ index = i; dmax = d; }
+    if(d>dmax){ index=i; dmax=d; }
   }
-  if(dmax > eps){
-    const left = simplifyPathRDP(points.slice(0, index+1), eps);
-    const right = simplifyPathRDP(points.slice(index, end+1), eps);
-    return left.slice(0, -1).concat(right);
+  if(dmax>eps){
+    const left = simplifyPathRDP(points.slice(0,index+1), eps);
+    const right = simplifyPathRDP(points.slice(index,end+1), eps);
+    return left.slice(0,-1).concat(right);
   } else {
-    return [ points[0], points[end] ];
+    return [points[0], points[end]];
   }
 }
 
-/* ========== استخدام Clipper للتعويض ========= */
+/* ========== Clipper offset ========= */
 function offsetPathWithClipper(pathPx, offsetPx){
   if(!window.ClipperLib) return pathPx;
-  const scale = 100; // للحفاظ على الدقة
-  const subj = [ pathPx.map(p => ({ X: Math.round(p.x * scale), Y: Math.round(p.y * scale) })) ];
+  const scale = 100;
+  const subj = [ pathPx.map(p=>({ X: Math.round(p.x*scale), Y: Math.round(p.y*scale) })) ];
   const co = new ClipperLib.ClipperOffset(2, 0.25);
   co.AddPaths(subj, ClipperLib.JoinType.jtRound, ClipperLib.EndType.etClosedPolygon);
   const solution = new ClipperLib.Paths();
-  try{ co.Execute(solution, offsetPx * scale); }
-  catch(e){ console.warn('Clipper failed', e); return pathPx; }
-  if(!solution || solution.length === 0) return [];
-  return solution[0].map(pt => ({ x: pt.X / scale, y: pt.Y / scale }));
+  try{ co.Execute(solution, offsetPx * scale); } catch(e){ console.warn('Clipper failed', e); return pathPx; }
+  if(!solution || solution.length===0) return [];
+  return solution[0].map(pt=>({ x: pt.X/scale, y: pt.Y/scale }));
 }
 
-/* ========== نمط مساعدة: منطقة الحافة الخارجية ========== */
-function polygonArea(path){
-  let area = 0;
-  for(let i=0;i<path.length;i++){
-    const j=(i+1)%path.length;
-    area += path[i].x * path[j].y - path[j].x * path[i].y;
-  }
-  return Math.abs(area) / 2;
-}
-function getOuterPath(paths){
-  let maxArea = 0, outer = null;
-  for(const p of paths){
-    const a = polygonArea(p);
-    if(a > maxArea){ maxArea = a; outer = p; }
-  }
-  return outer ? [outer] : [];
-}
-function sortPathStart(path){
-  if(!path || path.length === 0) return path;
-  let minIdx = 0;
-  for(let i=1;i<path.length;i++){
-    if(path[i].y < path[minIdx].y || (path[i].y === path[minIdx].y && path[i].x < path[minIdx].x)) minIdx = i;
-  }
-  return path.slice(minIdx).concat(path.slice(0,minIdx));
-}
+/* ========== مساعدة حدود/فرز ========= */
+function polygonArea(path){ let area=0; for(let i=0;i<path.length;i++){ const j=(i+1)%path.length; area += path[i].x*path[j].y - path[j].x*path[i].y; } return Math.abs(area)/2; }
+function getOuterPath(paths){ let maxArea=0, outer=null; for(const p of paths){ const a=polygonArea(p); if(a>maxArea){ maxArea=a; outer=p; } } return outer? [outer] : []; }
+function sortPathStart(path){ if(!path || path.length===0) return path; let minIdx=0; for(let i=1;i<path.length;i++){ if(path[i].y < path[minIdx].y || (path[i].y===path[minIdx].y && path[i].x < path[minIdx].x)) minIdx = i; } return path.slice(minIdx).concat(path.slice(0,minIdx)); }
 
-/* ========== عيّن العينة الرمادية من خريطة Heatmap ========= */
-function sampleGrayAtPreviewXY(x, y){
+/* ========== عيّن العينة الرمادية ========== */
+function sampleGrayAtPreviewXY(x,y){
   if(!grayMatForZ) return 0;
   const gw = grayMatForZ.cols, gh = grayMatForZ.rows;
   const gx = clamp(Math.round((x / procImageSize.w) * (gw-1)), 0, gw-1);
   const gy = clamp(Math.round((y / procImageSize.h) * (gh-1)), 0, gh-1);
-  // grayMatForZ.data is Uint8Array single-channel
   const idx = gy * gw + gx;
   return grayMatForZ.data ? grayMatForZ.data[idx] : 0;
 }
 
-/* ========== كشف الحواف + تهيئة Heatmap + استخراج المسارات ========= */
+/* ========== كشف الحواف + Heatmap ========= */
 function detectContoursAndPrepareHeatmap(){
   if(!cvReady) return showToast('OpenCV لا يزال يحمل');
   if(!originalImage) return showToast('حمّل صورة أولاً');
   showToast('جاري الكشف وتهيئة Heatmap — انتظر...');
 
-  // نقرأ محتوى previewCanvas
   const tmpCanvas = document.createElement('canvas');
   tmpCanvas.width = previewCanvas.width; tmpCanvas.height = previewCanvas.height;
   tmpCanvas.getContext('2d').drawImage(previewCanvas, 0, 0);
 
-  let src = cv.imread(tmpCanvas); // RGBA
-  // حماية: تقليل الحجم إذا كان كبيرًا
+  let src = cv.imread(tmpCanvas);
   const MAX_PIX = 1400;
   if(src.cols > MAX_PIX || src.rows > MAX_PIX){
     const scale = Math.min(MAX_PIX/src.cols, MAX_PIX/src.rows);
     const dsize = new cv.Size(Math.round(src.cols*scale), Math.round(src.rows*scale));
     let tmp = new cv.Mat();
     cv.resize(src, tmp, dsize, 0, 0, cv.INTER_AREA);
-    src.delete();
-    src = tmp;
+    src.delete(); src = tmp;
   }
 
-  // إلى رمادي
-  let gray = new cv.Mat();
-  cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-
-  // تمويه ثم Canny
-  let blur = new cv.Mat();
-  cv.GaussianBlur(gray, blur, new cv.Size(3,3), 0, 0, cv.BORDER_DEFAULT);
+  let gray = new cv.Mat(); cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+  let blur = new cv.Mat(); cv.GaussianBlur(gray, blur, new cv.Size(3,3), 0,0, cv.BORDER_DEFAULT);
 
   let low = parseInt(document.getElementById('cannyLow').value||0);
   let high = parseInt(document.getElementById('cannyHigh').value||0);
-  if(!low && !high){
-    const meanVal = cv.mean(gray)[0];
-    low = Math.max(10, Math.round(meanVal * 0.66));
-    high = Math.min(255, Math.round(meanVal * 1.33));
-  }
+  if(!low && !high){ const meanVal = cv.mean(gray)[0]; low = Math.max(10, Math.round(meanVal*0.66)); high = Math.min(255, Math.round(meanVal*1.33)); }
 
   let edges = new cv.Mat();
   cv.Canny(blur, edges, low, high);
-
-  // إيجاد المسارات (contours)
   let contours = new cv.MatVector();
   let hierarchy = new cv.Mat();
   cv.findContours(edges, contours, hierarchy, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE);
 
-  // معالجة الـ contours → JS paths (px coords)
   processedPaths = [];
   const EPS_FACTOR = 0.01;
   for(let i=0;i<contours.size();i++){
@@ -355,29 +355,20 @@ function detectContoursAndPrepareHeatmap(){
     const eps = Math.max(1.0, EPS_FACTOR * peri);
     let approx = new cv.Mat();
     cv.approxPolyDP(cnt, approx, eps, true);
-    // approx may be of type Point vector (int32)
     if(approx.data32S && approx.data32S.length >= 6){
       const path = [];
-      for(let k=0;k<approx.data32S.length;k+=2){
-        path.push({ x: approx.data32S[k], y: approx.data32S[k+1] });
-      }
+      for(let k=0;k<approx.data32S.length;k+=2) path.push({ x: approx.data32S[k], y: approx.data32S[k+1] });
       if(path.length > 2){
-        if(path.length > MAX_POINTS){
-          const simplified = simplifyPathRDP(path, 1.2);
-          processedPaths.push(simplified);
-        } else {
-          processedPaths.push(path);
-        }
+        if(path.length > MAX_POINTS) processedPaths.push(simplifyPathRDP(path, 1.2)); else processedPaths.push(path);
       }
     }
-    approx.delete();
-    cnt.delete();
+    approx.delete(); cnt.delete();
   }
 
-  // عرض نتائج Canny على overlayCanvas (بشكل ثنائي)
+  // عرض edges (ثنائي) على overlay (سيتم إعادة الرسم بالمسارات بعد ذلك)
   try{ cv.imshow(overlayCanvas, edges); } catch(e){ console.warn('cv.imshow overlay failed', e); }
 
-  // تجهيز grayMatForZ وفق procRes
+  // تحضير grayMatForZ بمقاس procRes
   const procRes = clamp(parseInt(document.getElementById('procRes').value || 220), 32, 1200);
   const scale = Math.min(procRes / previewCanvas.width, procRes / previewCanvas.height, 1);
   const gw = Math.max(16, Math.round(previewCanvas.width * scale));
@@ -386,14 +377,12 @@ function detectContoursAndPrepareHeatmap(){
   tmp2.getContext('2d').drawImage(previewCanvas, 0, 0, gw, gh);
 
   if(grayMatForZ){ try{ grayMatForZ.delete(); } catch(e){} grayMatForZ = null; }
-  // اقرأ صورة صغيرة ثم حول للرمادي
   let rgbaSmall = cv.imread(tmp2);
   let graySmall = new cv.Mat();
   cv.cvtColor(rgbaSmall, graySmall, cv.COLOR_RGBA2GRAY);
   rgbaSmall.delete();
-  grayMatForZ = graySmall; // single-channel mat (cols, rows, data)
+  grayMatForZ = graySmall;
 
-  // تطبيق تنعيم إذا طلب
   const smoothing = document.getElementById('smoothing').value || 'none';
   if(smoothing === 'gauss'){
     let tmpG = new cv.Mat();
@@ -401,13 +390,12 @@ function detectContoursAndPrepareHeatmap(){
     grayMatForZ.delete(); grayMatForZ = tmpG;
   }
 
-  // تسجيل حجم المعاينة (preview)
   procImageSize.w = previewCanvas.width;
   procImageSize.h = previewCanvas.height;
 
-  // snapshot مع مسارات ملونة
+  // رسم مسارات ملونة على لقطة snapshot
   const snap = document.createElement('canvas'); snap.width = previewCanvas.width; snap.height = previewCanvas.height;
-  const sc = snap.getContext('2d'); sc.drawImage(previewCanvas, 0, 0);
+  const sc = snap.getContext('2d'); sc.drawImage(previewCanvas,0,0);
   sc.strokeStyle = 'rgba(255,60,60,0.95)'; sc.lineWidth = 1;
   for(const path of processedPaths){
     sc.beginPath(); sc.moveTo(path[0].x, path[0].y);
@@ -417,20 +405,17 @@ function detectContoursAndPrepareHeatmap(){
   document.getElementById('overlayImg').src = snap.toDataURL();
   document.getElementById('overlayBox').style.display = 'block';
 
-  // تنظيف Mats
-  try{ src.delete(); gray.delete(); blur.delete(); edges.delete(); contours.delete(); hierarchy.delete(); } catch(e){ console.warn('cleanup cv mats', e); }
+  // تنظيف
+  try{ src.delete(); gray.delete(); blur.delete(); edges.delete(); contours.delete(); hierarchy.delete(); } catch(e){ console.warn('cleanup mats', e); }
 
   document.getElementById('summary').textContent = `اكتشف ${processedPaths.length} مساراً — Heatmap: ${grayMatForZ.cols}×${grayMatForZ.rows}`;
   showToast('انتهى الكشف وتهيئة Heatmap');
 
-  // رسم overlay 2D
   draw2DOverlay(processedPaths);
-
-  // بناء معاينة ثلاثية الأبعاد
   setTimeout(()=> build3DPreview(), 80);
 }
 
-/* ========== رسم Overlay 2D منظّم ========== */
+/* ========== رسم 2D overlay ========== */
 function draw2DOverlay(paths){
   octx.clearRect(0,0,overlayCanvas.width, overlayCanvas.height);
   octx.lineWidth = 1.4;
@@ -444,22 +429,51 @@ function draw2DOverlay(paths){
     octx.moveTo(path[0].x, path[0].y);
     for(let j=1;j<path.length;j++) octx.lineTo(path[j].x, path[j].y);
     octx.closePath(); octx.stroke();
-    // start / end
+    // start/end
     octx.fillStyle = '#ff3b3b'; octx.beginPath(); octx.arc(path[0].x, path[0].y, 3.2, 0, Math.PI*2); octx.fill();
     octx.fillStyle = '#c12b2b'; octx.beginPath(); octx.arc(path[path.length-1].x, path[path.length-1].y, 2.6, 0, Math.PI*2); octx.fill();
     // label
-    let cx=0, cy=0; for(const p of path){ cx+=p.x; cy+=p.y; } cx/=path.length; cy/=path.length;
+    let cx=0,cy=0; for(const p of path){ cx+=p.x; cy+=p.y; } cx/=path.length; cy/=path.length;
     octx.fillStyle = '#ffffff'; octx.fillText(`#${i+1}`, cx+6, cy-6);
   }
 }
 
-/* ========== توليد G-code مفصل ========= */
-function generateGcodeFromPaths(){
-  if(processedPaths.length === 0) { showToast('لا توجد مسارات — نفّذ كشف الحواف أولاً'); return ''; }
+/* ========== Colormap (Jet-like) & عرض Heatmap ========= */
+function jetColormap(v){ // v: 0..255 -> [r,g,b]
+  const x = v/255;
+  const r = Math.round(255 * Math.max(Math.min(1.5 - Math.abs(4*x-3), 1), 0));
+  const g = Math.round(255 * Math.max(Math.min(1.5 - Math.abs(4*x-2), 1), 0));
+  const b = Math.round(255 * Math.max(Math.min(1.5 - Math.abs(4*x-1), 1), 0));
+  return [r,g,b];
+}
+function showHeatmapOverlay(){
+  if(!grayMatForZ) return showToast('لا يوجد Heatmap جاهز');
+  const gw = grayMatForZ.cols, gh = grayMatForZ.rows;
+  const id = new ImageData(gw, gh);
+  for(let i=0;i<gw*gh;i++){
+    const v = grayMatForZ.data[i];
+    // show darker as deeper -> use reversed mapping for color intensity (so deep = hot)
+    const [r,g,b] = jetColormap(255 - v);
+    id.data[i*4+0] = r; id.data[i*4+1] = g; id.data[i*4+2] = b; id.data[i*4+3] = 255;
+  }
+  const tmp = document.createElement('canvas'); tmp.width = gw; tmp.height = gh;
+  tmp.getContext('2d').putImageData(id, 0, 0);
+  // draw scaled onto overlay (cover preview)
+  octx.clearRect(0,0,overlayCanvas.width, overlayCanvas.height);
+  octx.drawImage(tmp, 0, 0, overlayCanvas.width, overlayCanvas.height);
+  // then overlay paths on top
+  draw2DOverlay(processedPaths);
+}
+btnHeatmap.addEventListener('click', showHeatmapOverlay);
 
+/* ========== توليد G-code محسّن حسب الماكينة ========= */
+function generateGcodeFromPaths(){
+  if(processedPaths.length===0) { showToast('لا توجد مسارات — نفّذ كشف الحواف أولاً'); return ''; }
+
+  const machine = document.getElementById('machineType').value;
   const realW = parseFloat(document.getElementById('realWidth').value||200);
   const feed = parseFloat(document.getElementById('feedRate').value||800);
-  const spindle = parseInt(document.getElementById('spindle').value||10000);
+  const spindle = parseInt(document.getElementById('spindle').value||0);
   const safeZ = parseFloat(document.getElementById('safeZ').value||5);
   const maxDepth = parseFloat(document.getElementById('maxDepth').value||5);
   const zMode = document.getElementById('zMode').value;
@@ -469,23 +483,22 @@ function generateGcodeFromPaths(){
   const compDir = document.getElementById('compDir').value || 'none';
   const toolDia = parseFloat(document.getElementById('toolDia').value||2.0);
   const stepDown = parseFloat(document.getElementById('stepDown').value||0);
+  const laserPower = parseFloat(document.getElementById('laserPower').value||80);
 
-  // compute realH maintaining aspect ratio of preview
   const realH = realW * (procImageSize.h / procImageSize.w);
 
   // choose paths
   let paths = (pathMode === 'outer') ? getOuterPath(processedPaths) : processedPaths.slice();
   if(pathMode === 'outer') paths = paths.map(sortPathStart);
 
-  // apply compensation if requested
+  // compensation (px)
   if(enableComp && window.ClipperLib && compDir !== 'none'){
-    const toolRadiusPx = (toolDia / 2) * (procImageSize.w / realW); // px = mm * px/mm
+    const toolRadiusPx = (toolDia / 2) * (procImageSize.w / realW);
     const sign = (compDir === 'outside') ? 1 : -1;
     const offset = sign * toolRadiusPx;
     const out = [];
     for(const p of paths){
       if(p.length > MAX_POINTS){ out.push(p); continue; }
-      // ensure closed
       const closed = p.slice();
       if(Math.hypot(closed[0].x - closed[closed.length-1].x, closed[0].y - closed[closed.length-1].y) > 0.5) closed.push({...closed[0]});
       const off = offsetPathWithClipper(closed, offset);
@@ -494,79 +507,124 @@ function generateGcodeFromPaths(){
     paths = out;
   }
 
-  // helper: build depth passes
+  // build depth passes helper
   function buildDepthPasses(totalDepth, step){
     if(step <= 0) return [totalDepth];
     const passes = [];
-    for(let d=step; d < totalDepth; d += step) passes.push(d);
+    for(let d=step; d<totalDepth; d+=step) passes.push(d);
     if(passes.length === 0 || passes[passes.length-1] < totalDepth) passes.push(totalDepth);
     return passes;
   }
 
-  // begin G-code
   const lines = [];
   lines.push('; --- Generated by CNC AI (Reviewed) ---');
   lines.push(`; Date: ${new Date().toLocaleString()}`);
-  lines.push('; Units: mm, Absolute (G21 G90)');
-  lines.push('G21');
-  lines.push('G90');
+  lines.push('; Units: mm, Absolute positioning');
+  lines.push('G21'); lines.push('G90'); lines.push('G17'); lines.push('G40');
   lines.push(`G0 Z${safeZ.toFixed(3)} ; safe height`);
-  lines.push(`M3 S${spindle} ; spindle on`);
+
+  // Start tool depending on machine
+  if(machine === 'router'){
+    if(spindle > 0) lines.push(`M3 S${spindle} ; spindle on`);
+  } else if(machine === 'laser'){
+    // laser uses power percentage (user sets 0..100). We'll use S as percent in comments and set S in commands.
+    lines.push(`; Laser mode — power will be set per move (S = 0..${laserPower})`);
+    lines.push(`M3 S${Math.round(laserPower)} ; laser ON at default power`);
+  } else if(machine === 'plasma'){
+    lines.push(`M3 ; plasma ON`);
+  }
+
   lines.push('');
 
-  // fixed Z mode
-  if(zMode === 'fixed'){
-    const targetDepthAbs = Math.abs(fixedZ);
-    const passes = buildDepthPasses(targetDepthAbs, stepDown);
-    for(let pi=0; pi<passes.length; pi++){
-      const passDepth = -passes[pi]; // negative
-      lines.push(`; PASS ${pi+1}/${passes.length} fixed Z = ${passDepth.toFixed(3)} mm`);
+  if(machine === 'laser'){
+    // Laser — prefer power modulation rather than Z movement. If zMode==heatmap, modulate power by gray; if fixed, keep constant power.
+    if(zMode === 'fixed'){
+      const powerVal = Math.round(laserPower);
       for(const path of paths){
-        if(!path || path.length < 2) continue;
-        const s = path[0];
-        const sx = pxToMmX(s.x, procImageSize.w, realW);
-        const sy = pxToMmY(s.y, procImageSize.h, realH);
+        if(!path || path.length<2) continue;
+        const s0 = path[0];
+        const sx = pxToMmX(s0.x, procImageSize.w, realW), sy = pxToMmY(s0.y, procImageSize.h, realH);
         lines.push(`G0 Z${safeZ.toFixed(3)}`);
         lines.push(`G0 X${sx.toFixed(3)} Y${sy.toFixed(3)}`);
-        lines.push(`G1 Z${passDepth.toFixed(3)} F${feed}`);
+        // start cut with power
+        lines.push(`G1 F${feed} S${powerVal}`);
         for(const pt of path){
           const x = pxToMmX(pt.x, procImageSize.w, realW);
           const y = pxToMmY(pt.y, procImageSize.h, realH);
-          lines.push(`G1 X${x.toFixed(3)} Y${y.toFixed(3)} F${feed}`);
+          lines.push(`G1 X${x.toFixed(3)} Y${y.toFixed(3)} S${powerVal} F${feed}`);
+        }
+        lines.push(`G0 Z${safeZ.toFixed(3)}`);
+      }
+    } else {
+      // heatmap -> for each vertex set power proportional to depth (black=deep => high power)
+      for(const path of paths){
+        if(!path || path.length<2) continue;
+        const s0 = path[0];
+        const sx = pxToMmX(s0.x, procImageSize.w, realW), sy = pxToMmY(s0.y, procImageSize.h, realH);
+        lines.push(`G0 Z${safeZ.toFixed(3)}`);
+        lines.push(`G0 X${sx.toFixed(3)} Y${sy.toFixed(3)}`);
+        // cut along path with per-vertex power
+        for(const pt of path){
+          const x = pxToMmX(pt.x, procImageSize.w, realW);
+          const y = pxToMmY(pt.y, procImageSize.h, realH);
+          const pv = sampleGrayAtPreviewXY(pt.x, pt.y);
+          const power = Math.round(((255 - pv)/255.0) * laserPower); // black->max
+          lines.push(`G1 X${x.toFixed(3)} Y${y.toFixed(3)} S${power} F${feed}`);
         }
         lines.push(`G0 Z${safeZ.toFixed(3)}`);
       }
     }
   } else {
-    // heatmap mode: map gray value to depth. IMPORTANT: mapping chosen -> BLACK (0) = deepest, WHITE (255) = surface
-    const passes = buildDepthPasses(maxDepth, stepDown);
-    for(let passIdx=0; passIdx<passes.length; passIdx++){
-      const passMax = passes[passIdx];
-      lines.push(`; 3D PASS ${passIdx+1}/${passes.length} — pass max depth = ${passMax.toFixed(3)} mm`);
-      for(const path of paths){
-        if(!path || path.length < 2) continue;
-        const s = path[0];
-        const sx = pxToMmX(s.x, procImageSize.w, realW);
-        const sy = pxToMmY(s.y, procImageSize.h, realH);
-        lines.push(`G0 Z${safeZ.toFixed(3)}`);
-        lines.push(`G0 X${sx.toFixed(3)} Y${sy.toFixed(3)}`);
-        // if need retract or dwell can be added here
-        for(const pt of path){
-          const x = pxToMmX(pt.x, procImageSize.w, realW);
-          const y = pxToMmY(pt.y, procImageSize.h, realH);
-          const pv = sampleGrayAtPreviewXY(pt.x, pt.y); // 0..255
-          // map: 0 (black) => deepest (passMax), 255 (white) => 0
-          const z = - ((255 - pv) / 255.0) * passMax;
-          lines.push(`G1 X${x.toFixed(3)} Y${y.toFixed(3)} Z${z.toFixed(3)} F${feed}`);
+    // Router / Plasma: use Z depth from heatmap or fixed Z; Plasma often doesn't do deep passes, but we keep generic behavior.
+    if(zMode === 'fixed'){
+      const depthAbs = Math.abs(fixedZ);
+      const passes = buildDepthPasses(depthAbs, stepDown);
+      for(let pi=0; pi<passes.length; pi++){
+        const pd = -passes[pi];
+        lines.push(`; PASS ${pi+1}/${passes.length} depth ${pd.toFixed(3)}mm`);
+        for(const path of paths){
+          if(!path || path.length<2) continue;
+          const s = path[0];
+          const sx = pxToMmX(s.x, procImageSize.w, realW), sy = pxToMmY(s.y, procImageSize.h, realH);
+          lines.push(`G0 Z${safeZ.toFixed(3)}`);
+          lines.push(`G0 X${sx.toFixed(3)} Y${sy.toFixed(3)}`);
+          lines.push(`G1 Z${pd.toFixed(3)} F${feed}`);
+          for(const pt of path){
+            const x = pxToMmX(pt.x, procImageSize.w, realW);
+            const y = pxToMmY(pt.y, procImageSize.h, realH);
+            lines.push(`G1 X${x.toFixed(3)} Y${y.toFixed(3)} F${feed}`);
+          }
+          lines.push(`G0 Z${safeZ.toFixed(3)}`);
         }
-        lines.push(`G0 Z${safeZ.toFixed(3)}`);
+      }
+    } else {
+      // heatmap: use gray to compute per-vertex Z. If stepDown > 0, create progressive passes.
+      const passes = buildDepthPasses(maxDepth, stepDown);
+      for(let passI=0; passI<passes.length; passI++){
+        const passMax = passes[passI];
+        lines.push(`; 3D PASS ${passI+1}/${passes.length} — pass max ${passMax.toFixed(3)} mm`);
+        for(const path of paths){
+          if(!path || path.length<2) continue;
+          const s = path[0];
+          const sx = pxToMmX(s.x, procImageSize.w, realW), sy = pxToMmY(s.y, procImageSize.h, realH);
+          lines.push(`G0 Z${safeZ.toFixed(3)}`);
+          lines.push(`G0 X${sx.toFixed(3)} Y${sy.toFixed(3)}`);
+          for(const pt of path){
+            const x = pxToMmX(pt.x, procImageSize.w, realW);
+            const y = pxToMmY(pt.y, procImageSize.h, realH);
+            const pv = sampleGrayAtPreviewXY(pt.x, pt.y);
+            const z = - ((255 - pv) / 255.0) * passMax; // black = deep
+            lines.push(`G1 X${x.toFixed(3)} Y${y.toFixed(3)} Z${z.toFixed(3)} F${feed}`);
+          }
+          lines.push(`G0 Z${safeZ.toFixed(3)}`);
+        }
       }
     }
   }
 
-  // finish
+  // finish / stop tool
   lines.push('');
-  lines.push('M5 ; spindle off');
+  if(machine === 'router' || machine === 'plasma' || machine === 'laser') lines.push('M5 ; tool off');
   lines.push('G0 X0 Y0 ; return home');
   lines.push('M30 ; end');
   return lines.join('\n');
@@ -574,10 +632,9 @@ function generateGcodeFromPaths(){
 
 /* ========== Three.js 3D preview ========= */
 let threeRenderer, threeScene, threeCamera, threeControls, heightMesh, pathsGroup;
-const MAX_SEGMENTS = 120;
-
 function initThree(container){
-  if(threeRenderer) return;
+  // clear previous canvas if any
+  while(container.firstChild) container.removeChild(container.firstChild);
   threeRenderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
   threeRenderer.setPixelRatio(window.devicePixelRatio);
   threeRenderer.setSize(container.clientWidth, container.clientHeight);
@@ -588,23 +645,25 @@ function initThree(container){
   threeControls = new THREE.OrbitControls(threeCamera, threeRenderer.domElement);
   threeScene.add(new THREE.AmbientLight(0x666666));
   const dl = new THREE.DirectionalLight(0xffffff, 0.95); dl.position.set(1,1,1); threeScene.add(dl);
+
   window.addEventListener('resize', ()=> {
     if(!threeRenderer) return;
     threeRenderer.setSize(container.clientWidth, container.clientHeight);
     threeCamera.aspect = container.clientWidth / container.clientHeight;
     threeCamera.updateProjectionMatrix();
   });
+
   (function animate(){ if(threeRenderer) threeRenderer.render(threeScene, threeCamera); requestAnimationFrame(animate); })();
 }
 
 function build3DPreview(){
   const container = document.getElementById('threeContainer');
-  if(!grayMatForZ || processedPaths.length === 0) return;
+  if(!grayMatForZ || processedPaths.length === 0) { /* nothing to show */ return; }
   initThree(container);
 
   // cleanup
-  if(heightMesh){ threeScene.remove(heightMesh); try{ heightMesh.geometry.dispose(); heightMesh.material.dispose(); }catch(e){} heightMesh=null; }
-  if(pathsGroup){ threeScene.remove(pathsGroup); pathsGroup=null; }
+  if(heightMesh){ try{ threeScene.remove(heightMesh); heightMesh.geometry.dispose(); heightMesh.material.dispose(); } catch(e){} heightMesh=null; }
+  if(pathsGroup){ try{ threeScene.remove(pathsGroup); } catch(e){} pathsGroup=null; }
 
   const gw = grayMatForZ.cols, gh = grayMatForZ.rows;
   const realW = parseFloat(document.getElementById('realWidth').value||200);
@@ -623,7 +682,7 @@ function build3DPreview(){
       const gx = Math.round((i / segX) * (gw - 1));
       const gy = Math.round((j / segY) * (gh - 1));
       const pv = grayMatForZ.data[gy * gw + gx];
-      const z = - ((255 - pv) / 255.0) * maxDepth; // black = deep
+      const z = - ((255 - pv) / 255.0) * maxDepth;
       pos.setZ(idx, z);
     }
   }
@@ -634,10 +693,10 @@ function build3DPreview(){
   heightMesh.rotateX(-Math.PI/2);
   threeScene.add(heightMesh);
 
-  // overlay paths
+  // paths overlay
   pathsGroup = new THREE.Group();
   const lineMat = new THREE.LineBasicMaterial({color:0xff6666});
-  for(const path of processedPaths){
+  processedPaths.forEach(path => {
     const pts = [];
     for(const p of path){
       const wx = (pxToMmX(p.x, procImageSize.w, realW) - realW/2);
@@ -646,22 +705,21 @@ function build3DPreview(){
       const z = - ((255 - pv) / 255.0) * maxDepth;
       pts.push(new THREE.Vector3(wx, z, wy));
     }
-    if(pts.length > 1){
+    if(pts.length>1){
       const g = new THREE.BufferGeometry().setFromPoints(pts);
       const line = new THREE.Line(g, lineMat);
       pathsGroup.add(line);
     }
-  }
+  });
   threeScene.add(pathsGroup);
 
-  // center camera on combined bbox (mesh + paths)
-  const box = new THREE.Box3();
-  box.setFromObject(heightMesh);
+  // center camera on combined bbox
+  const box = new THREE.Box3().setFromObject(heightMesh);
   if(pathsGroup) box.union(new THREE.Box3().setFromObject(pathsGroup));
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
   threeControls.target.copy(center);
-  const dist = Math.max(size.x, size.z) * 1.5 + 100;
+  const dist = Math.max(size.x, size.z) * 1.6 + 80;
   threeCamera.position.set(center.x, center.y - dist, center.z + dist/2);
   threeCamera.lookAt(center);
   threeControls.update();
@@ -669,6 +727,10 @@ function build3DPreview(){
 
 /* ========== أحداث الواجهة ========== */
 btnDetect.addEventListener('click', ()=> detectContoursAndPrepareHeatmap());
+btnSnapshot.addEventListener('click', ()=> {
+  const a = document.createElement('a'); a.href = document.getElementById('overlayImg').src; a.download='snapshot.png'; a.click();
+  showToast('تم حفظ اللقطة');
+});
 btnGen.addEventListener('click', ()=>{
   const g = generateGcodeFromPaths();
   if(!g) return;
