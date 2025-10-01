@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>CNC AI — Multi Machine Raster Engraving</title>
+
+  <!-- مكتبات -->
+  <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+  <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.158.0/examples/js/controls/OrbitControls.js"></script>
+
+  <style>
+    /* نفس التنسيقات التي عندك - بدون تغيير */
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Arial,Segoe UI,system-ui;background:#041022;color:#e6eef6;line-height:1.5}
+    .app{max-width:1400px;margin:16px auto;padding:14px}
+    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #1e293b}
+    .grid{display:grid;grid-template-columns:1fr 480px;gap:16px}
+    @media (max-width:1000px){.grid{grid-template-columns:1fr}}
+    .panel{background:#0b1320;padding:16px;border-radius:10px;border:1px solid #1e293b}
+    .tabs{display:flex;margin-top:12px;border-bottom:1px solid #1e293b}
+    .tabs button{margin-left:6px;padding:8px 14px;border:none;border-radius:6px 6px 0 0;cursor:pointer;background:transparent;color:#9bb0c8;transition:.2s;font-size:.9rem}
+    .tabs button.active{background:#06b6d4;color:#021}
+    .tab-content{display:none;margin-top:12px}
+    .tab-content.active{display:block}
+    canvas{max-width:100%;border-radius:6px;background:#000;display:block;margin:0 auto}
+    #threeContainer{width:100%;height:360px;background:#081224;border-radius:8px;overflow:hidden}
+    textarea{width:100%;height:200px;background:#021024;color:#cfeaf2;font-family:monospace;border-radius:8px;padding:10px;border:1px solid #1e293b;resize:vertical}
+    button.primary{background:#06b6d4;color:#021;font-weight:bold;border:none;padding:10px;border-radius:8px;cursor:pointer}
+    button.secondary{background:#1e293b;color:#e6eef6;border:none;padding:10px;border-radius:8px;cursor:pointer}
+    #toast{position:fixed;left:16px;bottom:16px;background:rgba(0,0,0,.85);color:#fff;padding:10px 14px;border-radius:8px;display:none;z-index:10000}
+    h1{margin:0;color:#06b6d4;font-size:1.5rem}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>CNC AI — Multi Machine Raster Engraving</h1>
+      <div id="cvState">جاري تحميل OpenCV...</div>
+    </header>
+
+    <div class="grid">
+      <!-- لوحة الصورة -->
+      <div class="panel">
+        <input id="fileInput" type="file" accept="image/*" style="margin-bottom:10px"/>
+        <div class="tabs">
+          <button data-tab="original" class="active">🖼️ الأصلية</button>
+          <button data-tab="heatmap">🔥 الحرارة</button>
+          <button data-tab="contour">📐 الحواف</button>
+          <button data-tab="threeD">📦 ثلاثية الأبعاد</button>
+        </div>
+        <div id="original" class="tab-content active"><canvas id="canvasOriginal"></canvas></div>
+        <div id="heatmap" class="tab-content"><canvas id="canvasHeatmap"></canvas></div>
+        <div id="contour" class="tab-content"><canvas id="canvasContour"></canvas></div>
+        <div id="threeD" class="tab-content"><div id="threeContainer"></div></div>
+      </div>
+
+      <!-- لوحة التحكم -->
+      <div class="panel">
+        <label>اتجاه المسارات</label>
+        <select id="scanDir"><option value="x">أفقي (X)</option><option value="y">رأسي (Y)</option></select>
+        <label>أقصى عمق (مم)</label><input id="maxDepth" type="number" value="3" step="0.1"/>
+        <label>Safe Z (مم)</label><input id="safeZ" type="number" value="5" step="0.1"/>
+        <label>سرعة التغذية (مم/د)</label><input id="feedRate" type="number" value="800"/>
+        <label>عكس Z</label><select id="invertZ"><option value="no">لا</option><option value="yes">نعم</option></select>
+        <label>خطوة المسح (مم)</label><input id="stepOver" type="number" value="5" step="0.1"/>
+        <div style="margin-top:10px">
+          <button id="btnGen" class="primary">⚡ توليد G-code</button>
+          <button id="btnQuick" class="secondary">🧪 اختبار سريع</button>
+          <button id="btnDownload" class="secondary">💾 تحميل</button>
+        </div>
+        <div id="estTime"></div>
+        <textarea id="gcodeOut" readonly placeholder="سيظهر G-code هنا..."></textarea>
+      </div>
+    </div>
+  </div>
+  <div id="toast"></div>
+
+<script>
+let cvReady=false,grayMat=null,contour=null,previewCanvas=null;
+function showToast(m,ms=2000){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',ms);}
+function cmToMm(cm){return cm*10;}
+function waitForCv(){if(window.cv&&cv.getBuildInformation){cvReady=true;document.getElementById('cvState').textContent='✅ OpenCV جاهز';}else if(window.cv){cv.onRuntimeInitialized=()=>{cvReady=true;document.getElementById('cvState').textContent='✅ OpenCV جاهز';};}else setTimeout(waitForCv,200);} waitForCv();
+
+document.querySelectorAll('.tabs button').forEach(b=>{b.addEventListener('click',()=>{document.querySelectorAll('.tabs button').forEach(bb=>bb.classList.remove('active'));document.querySelectorAll('.tab-content').forEach(tc=>tc.classList.remove('active'));b.classList.add('active');document.getElementById(b.dataset.tab).classList.add('active');if(b.dataset.tab==="threeD"&&grayMat)show3D();});});
+
+document.getElementById('fileInput').addEventListener('change',e=>{
+  const file=e.target.files[0]; if(!file)return;
+  const img=new Image(); img.onload=function(){
+    previewCanvas=document.getElementById('canvasOriginal');
+    let w=img.width,h=img.height;const maxW=800,maxH=600;
+    if(w>maxW){h=(maxW/w)*h;w=maxW;} if(h>maxH){w=(maxH/h)*w;h=maxH;}
+    previewCanvas.width=w; previewCanvas.height=h;
+    const ctx=previewCanvas.getContext('2d'); ctx.drawImage(img,0,0,w,h);
+    if(cvReady) detectContours(); else showToast("⏳ انتظر OpenCV...");
+  }; img.src=URL.createObjectURL(file);
+});
+
+function detectContours(){
+  let src=cv.imread(previewCanvas),gray=new cv.Mat(); cv.cvtColor(src,gray,cv.COLOR_RGBA2GRAY);
+  cv.GaussianBlur(gray,gray,new cv.Size(3,3),0,0);
+  let edges=new cv.Mat(); cv.Canny(gray,edges,50,150);
+  let contours=new cv.MatVector(),hier=new cv.Mat(); cv.findContours(edges,contours,hier,cv.RETR_EXTERNAL,cv.CHAIN_APPROX_SIMPLE);
+  let maxA=0;contour=null;
+  for(let i=0;i<contours.size();i++){let a=cv.contourArea(contours.get(i));if(a>maxA){maxA=a;contour=contours.get(i).clone();}}
+  if(grayMat)grayMat.delete(); grayMat=gray.clone();
+  renderHeatmap(gray); renderContour(gray);
+  src.delete();edges.delete();hier.delete();contours.delete();gray.delete();
+}
+
+function renderHeatmap(gray){
+  let c=document.getElementById('canvasHeatmap');c.width=gray.cols;c.height=gray.rows;
+  let ctx=c.getContext('2d'),imgd=ctx.createImageData(c.width,c.height);
+  for(let y=0;y<gray.rows;y++){for(let x=0;x<gray.cols;x++){let v=gray.ucharPtr(y,x)[0],i=(y*gray.cols+x)*4;
+    imgd.data[i]=v; imgd.data[i+1]=0; imgd.data[i+2]=255-v; imgd.data[i+3]=255;}}
+  ctx.putImageData(imgd,0,0);
+}
+
+function renderContour(gray){
+  let c=document.getElementById('canvasContour');c.width=gray.cols;c.height=gray.rows;
+  let ctx=c.getContext('2d');ctx.drawImage(document.getElementById('canvasHeatmap'),0,0);
+  if(contour){ctx.strokeStyle="lime";ctx.beginPath();for(let i=0;i<contour.data32S.length;i+=2){let x=contour.data32S[i],y=contour.data32S[i+1];if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.closePath();ctx.stroke();}
+}
+
+function sampleGrayAt(x,y){
+  if(!grayMat)return 128; let gw=grayMat.cols,gh=grayMat.rows;
+  let gx=(x/previewCanvas.width)*(gw-1),gy=(y/previewCanvas.height)*(gh-1);
+  let xi=Math.floor(gx),yi=Math.floor(gy);return grayMat.ucharPtr(yi,xi)[0];
+}
+
+function generateRasterGcode(scaleDown=false){
+  if(!grayMat||!contour){showToast("❌ لا توجد صورة");return"";}
+  const dir=document.getElementById('scanDir').value,step=parseFloat(document.getElementById('stepOver').value),maxD=parseFloat(document.getElementById('maxDepth').value),feed=parseFloat(document.getElementById('feedRate').value),safeZ=parseFloat(document.getElementById('safeZ').value),invert=document.getElementById('invertZ').value==='yes';
+  let lines=["G21 G90 G17","G0 Z"+safeZ],total=0;
+  let st=scaleDown?step*4:step;
+  let sX=1,sY=1;
+  if(dir==='x'){
+    for(let y=0;y<previewCanvas.height;y+=st){
+      let row=[];
+      for(let x=0;x<previewCanvas.width;x++){if(cv.pointPolygonTest(contour,new cv.Point(x,y),false)>=0){let pv=sampleGrayAt(x,y);let z=-((255-pv)/255.0)*maxD;if(invert)z=-z;row.push({x:x*sX,y:y*sY,z});}}
+      if(row.length>1){if((y/st)%2!==0)row.reverse();lines.push(`G0 X${row[0].x.toFixed(2)} Y${row[0].y.toFixed(2)} Z${safeZ}`);lines.push("G1 F"+feed);
+        for(let i=0;i<row.length;i++){let p=row[i];lines.push(`G1 X${p.x.toFixed(2)} Y${p.y.toFixed(2)} Z${p.z.toFixed(2)}`);if(i>0)total+=Math.hypot(p.x-row[i-1].x,p.y-row[i-1].y);}lines.push("G0 Z"+safeZ);}}
+  }else{
+    for(let x=0;x<previewCanvas.width;x+=st){
+      let col=[];
+      for(let y=0;y<previewCanvas.height;y++){if(cv.pointPolygonTest(contour,new cv.Point(x,y),false)>=0){let pv=sampleGrayAt(x,y);let z=-((255-pv)/255.0)*maxD;if(invert)z=-z;col.push({x:x*sX,y:y*sY,z});}}
+      if(col.length>1){if((x/st)%2!==0)col.reverse();lines.push(`G0 X${col[0].x.toFixed(2)} Y${col[0].y.toFixed(2)} Z${safeZ}`);lines.push("G1 F"+feed);
+        for(let i=0;i<col.length;i++){let p=col[i];lines.push(`G1 X${p.x.toFixed(2)} Y${p.y.toFixed(2)} Z${p.z.toFixed(2)}`);if(i>0)total+=Math.hypot(p.x-col[i-1].x,p.y-col[i-1].y);}lines.push("G0 Z"+safeZ);}}
+  }
+  lines.push("M5","M30");document.getElementById('estTime').textContent="⏱️ "+(total/feed).toFixed(1)+" دقيقة";return lines.join("\n");
+}
+
+document.getElementById('btnGen').addEventListener('click',()=>{let g=generateRasterGcode(false);document.getElementById('gcodeOut').value=g;});
+document.getElementById('btnQuick').addEventListener('click',()=>{let g=generateRasterGcode(true);document.getElementById('gcodeOut').value=g;});
+document.getElementById('btnDownload').addEventListener('click',()=>{let t=document.getElementById('gcodeOut').value;if(!t){showToast("❌ لا يوجد G-code");return;}let b=new Blob([t],{type:"text/plain"}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download="cnc_output.gcode";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(u);});
+
+function show3D(){
+  const cont=document.getElementById('threeContainer');cont.innerHTML="";
+  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(45,cont.clientWidth/cont.clientHeight,.1,5000),renderer=new THREE.WebGLRenderer({antialias:true});
+  renderer.setSize(cont.clientWidth,cont.clientHeight);cont.appendChild(renderer.domElement);
+  let scale=Math.max(grayMat.cols,grayMat.rows)>300?2:1; // downsample
+  let geom=new THREE.PlaneGeometry(grayMat.cols/scale,grayMat.rows/scale,grayMat.cols/scale-1,grayMat.rows/scale-1);
+  let colors=new Uint8Array((grayMat.cols/scale)*(grayMat.rows/scale)*3);
+  for(let y=0;y<grayMat.rows;y+=scale){for(let x=0;x<grayMat.cols;x+=scale){let v=grayMat.ucharPtr(y,x)[0],z=(1-v/255.0)*parseFloat(document.getElementById('maxDepth').value)*10;let idx=(y/scale)*(grayMat.cols/scale)+(x/scale);geom.attributes.position.setZ(idx,z);colors[idx*3]=v;colors[idx*3+1]=0;colors[idx*3+2]=255-v;}}
+  geom.attributes.position.needsUpdate=true;geom.computeVertexNormals();geom.rotateX(-Math.PI/2);
+  let tex=new THREE.DataTexture(colors,grayMat.cols/scale,grayMat.rows/scale,THREE.RGBFormat);tex.needsUpdate=true;
+  let mesh=new THREE.Mesh(geom,new THREE.MeshStandardMaterial({map:tex,side:THREE.DoubleSide}));scene.add(mesh);
+  let light=new THREE.DirectionalLight(0xffffff,1);light.position.set(50,100,150);scene.add(light);scene.add(new THREE.AmbientLight(0x404040));
+  camera.position.set(0,-grayMat.rows,grayMat.rows*1.5);
+  let controls=new THREE.OrbitControls(camera,renderer.domElement);
+  (function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera);})();
+}
+</script>
+</body>
+</html>
