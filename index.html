@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>CNC AI — Router Raster Engraving</title>
+<title>CNC AI — Multi Machine Raster Engraving</title>
 
 <!-- مكتبات -->
 <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
@@ -32,7 +32,7 @@ button.primary{background:#06b6d4;color:#021;font-weight:bold;border:none;paddin
 <body>
 <div class="app">
   <header>
-    <h1>CNC AI — Router Raster 3D</h1>
+    <h1>CNC AI — Multi Machine Raster</h1>
     <div id="cvState">انتظر OpenCV</div>
   </header>
 
@@ -54,13 +54,23 @@ button.primary{background:#06b6d4;color:#021;font-weight:bold;border:none;paddin
 
     <!-- يمين -->
     <div class="panel">
-      <h3>إعدادات Router</h3>
+      <h3>إعدادات التشغيل</h3>
+
+      <label>نوع الماكينة
+        <select id="machineType">
+          <option value="router">Router</option>
+          <option value="laser">Laser</option>
+          <option value="plasma">Plasma</option>
+        </select>
+      </label>
+
       <label>Feed (مم/دقيقة)<input id="feedRate" type="number" value="800"/></label>
       <label>Safe Z (مم)<input id="safeZ" type="number" value="5"/></label>
       <label>Invert Z<select id="invertZ"><option value="no">لا</option><option value="yes">نعم</option></select></label>
       <label>اتجاه المسارات<select id="scanDir"><option value="x">أفقي (X)</option><option value="y">رأسي (Y)</option></select></label>
       <label>خطوة المسح (مم)<input id="stepOver" type="number" value="5" step="0.5"/></label>
       <label>أقصى عمق (مم)<input id="maxDepth" type="number" value="3.0" step="0.1"/></label>
+
       <button id="btnGen" class="primary" style="margin-top:10px">توليد G-code</button>
       <button id="btnQuick" style="margin-top:6px">اختبار سريع</button>
       <button id="btnDownload" style="margin-top:6px">تحميل G-code</button>
@@ -107,10 +117,7 @@ document.getElementById('fileInput').addEventListener('change',e=>{
     previewCanvas=document.getElementById('canvasOriginal');
     previewCanvas.width=img.width;previewCanvas.height=img.height;
     previewCanvas.getContext('2d').drawImage(img,0,0,previewCanvas.width,previewCanvas.height);
-
-    if(cvReady){
-      detectContours();
-    }
+    if(cvReady){ detectContours(); }
   }
   img.src=URL.createObjectURL(file);
 });
@@ -143,8 +150,7 @@ function detectContours(){
   // auto Canny thresholds
   function medianGray(mat){
     const total=mat.rows*mat.cols, step=Math.max(1,Math.floor(total/5000));
-    const vals=[];
-    for(let i=0;i<total;i+=step) vals.push(mat.data[i]);
+    const vals=[];for(let i=0;i<total;i+=step) vals.push(mat.data[i]);
     vals.sort((a,b)=>a-b);
     return vals[Math.floor(vals.length/2)];
   }
@@ -166,7 +172,6 @@ function detectContours(){
   }
   contour=chosen;
 
-  // build grayMat (heatmap)
   if(grayMat){grayMat.delete();}
   grayMat=gray.clone();
 
@@ -226,7 +231,7 @@ function generateRasterGcode(scaleDown=false){
         }
       }
       if(row.length>1){
-        if((y/step)%2===0){}else row.reverse();
+        if((y/step)%2!==0) row.reverse();
         lines.push(`G0 X${row[0].x} Y${row[0].y} Z${safeZ}`);
         lines.push(`G1 F${feed}`);
         for(let i=0;i<row.length;i++){
@@ -243,6 +248,23 @@ function generateRasterGcode(scaleDown=false){
   document.getElementById('estTime').textContent="تقدير الوقت: "+timeMin.toFixed(1)+" دقيقة";
   return lines.join('\n');
 }
+
+/* Machine defaults */
+const machineDefaults = {
+  router: {feed:800, safeZ:5, maxDepth:3, stepOver:5},
+  laser:  {feed:1200, safeZ:0, maxDepth:0, stepOver:0.2},
+  plasma: {feed:1500, safeZ:3, maxDepth:0, stepOver:1}
+};
+document.getElementById('machineType').addEventListener('change',(e)=>{
+  const type=e.target.value, def=machineDefaults[type];
+  if(def){
+    document.getElementById('feedRate').value=def.feed;
+    document.getElementById('safeZ').value=def.safeZ;
+    document.getElementById('maxDepth').value=def.maxDepth;
+    document.getElementById('stepOver').value=def.stepOver;
+    showToast(`تم تحميل إعدادات ${type}`);
+  }
+});
 
 /* Buttons */
 document.getElementById('btnGen').addEventListener('click',()=>{
