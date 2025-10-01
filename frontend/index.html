@@ -1,0 +1,1218 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <title>CNC AI — Multi Machine Raster Engraving</title>
+
+    <!-- مكتبات -->
+    <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+    <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.158.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        /* الأساسيات */
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            margin: 0;
+            font-family: Arial, Segoe UI, system-ui;
+            background: #041022;
+            color: #e6eef6;
+            line-height: 1.5;
+        }
+        
+        /* التخطيط الرئيسي */
+        .app {
+            max-width: 1400px;
+            margin: 16px auto;
+            padding: 14px;
+        }
+        
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #1e293b;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 480px;
+            gap: 16px;
+        }
+        
+        @media (max-width: 1000px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* اللوحات */
+        .panel {
+            background: #0b1320;
+            padding: 16px;
+            border-radius: 10px;
+            border: 1px solid #1e293b;
+        }
+        
+        .panel-section {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #1e293b;
+        }
+        
+        .panel-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        
+        /* التبويبات */
+        .tabs {
+            display: flex;
+            margin-top: 12px;
+            border-bottom: 1px solid #1e293b;
+        }
+        
+        .tabs button {
+            margin-left: 6px;
+            padding: 8px 14px;
+            border: none;
+            border-radius: 6px 6px 0 0;
+            cursor: pointer;
+            background: transparent;
+            color: #9bb0c8;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+        
+        .tabs button:hover {
+            background: #1e293b;
+        }
+        
+        .tabs button.active {
+            background: #06b6d4;
+            color: #021;
+        }
+        
+        .tab-content {
+            display: none;
+            margin-top: 12px;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* العناصر المرئية */
+        canvas {
+            max-width: 100%;
+            border-radius: 6px;
+            background: #000;
+            display: block;
+            margin: 0 auto;
+        }
+        
+        textarea {
+            width: 100%;
+            height: 200px;
+            background: #021024;
+            color: #cfeaf2;
+            font-family: monospace;
+            border-radius: 8px;
+            padding: 10px;
+            border: 1px solid #1e293b;
+            resize: vertical;
+        }
+        
+        #threeContainer {
+            width: 100%;
+            height: 360px;
+            background: #081224;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        /* النماذج */
+        label {
+            display: block;
+            margin-top: 12px;
+            color: #cfeaf2;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+        
+        .input-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 8px 10px;
+            border-radius: 6px;
+            border: 1px solid #1e293b;
+            background: #0f172a;
+            color: #e6eef6;
+            margin-top: 6px;
+            font-size: 0.9rem;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: #06b6d4;
+        }
+        
+        /* الأزرار */
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 16px;
+        }
+        
+        button.primary {
+            background: #06b6d4;
+            color: #021;
+            font-weight: bold;
+            border: none;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        button.primary:hover {
+            background: #0ea5e9;
+        }
+        
+        button.secondary {
+            background: #1e293b;
+            color: #e6eef6;
+            border: none;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        button.secondary:hover {
+            background: #334155;
+        }
+        
+        /* التنبيهات */
+        #toast {
+            position: fixed;
+            left: 16px;
+            bottom: 16px;
+            background: rgba(0, 0, 0, 0.85);
+            color: #fff;
+            padding: 10px 14px;
+            border-radius: 8px;
+            display: none;
+            z-index: 10000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* النصوص */
+        h1 {
+            margin: 0;
+            color: #06b6d4;
+            font-size: 1.5rem;
+        }
+        
+        h3 {
+            margin-top: 0;
+            color: #9bb0c8;
+            font-size: 1.1rem;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #1e293b;
+        }
+        
+        h4 {
+            margin: 0 0 10px 0;
+            color: #cfeaf2;
+            font-size: 1rem;
+        }
+        
+        #cvState {
+            color: #9bb0c8;
+            font-size: 0.9em;
+            padding: 6px 10px;
+            background: #0f172a;
+            border-radius: 6px;
+        }
+        
+        #estTime {
+            margin-top: 12px;
+            color: #9bb0c8;
+            text-align: center;
+            padding: 8px;
+            background: #0f172a;
+            border-radius: 6px;
+        }
+        
+        .file-input-container {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+        
+        .file-input-container input[type=file] {
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        
+        .file-input-label {
+            display: block;
+            padding: 10px;
+            background: #1e293b;
+            color: #e6eef6;
+            text-align: center;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .file-input-label:hover {
+            background: #334155;
+        }
+        
+        .info-text {
+            font-size: 0.8rem;
+            color: #9bb0c8;
+            margin-top: 4px;
+        }
+        
+        .settings-row {
+            display: flex;
+            gap: 10px;
+            align-items: end;
+        }
+        
+        .settings-row .input-group {
+            flex: 1;
+        }
+        
+        .material-preset {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 8px;
+            margin-top: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .material-preset:hover {
+            background: #334155;
+        }
+        
+        .material-preset.active {
+            background: #06b6d4;
+            color: #021;
+            border-color: #06b6d4;
+        }
+        
+        .material-name {
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+        
+        .material-details {
+            font-size: 0.8rem;
+            color: #9bb0c8;
+        }
+        
+        .active-material .material-details {
+            color: #021;
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <header>
+            <h1>CNC AI — Multi Machine Raster Engraving</h1>
+            <div id="cvState">انتظر OpenCV</div>
+        </header>
+
+        <div class="grid">
+            <!-- لوحة الصورة والمعاينة -->
+            <div class="panel">
+                <div class="file-input-container">
+                    <input id="fileInput" type="file" accept="image/*"/>
+                    <label class="file-input-label" for="fileInput">اختر صورة للتحميل</label>
+                </div>
+                
+                <div class="tabs">
+                    <button data-tab="original" class="active">الصورة الأصلية</button>
+                    <button data-tab="heatmap">خريطة الحرارة</button>
+                    <button data-tab="contour">الكشف عن الحواف</button>
+                    <button data-tab="threeD">المعاينة ثلاثية الأبعاد</button>
+                </div>
+                
+                <div id="original" class="tab-content active">
+                    <canvas id="canvasOriginal"></canvas>
+                </div>
+                
+                <div id="heatmap" class="tab-content">
+                    <canvas id="canvasHeatmap"></canvas>
+                </div>
+                
+                <div id="contour" class="tab-content">
+                    <canvas id="canvasContour"></canvas>
+                </div>
+                
+                <div id="threeD" class="tab-content">
+                    <div id="threeContainer"></div>
+                </div>
+            </div>
+
+            <!-- لوحة التحكم والإعدادات -->
+            <div class="panel">
+                <!-- إعدادات الماكينة -->
+                <div class="panel-section">
+                    <h3>إعدادات الماكينة</h3>
+                    
+                    <label for="machineType">
+                        نوع الماكينة
+                    </label>
+                    <select id="machineType">
+                        <option value="router">Router CNC</option>
+                        <option value="laser">Laser Engraver</option>
+                        <option value="plasma">Plasma Cutter</option>
+                        <option value="3dprinter">3D Printer</option>
+                    </select>
+                    
+                    <div class="info-text" id="machineDescription">
+                        Router CNC - مناسبة للنحت على الخشب والأكريليك
+                    </div>
+                </div>
+                
+                <!-- إعدادات حجم العمل -->
+                <div class="panel-section">
+                    <h3>إعدادات حجم العمل</h3>
+                    
+                    <div class="input-group">
+                        <div>
+                            <label for="workWidth">
+                                عرض العمل (سم)
+                            </label>
+                            <input id="workWidth" type="number" value="30" step="0.1" min="1" max="100"/>
+                        </div>
+                        
+                        <div>
+                            <label for="workHeight">
+                                ارتفاع العمل (سم)
+                            </label>
+                            <input id="workHeight" type="number" value="20" step="0.1" min="1" max="100"/>
+                        </div>
+                    </div>
+                    
+                    <label for="workDepth">
+                        عمق العمل (مم)
+                    </label>
+                    <input id="workDepth" type="number" value="3.0" step="0.1" min="0.1" max="20"/>
+                    
+                    <div class="settings-row">
+                        <div class="input-group">
+                            <div>
+                                <label for="originX">
+                                    نقطة الأصل X (سم)
+                                </label>
+                                <input id="originX" type="number" value="0" step="0.1"/>
+                            </div>
+                            
+                            <div>
+                                <label for="originY">
+                                    نقطة الأصل Y (سم)
+                                </label>
+                                <input id="originY" type="number" value="0" step="0.1"/>
+                            </div>
+                        </div>
+                        
+                        <button id="btnCenterOrigin" class="secondary" style="height: fit-content;">توسيط نقطة الأصل</button>
+                    </div>
+                </div>
+                
+                <!-- إعدادات الخامة -->
+                <div class="panel-section">
+                    <h3>إعدادات الخامة</h3>
+                    
+                    <label for="materialType">
+                        نوع الخامة
+                    </label>
+                    <select id="materialType">
+                        <option value="wood">خشب</option>
+                        <option value="acrylic">أكريليك</option>
+                        <option value="aluminum">ألومنيوم</option>
+                        <option value="steel">صلب</option>
+                        <option value="brass">نحاس</option>
+                        <option value="plastic">بلاستيك</option>
+                        <option value="foam">رغوة</option>
+                        <option value="custom">مخصص</option>
+                    </select>
+                    
+                    <div id="materialPresets">
+                        <!-- سيتم تعبئتها بالجافاسكريبت -->
+                    </div>
+                </div>
+                
+                <!-- إعدادات التشغيل -->
+                <div class="panel-section">
+                    <h3>إعدادات التشغيل</h3>
+                    
+                    <label for="feedRate">
+                        سرعة التغذية (مم/دقيقة)
+                    </label>
+                    <input id="feedRate" type="number" value="800"/>
+                    
+                    <label for="safeZ">
+                        ارتفاع الأمان (مم)
+                    </label>
+                    <input id="safeZ" type="number" value="5"/>
+                    
+                    <label for="invertZ">
+                        عكس المحور Z
+                    </label>
+                    <select id="invertZ">
+                        <option value="no">لا</option>
+                        <option value="yes">نعم</option>
+                    </select>
+                    
+                    <label for="scanDir">
+                        اتجاه المسارات
+                    </label>
+                    <select id="scanDir">
+                        <option value="x">أفقي (X)</option>
+                        <option value="y">رأسي (Y)</option>
+                    </select>
+                    
+                    <label for="stepOver">
+                        خطوة المسح (مم)
+                    </label>
+                    <input id="stepOver" type="number" value="5" step="0.5"/>
+                    
+                    <label for="maxDepth">
+                        أقصى عمق (مم)
+                    </label>
+                    <input id="maxDepth" type="number" value="3.0" step="0.1"/>
+                </div>
+
+                <!-- أزرار التحكم -->
+                <div class="button-group">
+                    <button id="btnGen" class="primary">توليد G-code</button>
+                    <button id="btnQuick" class="secondary">اختبار سريع</button>
+                    <button id="btnDownload" class="secondary">تحميل G-code</button>
+                </div>
+                
+                <div id="estTime"></div>
+                
+                <label for="gcodeOut" style="margin-top: 16px;">مخرجات G-code</label>
+                <textarea id="gcodeOut" readonly></textarea>
+            </div>
+        </div>
+    </div>
+    
+    <div id="toast"></div>
+
+    <script>
+        // ========== تعريف المتغيرات العامة ==========
+        let cvReady = false;
+        let grayMat = null;
+        let contour = null;
+        let previewCanvas = null;
+        
+        // إعدادات الماكينات الافتراضية
+        const machineDefaults = {
+            router: { 
+                feed: 800, 
+                safeZ: 5, 
+                maxDepth: 3, 
+                stepOver: 5,
+                description: "Router CNC - مناسبة للنحت على الخشب والأكريليك والمعادن اللينة"
+            },
+            laser: { 
+                feed: 1200, 
+                safeZ: 0, 
+                maxDepth: 0, 
+                stepOver: 0.2,
+                description: "Laser Engraver - مناسبة للنقش على الخشب والجلود والأكريليك"
+            },
+            plasma: { 
+                feed: 1500, 
+                safeZ: 3, 
+                maxDepth: 0, 
+                stepOver: 1,
+                description: "Plasma Cutter - مناسبة لقطع المعادن بسمك مختلف"
+            },
+            "3dprinter": { 
+                feed: 1000, 
+                safeZ: 0.2, 
+                maxDepth: 0.2, 
+                stepOver: 0.4,
+                description: "3D Printer - للطباعة ثلاثية الأبعاد باستخدام تقنية FDM"
+            }
+        };
+        
+        // إعدادات الخامات الافتراضية
+        const materialDefaults = {
+            wood: {
+                feed: 800,
+                maxDepth: 3,
+                stepOver: 5,
+                description: "خشب - مناسبة للنحت والتفريغ على الخشب"
+            },
+            acrylic: {
+                feed: 600,
+                maxDepth: 2,
+                stepOver: 3,
+                description: "أكريليك - مناسبة للنقش والقطع على الأكريليك"
+            },
+            aluminum: {
+                feed: 400,
+                maxDepth: 1,
+                stepOver: 2,
+                description: "ألومنيوم - مناسبة للنقش على الألومنيوم"
+            },
+            steel: {
+                feed: 300,
+                maxDepth: 0.5,
+                stepOver: 1.5,
+                description: "صلب - مناسبة للنقش على الصلب باستخدام ماكينات قوية"
+            },
+            brass: {
+                feed: 500,
+                maxDepth: 1.5,
+                stepOver: 2.5,
+                description: "نحاس - مناسبة للنقش على النحاس والأصفر"
+            },
+            plastic: {
+                feed: 700,
+                maxDepth: 2.5,
+                stepOver: 4,
+                description: "بلاستيك - مناسبة للنقش على مختلف أنواع البلاستيك"
+            },
+            foam: {
+                feed: 1000,
+                maxDepth: 5,
+                stepOver: 6,
+                description: "رغوة - مناسبة للنحت على الرغوة بسرعات عالية"
+            },
+            custom: {
+                feed: 800,
+                maxDepth: 3,
+                stepOver: 5,
+                description: "مخصص - إعدادات مخصصة حسب الخامة"
+            }
+        };
+        
+        // القوالب المسبقة للخامات
+        const materialPresets = {
+            wood: [
+                { name: "خشب رقائقي 3مم", feed: 1000, maxDepth: 3, stepOver: 4 },
+                { name: "خشب MDF 6مم", feed: 800, maxDepth: 6, stepOver: 5 },
+                { name: "خشب طبيعي 10مم", feed: 600, maxDepth: 10, stepOver: 6 }
+            ],
+            acrylic: [
+                { name: "أكريليك 3مم", feed: 800, maxDepth: 3, stepOver: 3 },
+                { name: "أكريليك 5مم", feed: 600, maxDepth: 5, stepOver: 3 },
+                { name: "أكريليك شفاف 2مم", feed: 1000, maxDepth: 2, stepOver: 2 }
+            ],
+            aluminum: [
+                { name: "ألومنيوم رقائق 1مم", feed: 500, maxDepth: 1, stepOver: 2 },
+                { name: "ألومنيوم 3مم", feed: 400, maxDepth: 3, stepOver: 2 },
+                { name: "ألومنيوم 5مم", feed: 300, maxDepth: 5, stepOver: 1.5 }
+            ],
+            steel: [
+                { name: "صلب طري 2مم", feed: 400, maxDepth: 2, stepOver: 1.5 },
+                { name: "ستانلس ستيل 1مم", feed: 350, maxDepth: 1, stepOver: 1 }
+            ],
+            brass: [
+                { name: "نحاس أصفر 2مم", feed: 600, maxDepth: 2, stepOver: 2.5 },
+                { name: "نحاس أحمر 3مم", feed: 500, maxDepth: 3, stepOver: 2 }
+            ],
+            plastic: [
+                { name: "بلاستيك ABS 3مم", feed: 800, maxDepth: 3, stepOver: 4 },
+                { name: "بلاستيك PVC 2مم", feed: 700, maxDepth: 2, stepOver: 3 }
+            ],
+            foam: [
+                { name: "رغوة PVC 10مم", feed: 1200, maxDepth: 10, stepOver: 6 },
+                { name: "رغوة بولسترين 20مم", feed: 1500, maxDepth: 20, stepOver: 8 }
+            ],
+            custom: [
+                { name: "إعدادات مبدئية", feed: 800, maxDepth: 3, stepOver: 5 }
+            ]
+        };
+
+        // ========== وظائف المساعدة ==========
+        
+        /**
+         * عرض رسالة تنبيه
+         * @param {string} msg - نص الرسالة
+         * @param {number} ms - مدة العرض (ميلي ثانية)
+         */
+        function showToast(msg, ms = 2000) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.style.display = 'block';
+            clearTimeout(t._t);
+            t._t = setTimeout(() => t.style.display = 'none', ms);
+        }
+        
+        /**
+         * تحويل السنتيمتر إلى ملليمتر
+         * @param {number} cm - القيمة بالسنتيمتر
+         * @returns {number} القيمة بالملليمتر
+         */
+        function cmToMm(cm) {
+            return cm * 10;
+        }
+        
+        /**
+         * تحويل الملليمتر إلى سنتيمتر
+         * @param {number} mm - القيمة بالملليمتر
+         * @returns {number} القيمة بالسنتيمتر
+         */
+        function mmToCm(mm) {
+            return mm / 10;
+        }
+
+        // ========== تهيئة OpenCV ==========
+        
+        /**
+         * انتظار تحميل OpenCV
+         */
+        function waitForCv() {
+            if (window.cv && cv.getBuildInformation) {
+                cvReady = true;
+                document.getElementById('cvState').textContent = 'OpenCV جاهز';
+            } else if (window.cv) {
+                cv.onRuntimeInitialized = () => {
+                    cvReady = true;
+                    document.getElementById('cvState').textContent = 'OpenCV جاهز';
+                };
+            } else {
+                setTimeout(waitForCv, 200);
+            }
+        }
+        
+        // بدء انتظار OpenCV
+        waitForCv();
+
+        // ========== إدارة التبويبات ==========
+        
+        document.querySelectorAll('.tabs button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                // إزالة النشاط من جميع الأزرار
+                document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+                
+                // إضافة النشاط للزر المحدد
+                btn.classList.add('active');
+                document.getElementById(btn.dataset.tab).classList.add('active');
+                
+                // إذا كانت التبويبة ثلاثية الأبعاد، عرض المعاينة
+                if (btn.dataset.tab === "threeD" && grayMat) {
+                    show3D();
+                }
+            });
+        });
+
+        // ========== معالجة تحميل الصور ==========
+        
+        document.getElementById('fileInput').addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const img = new Image();
+            img.onload = function() {
+                previewCanvas = document.getElementById('canvasOriginal');
+                previewCanvas.width = img.width;
+                previewCanvas.height = img.height;
+                
+                const ctx = previewCanvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, previewCanvas.width, previewCanvas.height);
+                
+                if (cvReady) {
+                    detectContours();
+                }
+            }
+            img.src = URL.createObjectURL(file);
+        });
+
+        // ========== إدارة إعدادات الماكينة ==========
+        
+        document.getElementById('machineType').addEventListener('change', (e) => {
+            const type = e.target.value;
+            const def = machineDefaults[type];
+            
+            if (def) {
+                document.getElementById('feedRate').value = def.feed;
+                document.getElementById('safeZ').value = def.safeZ;
+                document.getElementById('maxDepth').value = def.maxDepth;
+                document.getElementById('stepOver').value = def.stepOver;
+                document.getElementById('machineDescription').textContent = def.description;
+                
+                showToast(`تم تحميل إعدادات ${type}`);
+            }
+        });
+
+        // ========== إدارة إعدادات الخامة ==========
+        
+        /**
+         * تحديث قوالب الخامة بناءً على نوع الخامة المحدد
+         */
+        function updateMaterialPresets() {
+            const materialType = document.getElementById('materialType').value;
+            const presetsContainer = document.getElementById('materialPresets');
+            
+            // مسح المحتوى الحالي
+            presetsContainer.innerHTML = '';
+            
+            // إضافة القوالب المسبقة
+            if (materialPresets[materialType]) {
+                materialPresets[materialType].forEach((preset, index) => {
+                    const presetElement = document.createElement('div');
+                    presetElement.className = 'material-preset';
+                    presetElement.innerHTML = `
+                        <div class="material-name">${preset.name}</div>
+                        <div class="material-details">
+                            سرعة: ${preset.feed} مم/د | عمق: ${preset.maxDepth} مم | خطوة: ${preset.stepOver} مم
+                        </div>
+                    `;
+                    
+                    presetElement.addEventListener('click', () => {
+                        // تطبيق الإعدادات
+                        document.getElementById('feedRate').value = preset.feed;
+                        document.getElementById('maxDepth').value = preset.maxDepth;
+                        document.getElementById('stepOver').value = preset.stepOver;
+                        
+                        // إزالة النشاط من جميع القوالب
+                        document.querySelectorAll('.material-preset').forEach(p => p.classList.remove('active'));
+                        // إضافة النشاط للقالب المحدد
+                        presetElement.classList.add('active');
+                        
+                        showToast(`تم تطبيق إعدادات ${preset.name}`);
+                    });
+                    
+                    presetsContainer.appendChild(presetElement);
+                });
+            }
+        }
+        
+        // تحديث قوالب الخامة عند تغيير نوع الخامة
+        document.getElementById('materialType').addEventListener('change', updateMaterialPresets);
+        
+        // تحديث قوالب الخامة عند التحميل
+        updateMaterialPresets();
+
+        // ========== إدارة حجم العمل ==========
+        
+        document.getElementById('btnCenterOrigin').addEventListener('click', () => {
+            const workWidth = parseFloat(document.getElementById('workWidth').value);
+            const workHeight = parseFloat(document.getElementById('workHeight').value);
+            
+            document.getElementById('originX').value = (workWidth / 2).toFixed(1);
+            document.getElementById('originY').value = (workHeight / 2).toFixed(1);
+            
+            showToast("تم توسيط نقطة الأصل");
+        });
+
+        // ========== معالجة الصور والرؤية الحاسوبية ==========
+        
+        /**
+         * أخذ عينة من الصورة الرمادية باستخدام الاستيفاء الثنائي
+         * @param {number} x - الإحداثي X
+         * @param {number} y - الإحداثي Y
+         * @returns {number} قيمة الرمادي
+         */
+        function sampleGrayAt(x, y) {
+            if (!grayMat) return 128;
+            
+            const gw = grayMat.cols;
+            const gh = grayMat.rows;
+            
+            // تحويل الإحداثيات
+            const gx_f = (x / previewCanvas.width) * (gw - 1);
+            const gy_f = (y / previewCanvas.height) * (gh - 1);
+            
+            // نقاط الشبكة المحيطة
+            const x0 = Math.floor(gx_f);
+            const y0 = Math.floor(gy_f);
+            const x1 = Math.min(gw - 1, x0 + 1);
+            const y1 = Math.min(gh - 1, y0 + 1);
+            
+            // نسب الاستيفاء
+            const sx = gx_f - x0;
+            const sy = gy_f - y0;
+            
+            // القيم المحيطة
+            const v00 = grayMat.ucharPtr(y0, x0)[0];
+            const v10 = grayMat.ucharPtr(y0, x1)[0];
+            const v01 = grayMat.ucharPtr(y1, x0)[0];
+            const v11 = grayMat.ucharPtr(y1, x1)[0];
+            
+            // الاستيفاء الثنائي
+            const v0 = v00 * (1 - sx) + v10 * sx;
+            const v1 = v01 * (1 - sx) + v11 * sx;
+            
+            return Math.round(v0 * (1 - sy) + v1 * sy);
+        }
+
+        /**
+         * الكشف عن الحواف في الصورة
+         */
+        function detectContours() {
+            // تحميل الصورة
+            let src = cv.imread(previewCanvas);
+            let gray = new cv.Mat();
+            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+            cv.GaussianBlur(gray, gray, new cv.Size(3, 3), 0, 0);
+
+            // حساب عتبات Canny تلقائياً
+            function medianGray(mat) {
+                const total = mat.rows * mat.cols;
+                const step = Math.max(1, Math.floor(total / 5000));
+                const vals = [];
+                
+                for (let i = 0; i < total; i += step) {
+                    vals.push(mat.data[i]);
+                }
+                
+                vals.sort((a, b) => a - b);
+                return vals[Math.floor(vals.length / 2)];
+            }
+            
+            const med = medianGray(gray);
+            const sigma = 0.33;
+            const lower = Math.max(0, Math.round((1.0 - sigma) * med));
+            const upper = Math.min(255, Math.round((1.0 + sigma) * med));
+
+            // كشف الحواف
+            let edges = new cv.Mat();
+            cv.Canny(gray, edges, lower, upper);
+            
+            // تحسين الحواف
+            let k = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
+            cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, k);
+
+            // إيجاد الكنتورات
+            let contours = new cv.MatVector();
+            let hier = new cv.Mat();
+            cv.findContours(edges, contours, hier, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+            
+            // اختيار الكنتور الأكبر
+            let maxArea = 0;
+            let chosen = null;
+            
+            for (let i = 0; i < contours.size(); i++) {
+                const cnt = contours.get(i);
+                const a = cv.contourArea(cnt);
+                
+                if (a > maxArea) {
+                    maxArea = a;
+                    chosen = cnt.clone();
+                }
+            }
+            
+            contour = chosen;
+
+            // حفظ الصورة الرمادية
+            if (grayMat) {
+                grayMat.delete();
+            }
+            grayMat = gray.clone();
+
+            // عرض خريطة الحرارة
+            renderHeatmap(gray);
+            
+            // عرض الكنتور
+            renderContour(gray);
+            
+            showToast("تم الكشف عن الحواف");
+            
+            // تنظيف الذاكرة
+            src.delete();
+            edges.delete();
+            hier.delete();
+        }
+
+        /**
+         * عرض خريطة الحرارة
+         * @param {cv.Mat} gray - الصورة الرمادية
+         */
+        function renderHeatmap(gray) {
+            let heat = document.getElementById('canvasHeatmap');
+            heat.width = gray.cols;
+            heat.height = gray.rows;
+            
+            let hctx = heat.getContext('2d');
+            let imgData = hctx.createImageData(heat.width, heat.height);
+            
+            for (let y = 0; y < gray.rows; y++) {
+                for (let x = 0; x < gray.cols; x++) {
+                    let v = gray.ucharPtr(y, x)[0];
+                    let idx = (y * gray.cols + x) * 4;
+                    
+                    imgData.data[idx] = v;        // الأحمر
+                    imgData.data[idx + 1] = 0;    // الأخضر
+                    imgData.data[idx + 2] = 255 - v; // الأزرق
+                    imgData.data[idx + 3] = 255;  // الشفافية
+                }
+            }
+            
+            hctx.putImageData(imgData, 0, 0);
+        }
+
+        /**
+         * عرض الكنتور
+         * @param {cv.Mat} gray - الصورة الرمادية
+         */
+        function renderContour(gray) {
+            let ccan = document.getElementById('canvasContour');
+            ccan.width = gray.cols;
+            ccan.height = gray.rows;
+            
+            let cctx = ccan.getContext('2d');
+            cctx.drawImage(document.getElementById('canvasHeatmap'), 0, 0);
+            
+            if (contour) {
+                cctx.strokeStyle = "lime";
+                cctx.lineWidth = 2;
+                cctx.beginPath();
+                
+                for (let i = 0; i < contour.data32S.length; i += 2) {
+                    let x = contour.data32S[i];
+                    let y = contour.data32S[i + 1];
+                    
+                    if (i === 0) {
+                        cctx.moveTo(x, y);
+                    } else {
+                        cctx.lineTo(x, y);
+                    }
+                }
+                
+                cctx.closePath();
+                cctx.stroke();
+            }
+        }
+
+        // ========== توليد G-code ==========
+        
+        /**
+         * توليد كود G للمسح النقطي
+         * @param {boolean} scaleDown - تقليل حجم المسارات للاختبار السريع
+         * @returns {string} كود G المولد
+         */
+        function generateRasterGcode(scaleDown = false) {
+            if (!grayMat || !contour) {
+                showToast("لا توجد صورة جاهزة");
+                return "";
+            }
+            
+            // قراءة الإعدادات
+            const dir = document.getElementById('scanDir').value;
+            const stepOver = parseFloat(document.getElementById('stepOver').value);
+            const maxDepth = parseFloat(document.getElementById('maxDepth').value);
+            const feed = parseFloat(document.getElementById('feedRate').value);
+            const safeZ = parseFloat(document.getElementById('safeZ').value);
+            const invertZ = document.getElementById('invertZ').value === 'yes';
+            
+            // قراءة إعدادات حجم العمل
+            const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value));
+            const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value));
+            const originX = cmToMm(parseFloat(document.getElementById('originX').value));
+            const originY = cmToMm(parseFloat(document.getElementById('originY').value));
+
+            // بدء كود G
+            const lines = [];
+            lines.push('G21 G90 G17'); // الوحدات المترية، الإحداثيات المطلقة، مستوى XY
+            lines.push(`G0 Z${safeZ.toFixed(2)}`); // الانتقال لارتفاع الأمان
+            
+            let totalLen = 0;
+            let step = scaleDown ? stepOver * 4 : stepOver;
+
+            // حساب عوامل القياس
+            const scaleX = workWidth / previewCanvas.width;
+            const scaleY = workHeight / previewCanvas.height;
+
+            // المسح الأفقي
+            if (dir === 'x') {
+                for (let y = 0; y < previewCanvas.height; y += step) {
+                    let row = [];
+                    
+                    // جمع النقاط داخل الكنتور
+                    for (let x = 0; x < previewCanvas.width; x++) {
+                        let inside = cv.pointPolygonTest(contour, new cv.Point(x, y), false);
+                        
+                        if (inside >= 0) {
+                            let pv = sampleGrayAt(x, y);
+                            let z = -((255 - pv) / 255.0) * maxDepth;
+                            
+                            if (invertZ) {
+                                z = -z;
+                            }
+                            
+                            // تطبيق القياس ونقطة الأصل
+                            const scaledX = (x * scaleX) + originX;
+                            const scaledY = (y * scaleY) + originY;
+                            
+                            row.push({ x: scaledX, y: scaledY, z });
+                        }
+                    }
+                    
+                    // إذا كان هناك نقاط في الصف
+                    if (row.length > 1) {
+                        // عكس اتجاه الصفوف الفردية
+                        if ((y / step) % 2 !== 0) {
+                            row.reverse();
+                        }
+                        
+                        // الانتقال للنقطة الأولى
+                        lines.push(`G0 X${row[0].x.toFixed(2)} Y${row[0].y.toFixed(2)} Z${safeZ}`);
+                        lines.push(`G1 F${feed}`); // تعيين سرعة التغذية
+                        
+                        // رسم المسار
+                        for (let i = 0; i < row.length; i++) {
+                            let p = row[i];
+                            lines.push(`G1 X${p.x.toFixed(2)} Y${p.y.toFixed(2)} Z${p.z.toFixed(3)}`);
+                            
+                            // حساب الطول الإجمالي
+                            if (i > 0) {
+                                totalLen += Math.hypot(p.x - row[i - 1].x, p.y - row[i - 1].y);
+                            }
+                        }
+                        
+                        // العودة لارتفاع الأمان
+                        lines.push(`G0 Z${safeZ}`);
+                    }
+                }
+            }
+            
+            // نهاية البرنامج
+            lines.push('M5');  // إيقاف المغزل/الليزر
+            lines.push('M30'); // نهاية البرنامج
+            
+            // حساب الوقت التقريبي
+            let timeMin = (totalLen / feed);
+            document.getElementById('estTime').textContent = "تقدير الوقت: " + timeMin.toFixed(1) + " دقيقة";
+            
+            return lines.join('\n');
+        }
+
+        // ========== إدارة الأحداث ==========
+        
+        document.getElementById('btnGen').addEventListener('click', () => {
+            let gcode = generateRasterGcode(false);
+            document.getElementById('gcodeOut').value = gcode;
+            showToast("تم توليد G-code");
+        });
+        
+        document.getElementById('btnQuick').addEventListener('click', () => {
+            let gcode = generateRasterGcode(true);
+            document.getElementById('gcodeOut').value = gcode;
+            showToast("توليد سريع");
+        });
+        
+        document.getElementById('btnDownload').addEventListener('click', () => {
+            const text = document.getElementById('gcodeOut').value;
+            if (!text) {
+                showToast("لا يوجد G-code لتحميله");
+                return;
+            }
+            
+            const blob = new Blob([text], { type: "text/plain" });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "cnc_output.gcode";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showToast("تم تحميل الملف");
+        });
+
+        // ========== المعاينة ثلاثية الأبعاد ==========
+        
+        /**
+         * عرض معاينة ثلاثية الأبعاد للصورة
+         */
+        function show3D() {
+            const cont = document.getElementById('threeContainer');
+            cont.innerHTML = "";
+            
+            // إنشاء المشهد
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(45, cont.clientWidth / cont.clientHeight, 0.1, 5000);
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(cont.clientWidth, cont.clientHeight);
+            cont.appendChild(renderer.domElement);
+
+            // إنشاء سطح ثلاثي الأبعاد من الصورة الرمادية
+            const geom = new THREE.PlaneGeometry(grayMat.cols, grayMat.rows, grayMat.cols - 1, grayMat.rows - 1);
+            
+            for (let y = 0; y < grayMat.rows; y++) {
+                for (let x = 0; x < grayMat.cols; x++) {
+                    let v = grayMat.ucharPtr(y, x)[0];
+                    let z = (v / 255.0) * 10;
+                    let idx = y * grayMat.cols + x;
+                    
+                    geom.attributes.position.setZ(idx, z);
+                }
+            }
+            
+            geom.attributes.position.needsUpdate = true;
+            geom.computeVertexNormals();
+            geom.rotateX(-Math.PI / 2); // تدوير السطح ليكون أفقي
+
+            // إنشاء الشبكة وإضافتها للمشهد
+            const mesh = new THREE.Mesh(
+                geom,
+                new THREE.MeshStandardMaterial({
+                    color: 0xcccccc,
+                    side: THREE.DoubleSide,
+                    flatShading: true
+                })
+            );
+            
+            scene.add(mesh);
+            
+            // الإضاءة
+            const light = new THREE.DirectionalLight(0xffffff, 1);
+            light.position.set(50, 100, 150);
+            scene.add(light);
+            scene.add(new THREE.AmbientLight(0x404040));
+
+            // وضع الكاميرا
+            camera.position.set(0, -grayMat.rows, grayMat.rows * 1.2);
+            
+            // التحكم بالكاميرا
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            
+            // التصيير المستمر
+            function animate() {
+                requestAnimationFrame(animate);
+                controls.update();
+                renderer.render(scene, camera);
+            }
+            
+            animate();
+        }
+    </script>
+</body>
+</html>
