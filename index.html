@@ -510,6 +510,7 @@
     function detectContours() {
       if (isProcessing) return;
       isProcessing = true;
+      updateProgress(30);
       
       try {
         let src = cv.imread(previewCanvas);
@@ -619,6 +620,7 @@
         }
         
         showToast("تم الكشف عن الحواف");
+        updateProgress(100);
         
         // تنظيف الذاكرة المؤقتة
         src.delete();
@@ -626,13 +628,14 @@
         hier.delete();
         contours.delete();
         gray.delete();
+        k.delete();
         
       } catch (error) {
         console.error("خطأ في كشف الكفاف:", error);
         showToast("حدث خطأ في معالجة الصورة");
       } finally {
         isProcessing = false;
-        updateProgress(0);
+        setTimeout(() => updateProgress(0), 1000);
       }
     }
 
@@ -705,7 +708,9 @@
                   updateProgress(progress);
                   
                   // إعطاء فرصة للمتصفح للتنفس
-                  await new Promise(resolve => setTimeout(resolve, 0));
+                  if (pointCount % 1000 === 0) {
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                  }
                 }
               }
             }
@@ -739,7 +744,6 @@
         document.getElementById('estTime').textContent = "تقدير الوقت: " + timeMin.toFixed(1) + " دقيقة";
         
         updateProgress(100);
-        setTimeout(() => updateProgress(0), 1000);
         
         return lines.join('\n');
         
@@ -749,6 +753,7 @@
         return "";
       } finally {
         isProcessing = false;
+        setTimeout(() => updateProgress(0), 1000);
       }
     }
 
@@ -775,30 +780,41 @@
 
     // ========== معالجة الأزرار ==========
     
-    document.getElementById('btnGen').addEventListener('click', async () => {
+    document.getElementById('btnGen').addEventListener('click', () => {
       const btn = document.getElementById('btnGen');
+      const originalText = btn.textContent;
       btn.disabled = true;
       btn.textContent = 'جاري التوليد...';
       
-      let gcode = await generateRasterGcode(false);
-      document.getElementById('gcodeOut').value = gcode;
-      
-      btn.disabled = false;
-      btn.textContent = 'توليد G-code';
-      showToast("تم توليد G-code");
+      // استخدام setTimeout لإعطاء واجهة المستخدم فرصة للتحديث
+      setTimeout(() => {
+        let gcode = generateRasterGcode(false);
+        document.getElementById('gcodeOut').value = gcode;
+        
+        btn.disabled = false;
+        btn.textContent = originalText;
+        if (gcode) {
+          showToast("تم توليد G-code");
+        }
+      }, 100);
     });
     
-    document.getElementById('btnQuick').addEventListener('click', async () => {
+    document.getElementById('btnQuick').addEventListener('click', () => {
       const btn = document.getElementById('btnQuick');
+      const originalText = btn.textContent;
       btn.disabled = true;
       btn.textContent = 'جاري التوليد...';
       
-      let gcode = await generateRasterGcode(true);
-      document.getElementById('gcodeOut').value = gcode;
-      
-      btn.disabled = false;
-      btn.textContent = 'اختبار سريع';
-      showToast("توليد سريع");
+      setTimeout(() => {
+        let gcode = generateRasterGcode(true);
+        document.getElementById('gcodeOut').value = gcode;
+        
+        btn.disabled = false;
+        btn.textContent = originalText;
+        if (gcode) {
+          showToast("توليد سريع");
+        }
+      }, 100);
     });
     
     document.getElementById('btnDownload').addEventListener('click', () => {
@@ -827,12 +843,10 @@
       
       // تنظيف المشهد السابق إذا كان موجوداً
       if (scene3D) {
+        if (renderer3D) {
+          renderer3D.dispose();
+        }
         container.innerHTML = '';
-        scene3D = null;
-        camera3D = null;
-        renderer3D = null;
-        controls3D = null;
-        mesh3D = null;
       }
       
       // إنشاء المشهد
@@ -851,6 +865,9 @@
       // إنشاء الشبكة ثلاثية الأبعاد من الصورة
       if (grayMat) {
         create3DMesh();
+      } else {
+        container.innerHTML = '<div class="loading">لا توجد بيانات للعرض</div>';
+        return;
       }
       
       // إضافة الإضاءة
@@ -885,9 +902,29 @@
       controls3D.update();
       
       // معالجة تغيير حجم النافذة
+      function onWindowResize() {
+        if (camera3D && renderer3D) {
+          camera3D.aspect = container.clientWidth / container.clientHeight;
+          camera3D.updateProjectionMatrix();
+          renderer3D.setSize(container.clientWidth, container.clientHeight);
+        }
+      }
+      
       window.addEventListener('resize', onWindowResize);
       
       // بدء التقديم المتحرك
+      function animate3D() {
+        requestAnimationFrame(animate3D);
+        
+        if (controls3D) {
+          controls3D.update();
+        }
+        
+        if (renderer3D && scene3D && camera3D) {
+          renderer3D.render(scene3D, camera3D);
+        }
+      }
+      
       animate3D();
     }
     
@@ -934,28 +971,6 @@
       
       mesh3D = new THREE.Mesh(geometry, material);
       scene3D.add(mesh3D);
-    }
-    
-    function onWindowResize() {
-      const container = document.getElementById('threeContainer');
-      
-      if (camera3D && renderer3D) {
-        camera3D.aspect = container.clientWidth / container.clientHeight;
-        camera3D.updateProjectionMatrix();
-        renderer3D.setSize(container.clientWidth, container.clientHeight);
-      }
-    }
-    
-    function animate3D() {
-      requestAnimationFrame(animate3D);
-      
-      if (controls3D) {
-        controls3D.update();
-      }
-      
-      if (renderer3D && scene3D && camera3D) {
-        renderer3D.render(scene3D, camera3D);
-      }
     }
   </script>
 </body>
