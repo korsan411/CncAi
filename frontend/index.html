@@ -1,0 +1,780 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>CNC Raster 3D Engraver — Index</title>
+
+<!-- مكتبات -->
+<script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+<script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.158.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/clipper-lib@6.4.2/clipper.js"></script>
+
+<style>
+:root{--bg:#041022;--panel:#0b1320;--accent:#06b6d4;--muted:#9bb0c8}
+body{margin:0;font-family:Inter,Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#021021,#041022);color:#e6eef6}
+.app{max-width:1200px;margin:16px auto;padding:14px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+h1{margin:0;color:var(--accent)}
+.grid{display:grid;grid-template-columns:1fr 460px;gap:12px}
+.panel{background:var(--panel);padding:12px;border-radius:10px}
+.small{font-size:13px;color:var(--muted)}
+.preview-wrap{position:relative;background:#000;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.03)}
+canvas{display:block;max-width:100%}
+.controls-row{display:flex;gap:8px}
+button.primary{background:var(--accent);color:#042;border:none;cursor:pointer;font-weight:700;padding:8px 10px;border-radius:8px}
+button.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);padding:8px;border-radius:8px}
+.tabbar{display:flex;gap:8px;margin-top:8px}
+.tab{padding:6px 10px;border-radius:8px;cursor:pointer;background:rgba(255,255,255,0.02)}
+.tab.active{background:rgba(6,182,212,0.14);color:var(--accent)}
+textarea{height:220px;background:#021024;color:#cfeaf2;font-family:monospace;white-space:pre-wrap;overflow:auto;border-radius:8px;padding:8px;border:1px solid rgba(255,255,255,0.04)}
+.form-row{display:flex;gap:8px;margin-top:8px}
+.form-row> *{flex:1}
+#toast{position:fixed;left:16px;bottom:16px;background:rgba(0,0,0,0.85);color:#fff;padding:8px 10px;border-radius:8px;display:none;z-index:10000}
+.small-muted{font-size:12px;color:#9bb0c8}
+@media(max-width:980px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>CNC Raster 3D Engraver — متكامل</h1>
+      <div class="small">Raster-fill داخل الحد الخارجي + Heatmap → G-code Router 3D</div>
+    </div>
+    <div class="small" id="cvState">OpenCV: جاري التحميل...</div>
+  </header>
+
+  <div class="grid">
+    <!-- Left: preview area -->
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <input id="fileInput" type="file" accept="image/*"/>
+          <span class="small-muted" style="margin-left:8px">تحميل صورة</span>
+        </div>
+        <div class="small-muted" id="imgInfo">لا توجد صورة</div>
+      </div>
+
+      <div class="tabbar" role="tablist" style="margin-top:10px">
+        <div class="tab active" data-tab="original">الأصلية</div>
+        <div class="tab" data-tab="heatmap">Heatmap</div>
+        <div class="tab" data-tab="contour">Contour</div>
+        <div class="tab" data-tab="3d">3D Preview</div>
+      </div>
+
+      <div style="margin-top:10px">
+        <div id="view-original" class="view-panel">
+          <div class="preview-wrap">
+            <canvas id="previewCanvas" width="900" height="600"></canvas>
+          </div>
+        </div>
+
+        <div id="view-heatmap" class="view-panel" style="display:none">
+          <div class="preview-wrap">
+            <canvas id="heatmapCanvas"></canvas>
+          </div>
+        </div>
+
+        <div id="view-contour" class="view-panel" style="display:none">
+          <div class="preview-wrap">
+            <canvas id="contourCanvas"></canvas>
+          </div>
+        </div>
+
+        <div id="view-3d" class="view-panel" style="display:none">
+          <div id="threeContainer" style="height:420px;border-radius:8px;overflow:hidden"></div>
+        </div>
+      </div>
+
+      <div class="controls-row" style="margin-top:8px">
+        <button id="btnDetect" class="primary">كشف الحواف وتهيئة Heatmap</button>
+        <button id="btnQuickTest" class="secondary">اختبار سريع (low-res)</button>
+        <button id="btnHeatmap" class="secondary">عرض Heatmap</button>
+      </div>
+
+      <div style="margin-top:8px" class="small-muted">التنقل بين المشاهد: اختر التبويب (الأصلية / Heatmap / Contour / 3D)</div>
+    </div>
+
+    <!-- Right: settings & generation -->
+    <div class="panel">
+      <h3 style="margin:0 0 8px 0">إعدادات الجيل</h3>
+
+      <label>عرض العمل الحقيقي (مم) — يربط px → mm
+        <input id="realWidth" type="number" value="200" step="1"/>
+      </label>
+
+      <div class="form-row">
+        <label>Feed (مم/دقيقة)<input id="feedRate" type="number" value="800" step="1"/></label>
+        <label>Safe Z (مم)<input id="safeZ" type="number" value="5.0" step="0.1"/></label>
+      </div>
+
+      <label>Invert Z
+        <select id="invertZ"><option value="no">لا</option><option value="yes">نعم</option></select>
+      </label>
+
+      <hr style="border-color:rgba(255,255,255,0.03)">
+
+      <h4 style="margin:8px 0 4px 0">Raster Engraving (داخل الشكل)</h4>
+
+      <label>اتجاه المسارات
+        <select id="scanDir"><option value="x">أفقي (X)</option><option value="y">رأسي (Y)</option></select>
+      </label>
+
+      <div class="form-row">
+        <label>خطوة المسح (مم) — Step-over<input id="stepOver" type="number" value="1.0" step="0.1" min="0.1"/></label>
+        <label>أقصى عمق (مم)<input id="maxDepth" type="number" value="3.0" step="0.1" min="0"/></label>
+      </div>
+
+      <label>دقة Heatmap (procRes px — أكبر بُعد)
+        <input id="procRes" type="number" value="360" step="16" min="32" max="1200"/>
+      </label>
+
+      <label>حد أدنى لمساحة الشكل (نسبة مئوية من معاينة) — لإقصاء الضجيج
+        <input id="minAreaPct" type="number" value="0.5" step="0.1" min="0"/>
+      </label>
+
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button id="btnGen" class="primary">توليد G-code</button>
+        <button id="btnDownload" class="secondary">تحميل</button>
+      </div>
+
+      <label style="margin-top:8px">G-code الناتج</label>
+      <textarea id="gcodeOut" readonly placeholder="G-code سيظهر هنا..."></textarea>
+
+      <div class="form-row" style="margin-top:8px">
+        <button id="btnCopy" class="secondary">نسخ</button>
+        <button id="btnClear" class="secondary">مسح</button>
+      </div>
+
+      <div id="timeEst" class="small-muted" style="margin-top:8px">تقدير الوقت: —</div>
+      <div id="summary" class="small-muted" style="margin-top:6px">حالة: جاهز</div>
+    </div>
+  </div>
+</div>
+
+<div id="overlayBox" style="display:none"><img id="overlayImg" alt="overlay"/><button id="closeOverlay">إغلاق</button></div>
+<div id="toast"></div>
+
+<script>
+/* ================= Helpers ================= */
+const toast = document.getElementById('toast');
+function showToast(msg, ms=2600){ toast.textContent = msg; toast.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>toast.style.display='none', ms); }
+
+/* OpenCV readiness */
+let cvReady = false;
+function markCvReady(){ cvReady = true; document.getElementById('cvState').textContent='OpenCV جاهز'; showToast('OpenCV جاهز'); }
+function waitForCv(){ if(window.cv && cv.getBuildInformation) markCvReady(); else if(window.cv) cv.onRuntimeInitialized = markCvReady; else setTimeout(waitForCv,200); }
+waitForCv();
+
+/* DOM */
+const fileInput = document.getElementById('fileInput');
+const previewCanvas = document.getElementById('previewCanvas');
+const heatmapCanvas = document.getElementById('heatmapCanvas');
+const contourCanvas = document.getElementById('contourCanvas');
+const overlayImg = document.getElementById('overlayImg');
+const pctx = previewCanvas.getContext('2d');
+const hctx = heatmapCanvas.getContext ? heatmapCanvas.getContext('2d') : null;
+const cctx = contourCanvas.getContext ? contourCanvas.getContext('2d') : null;
+
+const btnDetect = document.getElementById('btnDetect');
+const btnQuickTest = document.getElementById('btnQuickTest');
+const btnHeatmap = document.getElementById('btnHeatmap');
+const btnGen = document.getElementById('btnGen');
+const btnDownload = document.getElementById('btnDownload');
+const btnCopy = document.getElementById('btnCopy');
+const btnClear = document.getElementById('btnClear');
+
+let originalImage = null;
+let procImageSize = {w:0,h:0}; // preview canvas size
+let grayMat = null;            // small gray mat used for sampling (cols x rows)
+let outerContours = [];        // array of {contour: Mat, area: number}
+let chosenContour = null;      // selected outer contour Mat (in preview pixel coords)
+
+const JET_LUT = (() => {
+  const lut = new Uint8ClampedArray(256*3);
+  for(let i=0;i<256;i++){
+    const x = i/255;
+    const r = Math.round(255 * Math.max(Math.min(1.5 - Math.abs(4*x-3), 1), 0));
+    const g = Math.round(255 * Math.max(Math.min(1.5 - Math.abs(4*x-2), 1), 0));
+    const b = Math.round(255 * Math.max(Math.min(1.5 - Math.abs(4*x-1), 1), 0));
+    lut[i*3+0]=r; lut[i*3+1]=g; lut[i*3+2]=b;
+  }
+  return lut;
+})();
+
+/* Tabs handling */
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', ()=> {
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    const tab = t.dataset.tab;
+    document.querySelectorAll('.view-panel').forEach(v => v.style.display='none');
+    document.getElementById('view-' + tab).style.display = 'block';
+    if(tab === '3d'){
+      // rebuild 3D if necessary
+      if(grayMat) build3DPreview();
+    }
+  });
+});
+
+/* ========== Load image into preview ========== */
+fileInput.addEventListener('change', e=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  const url = URL.createObjectURL(f);
+  const img = new Image();
+  img.onload = ()=>{
+    originalImage = img;
+    // scale preview
+    const maxW = 900, maxH = 600;
+    const ratio = Math.min(maxW/img.width, maxH/img.height, 1);
+    previewCanvas.width = Math.round(img.width * ratio);
+    previewCanvas.height = Math.round(img.height * ratio);
+    procImageSize.w = previewCanvas.width;
+    procImageSize.h = previewCanvas.height;
+    overlayImg.style.display='none';
+    pctx.clearRect(0,0,previewCanvas.width, previewCanvas.height);
+    pctx.drawImage(img, 0, 0, previewCanvas.width, previewCanvas.height);
+    document.getElementById('imgInfo').textContent = `معاينة: ${previewCanvas.width}×${previewCanvas.height}`;
+    document.getElementById('summary').textContent = 'صورة محمّلة — اضغط "كشف الحواف"';
+    showToast('تم تحميل الصورة');
+  };
+  img.src = url;
+});
+
+/* ================= Detect contours & prepare scaled grayMat ================ */
+btnDetect.addEventListener('click', async ()=>{
+  if(!originalImage) return showToast('حمّل صورة أولاً');
+  if(!cvReady) return showToast('OpenCV لا يزال يحمل');
+  showToast('جاري الكشف وتهيئة Heatmap — انتظر قليلاً...');
+
+  // read preview into mat
+  let src = cv.imread(previewCanvas); // RGBA with preview size
+  let gray = new cv.Mat();
+  cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+  // optional blur
+  cv.GaussianBlur(gray, gray, new cv.Size(3,3), 0, 0, cv.BORDER_DEFAULT);
+
+  // Canny edges
+  const low = 50, high = 150;
+  let edges = new cv.Mat();
+  cv.Canny(gray, edges, low, high);
+
+  // find contours (external)
+  let contours = new cv.MatVector();
+  let hierarchy = new cv.Mat();
+  cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+  // compute areas and filter by minAreaPct
+  const minAreaPct = parseFloat(document.getElementById('minAreaPct').value || 0.5)/100.0; // percent -> fraction
+  outerContours = [];
+  let totalPreviewArea = previewCanvas.width * previewCanvas.height;
+  for(let i=0;i<contours.size();i++){
+    const cnt = contours.get(i);
+    const area = Math.abs(cv.contourArea(cnt));
+    outerContours.push({contour: cnt, area});
+  }
+  // sort desc by area
+  outerContours.sort((a,b)=>b.area - a.area);
+
+  // filter small contours by area threshold
+  const filtered = [];
+  for(const c of outerContours){
+    if(c.area >= (minAreaPct * totalPreviewArea)) filtered.push(c);
+    else c.contour.delete(); // delete small contour Mat
+  }
+  outerContours = filtered;
+
+  if(outerContours.length === 0){
+    showToast('لم يتبق contour مناسب — غيّر minAreaPct أو جرّب اختبار سريع');
+    // still allow using whole rectangle as region: create a rectangle contour
+    const rectCnt = new cv.Mat();
+    // create points for rectangle around preview
+    rectCnt.create(4,1,cv.CV_32SC2);
+    rectCnt.data32S[0] = 0; rectCnt.data32S[1] = 0;
+    rectCnt.data32S[2] = previewCanvas.width; rectCnt.data32S[3] = 0;
+    rectCnt.data32S[4] = previewCanvas.width; rectCnt.data32S[5] = previewCanvas.height;
+    rectCnt.data32S[6] = 0; rectCnt.data32S[7] = previewCanvas.height;
+    outerContours.push({contour: rectCnt, area: previewCanvas.width*previewCanvas.height});
+  }
+
+  // choose the largest contour as shape
+  chosenContour = outerContours[0].contour;
+
+  // prepare scaled grayMat according to procRes
+  const procRes = clampInt(parseInt(document.getElementById('procRes').value || 360), 32, 1600);
+  const scale = Math.min(procRes / procImageSize.w, procRes / procImageSize.h, 1);
+  const gw = Math.max(16, Math.round(procImageSize.w * scale));
+  const gh = Math.max(16, Math.round(procImageSize.h * scale));
+  // draw tiny canvas and read in opencv
+  const tmp = document.createElement('canvas'); tmp.width = gw; tmp.height = gh;
+  tmp.getContext('2d').drawImage(previewCanvas, 0, 0, gw, gh);
+  if(grayMat){ try{ grayMat.delete(); } catch(e){} grayMat = null; }
+  let rgbaSmall = cv.imread(tmp);
+  let graySmall = new cv.Mat();
+  cv.cvtColor(rgbaSmall, graySmall, cv.COLOR_RGBA2GRAY);
+  cv.GaussianBlur(graySmall, graySmall, new cv.Size(3,3), 0,0,cv.BORDER_DEFAULT);
+  rgbaSmall.delete();
+  grayMat = graySmall;
+
+  // render heatmap preview
+  renderHeatmapPreview();
+
+  // render contour overlay
+  renderContourPreview();
+
+  // cleanup local mats
+  try{ src.delete(); gray.delete(); edges.delete(); contours.delete(); hierarchy.delete(); } catch(e){ console.warn('cleanup error', e); }
+
+  document.getElementById('summary').textContent = `Heatmap: ${grayMat.cols}×${grayMat.rows} — contours: ${outerContours.length}`;
+  showToast('اكتملت المعالجة — يمكنك معاينة النتائج');
+  // build 3D preview
+  setTimeout(()=> build3DPreview(), 60);
+});
+
+/* helper */
+function clampInt(v, a, b){ v = parseInt(v||0); if(isNaN(v)) v=a; return Math.max(a, Math.min(b, v)); }
+
+/* =================== render previews =================== */
+function renderHeatmapPreview(){
+  if(!grayMat) return;
+  heatmapCanvas.width = procImageSize.w;
+  heatmapCanvas.height = procImageSize.h;
+  const gw = grayMat.cols, gh = grayMat.rows;
+  const id = new ImageData(gw, gh);
+  for(let i=0;i<gw*gh;i++){
+    const v = grayMat.data[i];
+    const idx = 255 - v;
+    id.data[i*4+0] = JET_LUT[idx*3+0];
+    id.data[i*4+1] = JET_LUT[idx*3+1];
+    id.data[i*4+2] = JET_LUT[idx*3+2];
+    id.data[i*4+3] = 220;
+  }
+  const tmp = document.createElement('canvas'); tmp.width = gw; tmp.height = gh;
+  tmp.getContext('2d').putImageData(id, 0, 0);
+  hctx.clearRect(0,0,heatmapCanvas.width, heatmapCanvas.height);
+  hctx.drawImage(tmp, 0, 0, heatmapCanvas.width, heatmapCanvas.height);
+}
+
+function renderContourPreview(){
+  if(!chosenContour) return;
+  contourCanvas.width = procImageSize.w;
+  contourCanvas.height = procImageSize.h;
+  cctx.clearRect(0,0,contourCanvas.width, contourCanvas.height);
+  // draw original image faint
+  cctx.globalAlpha = 0.6;
+  cctx.drawImage(previewCanvas, 0, 0);
+  cctx.globalAlpha = 1.0;
+  // draw chosen contour
+  cctx.strokeStyle = '#ffdd66';
+  cctx.lineWidth = 2;
+  cctx.beginPath();
+  const pts = chosenContour.data32S;
+  if(pts && pts.length >= 6){
+    for(let k=0;k<pts.length;k+=2){
+      const x = pts[k], y = pts[k+1];
+      if(k===0) cctx.moveTo(x,y); else cctx.lineTo(x,y);
+    }
+    cctx.closePath();
+    cctx.stroke();
+  }
+}
+
+/* =================== Quick Test (low-res) =================== */
+btnQuickTest.addEventListener('click', ()=>{
+  if(!originalImage) return showToast('حمّل صورة أولاً');
+  if(!cvReady) return showToast('OpenCV لا يزال يحمل');
+  // temporarily set procRes small and run detection
+  const prev = document.getElementById('procRes').value;
+  document.getElementById('procRes').value = 160;
+  btnDetect.click();
+  setTimeout(()=>{ document.getElementById('procRes').value = prev; showToast('اختبار سريع انتهى'); }, 800);
+});
+
+/* =================== core: generate raster lines and clip with Clipper =================== */
+function pxContourToClipperPath(contourMat, scale){
+  // contourMat is Mat of shape N x 1, CV_32SC2 with data32S array [x1,y1,x2,y2,...]
+  const pts = contourMat.data32S;
+  const path = [];
+  for(let i=0;i<pts.length;i+=2){
+    const x = Math.round(pts[i] * scale);
+    const y = Math.round(pts[i+1] * scale);
+    path.push({X:x, Y:y});
+  }
+  return path;
+}
+
+function makeRasterLinesAsPaths(scanDir, pxStep){
+  // returns array of paths where each path is [{X,Y},... ] in preview px coordinates (no scaling)
+  const paths = [];
+  if(scanDir === 'x'){
+    // horizontal lines: y varies
+    for(let py = 0; py < procImageSize.h; py += pxStep){
+      // create a straight line from x=0 to x=width-1 at y=py
+      const path = [];
+      path.push({X: 0, Y: py});
+      path.push({X: procImageSize.w - 1, Y: py});
+      paths.push(path);
+    }
+  } else {
+    // vertical lines: x varies
+    for(let px = 0; px < procImageSize.w; px += pxStep){
+      const path = [];
+      path.push({X: px, Y: 0});
+      path.push({X: px, Y: procImageSize.h - 1});
+      paths.push(path);
+    }
+  }
+  return paths;
+}
+
+/* helper to compute euclidean length of a polyline */
+function polyLengthMm(polyPoints){
+  let L = 0;
+  for(let i=1;i<polyPoints.length;i++){
+    const dx = polyPoints[i].x - polyPoints[i-1].x;
+    const dy = polyPoints[i].y - polyPoints[i-1].y;
+    L += Math.hypot(dx, dy);
+  }
+  return L;
+}
+
+/* main generator */
+function generateRasterGcodeInsideShape(){
+  if(!grayMat || !chosenContour) { showToast('الرجاء تنفيذ كشف الحواف أولاً'); return ''; }
+
+  const scanDir = document.getElementById('scanDir').value;
+  const stepOverMm = parseFloat(document.getElementById('stepOver').value || 1.0);
+  const maxDepth = parseFloat(document.getElementById('maxDepth').value || 3.0);
+  const feed = parseFloat(document.getElementById('feedRate').value || 800);
+  const safeZ = parseFloat(document.getElementById('safeZ').value || 5.0);
+  const invertZ = document.getElementById('invertZ').value === 'yes';
+  const realW = parseFloat(document.getElementById('realWidth').value || 200);
+  const realH = realW * (procImageSize.h / procImageSize.w);
+
+  // pixel per mm scale
+  const pxPerMmX = procImageSize.w / realW;
+  const pxPerMmY = procImageSize.h / realH;
+
+  // compute pxStep from stepOverMm
+  const pxStep = Math.max(1, Math.round((scanDir==='x' ? (stepOverMm * pxPerMmY) : (stepOverMm * pxPerMmX))));
+
+  // build raster lines in preview px coords
+  const rasterLines = makeRasterLinesAsPaths(scanDir, pxStep); // each path is 2pt segment lines
+
+  // convert chosenContour to clipper path (scaled integer space)
+  const SCALE = 100; // clipper scaling
+  const clipperPoly = pxContourToClipperPath(chosenContour, SCALE);
+
+  // we'll use Clipper to intersect each raster line with the polygon
+  const cpr = new ClipperLib.Clipper();
+  const resultSegments = []; // each segment: array of points in preview px coords
+
+  // For better performance add clip polygon once
+  const subjType = ClipperLib.PolyType.ptClip;
+  const clipType = ClipperLib.ClipType.ctIntersection;
+
+  // We'll iterate raster lines and clip each as subject with the clip polygon
+  for(const rl of rasterLines){
+    // scale line path to Clipper coords
+    const subj = [ rl.map(p => ({ X: Math.round(p.X * SCALE), Y: Math.round(p.Y * SCALE) })) ];
+    const clip = [ clipperPoly ];
+    const clipper = new ClipperLib.Clipper();
+    try{
+      clipper.AddPaths(subj, ClipperLib.PolyType.ptSubject, false); // false => open path
+      clipper.AddPaths(clip, ClipperLib.PolyType.ptClip, true);     // true => closed polygon
+      const sol = new ClipperLib.Paths();
+      clipper.Execute(ClipperLib.ClipType.ctIntersection, sol, ClipperLib.PolyFillType.pftNonZero, ClipperLib.PolyFillType.pftNonZero);
+      // sol may contain one or more paths (polylines)
+      for(const sp of sol){
+        if(sp.length < 2) continue;
+        // convert back to preview px
+        const seg = sp.map(pt => ({ x: pt.X / SCALE, y: pt.Y / SCALE }));
+        // simplify tiny segments
+        if(seg.length >= 2){
+          resultSegments.push(seg);
+        }
+      }
+    } catch(e){
+      console.warn('Clipper error', e);
+    }
+  }
+
+  if(resultSegments.length === 0) { showToast('لم يتم توليد أي مسارات داخل الشكل — تفقد الإعدادات'); return ''; }
+
+  // Now for each segment we will sample points along it at pixel resolution and map to Z from grayMat.
+  // We'll also compute time estimate.
+  let totalCutLengthMm = 0;
+  let totalRapidLengthMm = 0;
+  const cutSegmentsG = []; // arrays of mm points {x,y,z}
+
+  // sampleStepPx: 1 px (highest resolution) — can be coarsened for speed
+  const sampleStepPx = 1;
+
+  for(let si=0; si<resultSegments.length; si++){
+    const seg = resultSegments[si];
+    // each seg is a polyline in preview px coords; we'll walk along it by interpolating between vertices
+    // produce dense sample points
+    const ptsPx = [];
+    for(let k=0;k<seg.length-1;k++){
+      const a = seg[k], b = seg[k+1];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const distPx = Math.hypot(dx, dy);
+      const steps = Math.max(1, Math.round(distPx / sampleStepPx));
+      for(let s=0;s<=steps;s++){
+        const t = s/steps;
+        const x = a.x + dx*t;
+        const y = a.y + dy*t;
+        // push, but avoid duplicates
+        const last = ptsPx[ptsPx.length - 1];
+        if(!last || Math.hypot(x-last.x, y-last.y) >= 0.4) ptsPx.push({x,y});
+      }
+    }
+    if(ptsPx.length < 2) continue;
+
+    // convert to mm and determine Z from grayMat
+    const ptsMm = ptsPx.map(p => {
+      const px = Math.round(p.x), py = Math.round(p.y);
+      const gv = sampleGrayAtPreviewXY(px, py); // 0..255
+      let z = - ((255 - gv) / 255.0) * maxDepth; // negative depth
+      if(invertZ) z = -z;
+      return { x: pxToMmX(px), y: pxToMmY(py), z };
+    });
+    // compute cut length (sum distances in XY)
+    let segCutLen = 0;
+    for(let i=1;i<ptsMm.length;i++) segCutLen += Math.hypot(ptsMm[i].x - ptsMm[i-1].x, ptsMm[i].y - ptsMm[i-1].y);
+    totalCutLengthMm += segCutLen;
+    cutSegmentsG.push(ptsMm);
+  }
+
+  // estimate quick travel (approx): assume rapid travel equals sum of gaps between segments' starts/ends in XY
+  for(let i=0;i<cutSegmentsG.length;i++){
+    const seg = cutSegmentsG[i];
+    const start = seg[0], end = seg[seg.length-1];
+    if(i===0){
+      totalRapidLengthMm += Math.hypot(start.x - 0, start.y - 0); // from origin (approx)
+    } else {
+      const prevEnd = cutSegmentsG[i-1][cutSegmentsG[i-1].length-1];
+      totalRapidLengthMm += Math.hypot(start.x - prevEnd.x, start.y - prevEnd.y);
+    }
+    // include return home approx
+    if(i === cutSegmentsG.length - 1){
+      totalRapidLengthMm += Math.hypot(end.x - 0, end.y - 0);
+    }
+  }
+
+  // time estimates
+  const cutTimeMin = totalCutLengthMm / feed; // minutes
+  const rapidFeed = feed * 3; // assume rapids 3x feed
+  const rapidTimeMin = totalRapidLengthMm / rapidFeed;
+  const totalTimeMin = cutTimeMin + rapidTimeMin;
+  document.getElementById('timeEst').textContent = `تقدير الوقت (دقائق): قطع ≈ ${cutTimeMin.toFixed(2)}, تنقّل ≈ ${rapidTimeMin.toFixed(2)}, إجمالي ≈ ${totalTimeMin.toFixed(2)}`;
+
+  // Build G-code:
+  const lines = [];
+  lines.push('; --- Raster Engraving inside contour (Generated) ---');
+  lines.push(`; Date: ${new Date().toLocaleString()}`);
+  lines.push('; Units: mm, Absolute positioning');
+  lines.push('G21');
+  lines.push('G90');
+  lines.push('G17');
+  lines.push(`G0 Z${safeZ.toFixed(3)} ; safe height`);
+  lines.push('; M3 S<rpm> ; start spindle (uncomment and set RPM)');
+
+  // Emit segments in an order (we already have order, but we can do zigzag across rows)
+  for(let si=0; si<cutSegmentsG.length; si++){
+    const seg = cutSegmentsG[si];
+    if(seg.length === 0) continue;
+    // rapid to start
+    const p0 = seg[0];
+    lines.push(`; segment ${si+1} start`);
+    lines.push(`G0 X${p0.x.toFixed(3)} Y${p0.y.toFixed(3)} Z${safeZ.toFixed(3)}`);
+    // plunge to first Z
+    lines.push(`G1 Z${seg[0].z.toFixed(3)} F${feed}`);
+    // cut
+    for(let k=0;k<seg.length;k++){
+      const p = seg[k];
+      lines.push(`G1 X${p.x.toFixed(3)} Y${p.y.toFixed(3)} Z${p.z.toFixed(3)} F${feed}`);
+    }
+    // retract
+    lines.push(`G0 Z${safeZ.toFixed(3)}`);
+  }
+
+  lines.push('');
+  lines.push('M5 ; tool off');
+  lines.push('G0 X0 Y0 ; return home');
+  lines.push('M30 ; end');
+
+  // store for 3D preview overlay: convert cutSegmentsG to a global variable for visualization
+  window._lastCutSegments = cutSegmentsG;
+
+  return lines.join('\n');
+}
+
+/* sample gray from grayMat (which is scaled to gw x gh) using preview px coordinates */
+function sampleGrayAtPreviewXY(px, py){
+  if(!grayMat) return 128;
+  const gw = grayMat.cols, gh = grayMat.rows;
+  const gx = clampInt(Math.round((px / procImageSize.w) * (gw - 1)), 0, gw - 1);
+  const gy = clampInt(Math.round((py / procImageSize.h) * (gh - 1)), 0, gh - 1);
+  return grayMat.data[gy * gw + gx];
+}
+
+/* convert preview px to mm coordinates */
+function pxToMmX(px){ const realW = parseFloat(document.getElementById('realWidth').value || 200); return (px / procImageSize.w) * realW; }
+function pxToMmY(py){ const realW = parseFloat(document.getElementById('realWidth').value || 200); const realH = realW * (procImageSize.h / procImageSize.w); return (py / procImageSize.h) * realH; }
+
+/* ==================== Buttons: generate / download / copy / clear ==================== */
+btnGen.addEventListener('click', ()=>{
+  const g = generateRasterGcodeInsideShape();
+  if(!g) return;
+  document.getElementById('gcodeOut').value = g;
+  document.getElementById('summary').textContent = `G-code مولّد — ${new Date().toLocaleString()}`;
+  showToast('تم توليد G-code');
+  // switch to 3D view to inspect
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelector('.tab[data-tab="3d"]').classList.add('active');
+  document.querySelectorAll('.view-panel').forEach(v=>v.style.display='none');
+  document.getElementById('view-3d').style.display='block';
+  setTimeout(()=> build3DPreview(true), 80);
+});
+
+btnDownload.addEventListener('click', ()=>{
+  const txt = document.getElementById('gcodeOut').value;
+  if(!txt) return showToast('لا يوجد G-code للتحميل');
+  const blob = new Blob([txt], {type:'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'raster_inside_shape.ngc'; a.click(); URL.revokeObjectURL(url);
+  showToast('تم تحميل ملف G-code');
+});
+
+btnCopy.addEventListener('click', async ()=>{
+  const txt = document.getElementById('gcodeOut').value;
+  if(!txt) return showToast('لا يوجد ما يُنسخ');
+  try{ await navigator.clipboard.writeText(txt); showToast('تم النسخ'); } catch(e){ showToast('فشل النسخ'); }
+});
+
+btnClear.addEventListener('click', ()=> { document.getElementById('gcodeOut').value=''; showToast('تم المسح'); });
+
+/* ==================== 3D preview: mesh + overlay segments ==================== */
+let threeRenderer, threeScene, threeCamera, threeControls, heightMesh, segmentsGroup;
+function initThree(container){
+  while(container.firstChild) container.removeChild(container.firstChild);
+  threeRenderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+  threeRenderer.setPixelRatio(window.devicePixelRatio);
+  threeRenderer.setSize(container.clientWidth, container.clientHeight);
+  container.appendChild(threeRenderer.domElement);
+  threeScene = new THREE.Scene();
+  threeCamera = new THREE.PerspectiveCamera(45, container.clientWidth/container.clientHeight, 0.1, 2000);
+  threeCamera.position.set(0, -300, 300);
+  threeControls = new THREE.OrbitControls(threeCamera, threeRenderer.domElement);
+  threeScene.add(new THREE.AmbientLight(0x666666));
+  const dl = new THREE.DirectionalLight(0xffffff, 0.95); dl.position.set(1,1,1); threeScene.add(dl);
+  (function animate(){ if(threeRenderer) threeRenderer.render(threeScene, threeCamera); requestAnimationFrame(animate); })();
+}
+
+function build3DPreview(showSegmentsFull=false){
+  if(!grayMat) return;
+  const container = document.getElementById('threeContainer');
+  initThree(container);
+
+  // cleanup
+  if(heightMesh){ try{ threeScene.remove(heightMesh); heightMesh.geometry.dispose(); heightMesh.material.dispose(); } catch(e){} heightMesh=null; }
+  if(segmentsGroup){ try{ threeScene.remove(segmentsGroup); } catch(e){} segmentsGroup=null; }
+
+  const gw = grayMat.cols, gh = grayMat.rows;
+  const realW = parseFloat(document.getElementById('realWidth').value || 200);
+  const realH = realW * (procImageSize.h / procImageSize.w);
+  const maxDepth = parseFloat(document.getElementById('maxDepth').value || 3);
+
+  // reduce geometry if too large
+  const segX = Math.min(160, Math.max(8, gw - 1));
+  const segY = Math.min(160, Math.max(8, gh - 1));
+  const geometry = new THREE.PlaneGeometry(realW, realH, segX, segY);
+  const pos = geometry.attributes.position;
+
+  for(let j=0;j<=segY;j++){
+    for(let i=0;i<=segX;i++){
+      const idx = j*(segX+1) + i;
+      const gx = Math.round((i / segX) * (gw - 1));
+      const gy = Math.round((j / segY) * (gh - 1));
+      const pv = grayMat.data[gy * gw + gx];
+      const meshZ = ((255 - pv) / 255.0) * maxDepth;
+      pos.setZ(idx, meshZ);
+    }
+  }
+  pos.needsUpdate = true; geometry.computeVertexNormals();
+
+  const mat = new THREE.MeshStandardMaterial({color:0xddeeff, metalness:0.05, roughness:0.8, side:THREE.DoubleSide});
+  heightMesh = new THREE.Mesh(geometry, mat);
+  heightMesh.rotateX(-Math.PI/2);
+  threeScene.add(heightMesh);
+
+  // draw outer contour
+  if(chosenContour){
+    const pts = chosenContour.data32S;
+    const verts = [];
+    for(let k=0;k<pts.length;k+=2){
+      const px = pts[k], py = pts[k+1];
+      const wx = pxToMmX(px) - realW/2;
+      const wy = pxToMmY(py) - realH/2;
+      verts.push(new THREE.Vector3(wx, 0.5, wy));
+    }
+    if(verts.length>1){
+      const g = new THREE.BufferGeometry().setFromPoints(verts);
+      const line = new THREE.Line(g, new THREE.LineBasicMaterial({color:0xffaa00}));
+      threeScene.add(line);
+    }
+  }
+
+  // draw cut segments if present
+  const segs = window._lastCutSegments || [];
+  segmentsGroup = new THREE.Group();
+  const cutMat = new THREE.LineBasicMaterial({color:0xff4444, linewidth:2});
+  const rapidMat = new THREE.LineBasicMaterial({color:0x999999, linewidth:1});
+  // show either full or sample
+  const showAll = showSegmentsFull;
+  const maxToShow = showAll ? segs.length : Math.min(80, segs.length);
+  for(let i=0;i<maxToShow;i++){
+    const s = segs[i];
+    const pts = [];
+    for(const p of s){
+      const wx = p.x - realW/2; // center
+      const wy = p.y - realH/2;
+      const wz = Math.abs(p.z) + 0.5; // slightly above
+      pts.push(new THREE.Vector3(wx, wz, wy));
+    }
+    if(pts.length>1){
+      const g = new THREE.BufferGeometry().setFromPoints(pts);
+      const line = new THREE.Line(g, cutMat);
+      segmentsGroup.add(line);
+    }
+  }
+  threeScene.add(segmentsGroup);
+
+  // camera centering
+  const box = new THREE.Box3().setFromObject(heightMesh);
+  if(segmentsGroup) box.union(new THREE.Box3().setFromObject(segmentsGroup));
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  threeControls.target.copy(center);
+  const diag = Math.max(size.x, size.y, size.z);
+  const dist = diag * 1.8 + 80;
+  threeCamera.position.set(center.x, center.y + dist, center.z + dist/4);
+  threeCamera.lookAt(center);
+  threeControls.update();
+}
+
+/* ================= cleanup on unload ================= */
+window.addEventListener('beforeunload', ()=>{
+  if(grayMat){ try{ grayMat.delete(); } catch(e){} grayMat = null; }
+  if(chosenContour){ try{ chosenContour.delete(); } catch(e){} chosenContour = null; }
+  if(outerContours){ for(const c of outerContours) try{ c.contour.delete(); } catch(e){} outerContours = []; }
+});
+
+</script>
+</body>
+</html>
