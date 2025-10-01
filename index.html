@@ -26,7 +26,7 @@
         
         /* التخطيط الرئيسي */
         .app {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 16px auto;
             padding: 14px;
         }
@@ -42,11 +42,11 @@
         
         .grid {
             display: grid;
-            grid-template-columns: 1fr 420px;
+            grid-template-columns: 1fr 480px;
             gap: 16px;
         }
         
-        @media (max-width: 900px) {
+        @media (max-width: 1000px) {
             .grid {
                 grid-template-columns: 1fr;
             }
@@ -58,6 +58,17 @@
             padding: 16px;
             border-radius: 10px;
             border: 1px solid #1e293b;
+        }
+        
+        .panel-section {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #1e293b;
+        }
+        
+        .panel-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
         }
         
         /* التبويبات */
@@ -76,6 +87,7 @@
             background: transparent;
             color: #9bb0c8;
             transition: all 0.2s;
+            font-size: 0.9rem;
         }
         
         .tabs button:hover {
@@ -131,6 +143,13 @@
             margin-top: 12px;
             color: #cfeaf2;
             font-weight: bold;
+            font-size: 0.9rem;
+        }
+        
+        .input-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
         }
         
         input, select {
@@ -141,6 +160,7 @@
             background: #0f172a;
             color: #e6eef6;
             margin-top: 6px;
+            font-size: 0.9rem;
         }
         
         input:focus, select:focus {
@@ -209,9 +229,15 @@
         h3 {
             margin-top: 0;
             color: #9bb0c8;
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             padding-bottom: 8px;
             border-bottom: 1px solid #1e293b;
+        }
+        
+        h4 {
+            margin: 0 0 10px 0;
+            color: #cfeaf2;
+            font-size: 1rem;
         }
         
         #cvState {
@@ -262,12 +288,62 @@
         .file-input-label:hover {
             background: #334155;
         }
+        
+        .info-text {
+            font-size: 0.8rem;
+            color: #9bb0c8;
+            margin-top: 4px;
+        }
+        
+        .settings-row {
+            display: flex;
+            gap: 10px;
+            align-items: end;
+        }
+        
+        .settings-row .input-group {
+            flex: 1;
+        }
+        
+        .material-preset {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 8px;
+            margin-top: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .material-preset:hover {
+            background: #334155;
+        }
+        
+        .material-preset.active {
+            background: #06b6d4;
+            color: #021;
+            border-color: #06b6d4;
+        }
+        
+        .material-name {
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+        
+        .material-details {
+            font-size: 0.8rem;
+            color: #9bb0c8;
+        }
+        
+        .active-material .material-details {
+            color: #021;
+        }
     </style>
 </head>
 <body>
     <div class="app">
         <header>
-            <h1>CNC AI — Multi Machine Raster</h1>
+            <h1>CNC AI — Multi Machine Raster Engraving</h1>
             <div id="cvState">انتظر OpenCV</div>
         </header>
 
@@ -305,53 +381,136 @@
 
             <!-- لوحة التحكم والإعدادات -->
             <div class="panel">
-                <h3>إعدادات التشغيل</h3>
+                <!-- إعدادات الماكينة -->
+                <div class="panel-section">
+                    <h3>إعدادات الماكينة</h3>
+                    
+                    <label for="machineType">
+                        نوع الماكينة
+                    </label>
+                    <select id="machineType">
+                        <option value="router">Router CNC</option>
+                        <option value="laser">Laser Engraver</option>
+                        <option value="plasma">Plasma Cutter</option>
+                        <option value="3dprinter">3D Printer</option>
+                    </select>
+                    
+                    <div class="info-text" id="machineDescription">
+                        Router CNC - مناسبة للنحت على الخشب والأكريليك
+                    </div>
+                </div>
+                
+                <!-- إعدادات حجم العمل -->
+                <div class="panel-section">
+                    <h3>إعدادات حجم العمل</h3>
+                    
+                    <div class="input-group">
+                        <div>
+                            <label for="workWidth">
+                                عرض العمل (سم)
+                            </label>
+                            <input id="workWidth" type="number" value="30" step="0.1" min="1" max="100"/>
+                        </div>
+                        
+                        <div>
+                            <label for="workHeight">
+                                ارتفاع العمل (سم)
+                            </label>
+                            <input id="workHeight" type="number" value="20" step="0.1" min="1" max="100"/>
+                        </div>
+                    </div>
+                    
+                    <label for="workDepth">
+                        عمق العمل (مم)
+                    </label>
+                    <input id="workDepth" type="number" value="3.0" step="0.1" min="0.1" max="20"/>
+                    
+                    <div class="settings-row">
+                        <div class="input-group">
+                            <div>
+                                <label for="originX">
+                                    نقطة الأصل X (سم)
+                                </label>
+                                <input id="originX" type="number" value="0" step="0.1"/>
+                            </div>
+                            
+                            <div>
+                                <label for="originY">
+                                    نقطة الأصل Y (سم)
+                                </label>
+                                <input id="originY" type="number" value="0" step="0.1"/>
+                            </div>
+                        </div>
+                        
+                        <button id="btnCenterOrigin" class="secondary" style="height: fit-content;">توسيط نقطة الأصل</button>
+                    </div>
+                </div>
+                
+                <!-- إعدادات الخامة -->
+                <div class="panel-section">
+                    <h3>إعدادات الخامة</h3>
+                    
+                    <label for="materialType">
+                        نوع الخامة
+                    </label>
+                    <select id="materialType">
+                        <option value="wood">خشب</option>
+                        <option value="acrylic">أكريليك</option>
+                        <option value="aluminum">ألومنيوم</option>
+                        <option value="steel">صلب</option>
+                        <option value="brass">نحاس</option>
+                        <option value="plastic">بلاستيك</option>
+                        <option value="foam">رغوة</option>
+                        <option value="custom">مخصص</option>
+                    </select>
+                    
+                    <div id="materialPresets">
+                        <!-- سيتم تعبئتها بالجافاسكريبت -->
+                    </div>
+                </div>
+                
+                <!-- إعدادات التشغيل -->
+                <div class="panel-section">
+                    <h3>إعدادات التشغيل</h3>
+                    
+                    <label for="feedRate">
+                        سرعة التغذية (مم/دقيقة)
+                    </label>
+                    <input id="feedRate" type="number" value="800"/>
+                    
+                    <label for="safeZ">
+                        ارتفاع الأمان (مم)
+                    </label>
+                    <input id="safeZ" type="number" value="5"/>
+                    
+                    <label for="invertZ">
+                        عكس المحور Z
+                    </label>
+                    <select id="invertZ">
+                        <option value="no">لا</option>
+                        <option value="yes">نعم</option>
+                    </select>
+                    
+                    <label for="scanDir">
+                        اتجاه المسارات
+                    </label>
+                    <select id="scanDir">
+                        <option value="x">أفقي (X)</option>
+                        <option value="y">رأسي (Y)</option>
+                    </select>
+                    
+                    <label for="stepOver">
+                        خطوة المسح (مم)
+                    </label>
+                    <input id="stepOver" type="number" value="5" step="0.5"/>
+                    
+                    <label for="maxDepth">
+                        أقصى عمق (مم)
+                    </label>
+                    <input id="maxDepth" type="number" value="3.0" step="0.1"/>
+                </div>
 
-                <label for="machineType">
-                    نوع الماكينة
-                </label>
-                <select id="machineType">
-                    <option value="router">Router</option>
-                    <option value="laser">Laser</option>
-                    <option value="plasma">Plasma</option>
-                </select>
-
-                <label for="feedRate">
-                    سرعة التغذية (مم/دقيقة)
-                </label>
-                <input id="feedRate" type="number" value="800"/>
-                
-                <label for="safeZ">
-                    ارتفاع الأمان (مم)
-                </label>
-                <input id="safeZ" type="number" value="5"/>
-                
-                <label for="invertZ">
-                    عكس المحور Z
-                </label>
-                <select id="invertZ">
-                    <option value="no">لا</option>
-                    <option value="yes">نعم</option>
-                </select>
-                
-                <label for="scanDir">
-                    اتجاه المسارات
-                </label>
-                <select id="scanDir">
-                    <option value="x">أفقي (X)</option>
-                    <option value="y">رأسي (Y)</option>
-                </select>
-                
-                <label for="stepOver">
-                    خطوة المسح (مم)
-                </label>
-                <input id="stepOver" type="number" value="5" step="0.5"/>
-                
-                <label for="maxDepth">
-                    أقصى عمق (مم)
-                </label>
-                <input id="maxDepth" type="number" value="3.0" step="0.1"/>
-
+                <!-- أزرار التحكم -->
                 <div class="button-group">
                     <button id="btnGen" class="primary">توليد G-code</button>
                     <button id="btnQuick" class="secondary">اختبار سريع</button>
@@ -377,9 +536,124 @@
         
         // إعدادات الماكينات الافتراضية
         const machineDefaults = {
-            router: { feed: 800, safeZ: 5, maxDepth: 3, stepOver: 5 },
-            laser: { feed: 1200, safeZ: 0, maxDepth: 0, stepOver: 0.2 },
-            plasma: { feed: 1500, safeZ: 3, maxDepth: 0, stepOver: 1 }
+            router: { 
+                feed: 800, 
+                safeZ: 5, 
+                maxDepth: 3, 
+                stepOver: 5,
+                description: "Router CNC - مناسبة للنحت على الخشب والأكريليك والمعادن اللينة"
+            },
+            laser: { 
+                feed: 1200, 
+                safeZ: 0, 
+                maxDepth: 0, 
+                stepOver: 0.2,
+                description: "Laser Engraver - مناسبة للنقش على الخشب والجلود والأكريليك"
+            },
+            plasma: { 
+                feed: 1500, 
+                safeZ: 3, 
+                maxDepth: 0, 
+                stepOver: 1,
+                description: "Plasma Cutter - مناسبة لقطع المعادن بسمك مختلف"
+            },
+            "3dprinter": { 
+                feed: 1000, 
+                safeZ: 0.2, 
+                maxDepth: 0.2, 
+                stepOver: 0.4,
+                description: "3D Printer - للطباعة ثلاثية الأبعاد باستخدام تقنية FDM"
+            }
+        };
+        
+        // إعدادات الخامات الافتراضية
+        const materialDefaults = {
+            wood: {
+                feed: 800,
+                maxDepth: 3,
+                stepOver: 5,
+                description: "خشب - مناسبة للنحت والتفريغ على الخشب"
+            },
+            acrylic: {
+                feed: 600,
+                maxDepth: 2,
+                stepOver: 3,
+                description: "أكريليك - مناسبة للنقش والقطع على الأكريليك"
+            },
+            aluminum: {
+                feed: 400,
+                maxDepth: 1,
+                stepOver: 2,
+                description: "ألومنيوم - مناسبة للنقش على الألومنيوم"
+            },
+            steel: {
+                feed: 300,
+                maxDepth: 0.5,
+                stepOver: 1.5,
+                description: "صلب - مناسبة للنقش على الصلب باستخدام ماكينات قوية"
+            },
+            brass: {
+                feed: 500,
+                maxDepth: 1.5,
+                stepOver: 2.5,
+                description: "نحاس - مناسبة للنقش على النحاس والأصفر"
+            },
+            plastic: {
+                feed: 700,
+                maxDepth: 2.5,
+                stepOver: 4,
+                description: "بلاستيك - مناسبة للنقش على مختلف أنواع البلاستيك"
+            },
+            foam: {
+                feed: 1000,
+                maxDepth: 5,
+                stepOver: 6,
+                description: "رغوة - مناسبة للنحت على الرغوة بسرعات عالية"
+            },
+            custom: {
+                feed: 800,
+                maxDepth: 3,
+                stepOver: 5,
+                description: "مخصص - إعدادات مخصصة حسب الخامة"
+            }
+        };
+        
+        // القوالب المسبقة للخامات
+        const materialPresets = {
+            wood: [
+                { name: "خشب رقائقي 3مم", feed: 1000, maxDepth: 3, stepOver: 4 },
+                { name: "خشب MDF 6مم", feed: 800, maxDepth: 6, stepOver: 5 },
+                { name: "خشب طبيعي 10مم", feed: 600, maxDepth: 10, stepOver: 6 }
+            ],
+            acrylic: [
+                { name: "أكريليك 3مم", feed: 800, maxDepth: 3, stepOver: 3 },
+                { name: "أكريليك 5مم", feed: 600, maxDepth: 5, stepOver: 3 },
+                { name: "أكريليك شفاف 2مم", feed: 1000, maxDepth: 2, stepOver: 2 }
+            ],
+            aluminum: [
+                { name: "ألومنيوم رقائق 1مم", feed: 500, maxDepth: 1, stepOver: 2 },
+                { name: "ألومنيوم 3مم", feed: 400, maxDepth: 3, stepOver: 2 },
+                { name: "ألومنيوم 5مم", feed: 300, maxDepth: 5, stepOver: 1.5 }
+            ],
+            steel: [
+                { name: "صلب طري 2مم", feed: 400, maxDepth: 2, stepOver: 1.5 },
+                { name: "ستانلس ستيل 1مم", feed: 350, maxDepth: 1, stepOver: 1 }
+            ],
+            brass: [
+                { name: "نحاس أصفر 2مم", feed: 600, maxDepth: 2, stepOver: 2.5 },
+                { name: "نحاس أحمر 3مم", feed: 500, maxDepth: 3, stepOver: 2 }
+            ],
+            plastic: [
+                { name: "بلاستيك ABS 3مم", feed: 800, maxDepth: 3, stepOver: 4 },
+                { name: "بلاستيك PVC 2مم", feed: 700, maxDepth: 2, stepOver: 3 }
+            ],
+            foam: [
+                { name: "رغوة PVC 10مم", feed: 1200, maxDepth: 10, stepOver: 6 },
+                { name: "رغوة بولسترين 20مم", feed: 1500, maxDepth: 20, stepOver: 8 }
+            ],
+            custom: [
+                { name: "إعدادات مبدئية", feed: 800, maxDepth: 3, stepOver: 5 }
+            ]
         };
 
         // ========== وظائف المساعدة ==========
@@ -395,6 +669,24 @@
             t.style.display = 'block';
             clearTimeout(t._t);
             t._t = setTimeout(() => t.style.display = 'none', ms);
+        }
+        
+        /**
+         * تحويل السنتيمتر إلى ملليمتر
+         * @param {number} cm - القيمة بالسنتيمتر
+         * @returns {number} القيمة بالملليمتر
+         */
+        function cmToMm(cm) {
+            return cm * 10;
+        }
+        
+        /**
+         * تحويل الملليمتر إلى سنتيمتر
+         * @param {number} mm - القيمة بالملليمتر
+         * @returns {number} القيمة بالسنتيمتر
+         */
+        function mmToCm(mm) {
+            return mm / 10;
         }
 
         // ========== تهيئة OpenCV ==========
@@ -458,6 +750,84 @@
                 }
             }
             img.src = URL.createObjectURL(file);
+        });
+
+        // ========== إدارة إعدادات الماكينة ==========
+        
+        document.getElementById('machineType').addEventListener('change', (e) => {
+            const type = e.target.value;
+            const def = machineDefaults[type];
+            
+            if (def) {
+                document.getElementById('feedRate').value = def.feed;
+                document.getElementById('safeZ').value = def.safeZ;
+                document.getElementById('maxDepth').value = def.maxDepth;
+                document.getElementById('stepOver').value = def.stepOver;
+                document.getElementById('machineDescription').textContent = def.description;
+                
+                showToast(`تم تحميل إعدادات ${type}`);
+            }
+        });
+
+        // ========== إدارة إعدادات الخامة ==========
+        
+        /**
+         * تحديث قوالب الخامة بناءً على نوع الخامة المحدد
+         */
+        function updateMaterialPresets() {
+            const materialType = document.getElementById('materialType').value;
+            const presetsContainer = document.getElementById('materialPresets');
+            
+            // مسح المحتوى الحالي
+            presetsContainer.innerHTML = '';
+            
+            // إضافة القوالب المسبقة
+            if (materialPresets[materialType]) {
+                materialPresets[materialType].forEach((preset, index) => {
+                    const presetElement = document.createElement('div');
+                    presetElement.className = 'material-preset';
+                    presetElement.innerHTML = `
+                        <div class="material-name">${preset.name}</div>
+                        <div class="material-details">
+                            سرعة: ${preset.feed} مم/د | عمق: ${preset.maxDepth} مم | خطوة: ${preset.stepOver} مم
+                        </div>
+                    `;
+                    
+                    presetElement.addEventListener('click', () => {
+                        // تطبيق الإعدادات
+                        document.getElementById('feedRate').value = preset.feed;
+                        document.getElementById('maxDepth').value = preset.maxDepth;
+                        document.getElementById('stepOver').value = preset.stepOver;
+                        
+                        // إزالة النشاط من جميع القوالب
+                        document.querySelectorAll('.material-preset').forEach(p => p.classList.remove('active'));
+                        // إضافة النشاط للقالب المحدد
+                        presetElement.classList.add('active');
+                        
+                        showToast(`تم تطبيق إعدادات ${preset.name}`);
+                    });
+                    
+                    presetsContainer.appendChild(presetElement);
+                });
+            }
+        }
+        
+        // تحديث قوالب الخامة عند تغيير نوع الخامة
+        document.getElementById('materialType').addEventListener('change', updateMaterialPresets);
+        
+        // تحديث قوالب الخامة عند التحميل
+        updateMaterialPresets();
+
+        // ========== إدارة حجم العمل ==========
+        
+        document.getElementById('btnCenterOrigin').addEventListener('click', () => {
+            const workWidth = parseFloat(document.getElementById('workWidth').value);
+            const workHeight = parseFloat(document.getElementById('workHeight').value);
+            
+            document.getElementById('originX').value = (workWidth / 2).toFixed(1);
+            document.getElementById('originY').value = (workHeight / 2).toFixed(1);
+            
+            showToast("تم توسيط نقطة الأصل");
         });
 
         // ========== معالجة الصور والرؤية الحاسوبية ==========
@@ -659,6 +1029,12 @@
             const feed = parseFloat(document.getElementById('feedRate').value);
             const safeZ = parseFloat(document.getElementById('safeZ').value);
             const invertZ = document.getElementById('invertZ').value === 'yes';
+            
+            // قراءة إعدادات حجم العمل
+            const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value));
+            const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value));
+            const originX = cmToMm(parseFloat(document.getElementById('originX').value));
+            const originY = cmToMm(parseFloat(document.getElementById('originY').value));
 
             // بدء كود G
             const lines = [];
@@ -667,6 +1043,10 @@
             
             let totalLen = 0;
             let step = scaleDown ? stepOver * 4 : stepOver;
+
+            // حساب عوامل القياس
+            const scaleX = workWidth / previewCanvas.width;
+            const scaleY = workHeight / previewCanvas.height;
 
             // المسح الأفقي
             if (dir === 'x') {
@@ -685,7 +1065,11 @@
                                 z = -z;
                             }
                             
-                            row.push({ x, y, z });
+                            // تطبيق القياس ونقطة الأصل
+                            const scaledX = (x * scaleX) + originX;
+                            const scaledY = (y * scaleY) + originY;
+                            
+                            row.push({ x: scaledX, y: scaledY, z });
                         }
                     }
                     
@@ -697,13 +1081,13 @@
                         }
                         
                         // الانتقال للنقطة الأولى
-                        lines.push(`G0 X${row[0].x} Y${row[0].y} Z${safeZ}`);
+                        lines.push(`G0 X${row[0].x.toFixed(2)} Y${row[0].y.toFixed(2)} Z${safeZ}`);
                         lines.push(`G1 F${feed}`); // تعيين سرعة التغذية
                         
                         // رسم المسار
                         for (let i = 0; i < row.length; i++) {
                             let p = row[i];
-                            lines.push(`G1 X${p.x} Y${p.y} Z${p.z.toFixed(3)}`);
+                            lines.push(`G1 X${p.x.toFixed(2)} Y${p.y.toFixed(2)} Z${p.z.toFixed(3)}`);
                             
                             // حساب الطول الإجمالي
                             if (i > 0) {
@@ -727,22 +1111,6 @@
             
             return lines.join('\n');
         }
-
-        // ========== إدارة إعدادات الماكينة ==========
-        
-        document.getElementById('machineType').addEventListener('change', (e) => {
-            const type = e.target.value;
-            const def = machineDefaults[type];
-            
-            if (def) {
-                document.getElementById('feedRate').value = def.feed;
-                document.getElementById('safeZ').value = def.safeZ;
-                document.getElementById('maxDepth').value = def.maxDepth;
-                document.getElementById('stepOver').value = def.stepOver;
-                
-                showToast(`تم تحميل إعدادات ${type}`);
-            }
-        });
 
         // ========== إدارة الأحداث ==========
         
