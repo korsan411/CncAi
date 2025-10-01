@@ -173,6 +173,10 @@
     }
 
     /* الأزرار */
+    button {
+      transition: all 0.2s ease;
+    }
+
     button.primary {
       background: var(--primary-color);
       color: #021;
@@ -181,12 +185,17 @@
       padding: 8px;
       border-radius: 8px;
       cursor: pointer;
-      transition: background 0.2s ease;
       width: 100%;
     }
 
     button.primary:hover {
       background: #0dc5e6;
+    }
+
+    button.primary:disabled {
+      background: #4b5563;
+      color: #9ca3af;
+      cursor: not-allowed;
     }
 
     button.secondary {
@@ -196,13 +205,18 @@
       padding: 8px;
       border-radius: 8px;
       cursor: pointer;
-      transition: background 0.2s ease;
       width: 100%;
       margin-top: 6px;
     }
 
     button.secondary:hover {
       background: #334155;
+    }
+
+    button.secondary:disabled {
+      background: #4b5563;
+      color: #9ca3af;
+      cursor: not-allowed;
     }
 
     /* الرسائل والإشعارات */
@@ -239,6 +253,23 @@
       height: 100%;
       color: var(--text-secondary);
     }
+
+    .progress {
+      width: 100%;
+      height: 6px;
+      background: #1e293b;
+      border-radius: 3px;
+      margin: 8px 0;
+      overflow: hidden;
+      display: none;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: var(--primary-color);
+      width: 0%;
+      transition: width 0.3s ease;
+    }
   </style>
 </head>
 <body>
@@ -252,6 +283,9 @@
       <!-- لوحة المعاينة -->
       <div class="panel">
         <input id="fileInput" type="file" accept="image/*"/>
+        <div class="progress">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
         <div class="tabs">
           <button data-tab="original" class="active">الصورة الأصلية</button>
           <button data-tab="heatmap">خريطة الحرارة</button>
@@ -332,6 +366,14 @@
   <div id="toast"></div>
 
   <script>
+    // ========== متغيرات التطبيق ==========
+    let cvReady = false;
+    let grayMat = null;
+    let contour = null;
+    let previewCanvas = null;
+    let isProcessing = false;
+    let scene3D = null, camera3D = null, renderer3D = null, controls3D = null, mesh3D = null;
+
     // ========== وظائف المساعدة ==========
     
     /* إظهار الإشعارات */
@@ -343,9 +385,32 @@
       t._t = setTimeout(() => t.style.display = 'none', ms);
     }
 
+    /* تحديث شريط التقدم */
+    function updateProgress(percent) {
+      const progressBar = document.getElementById('progressBar');
+      const progressContainer = document.querySelector('.progress');
+      
+      if (percent > 0) {
+        progressContainer.style.display = 'block';
+        progressBar.style.width = percent + '%';
+      } else {
+        progressContainer.style.display = 'none';
+      }
+    }
+
+    /* تنظيف الذاكرة */
+    function cleanupMemory() {
+      if (grayMat) {
+        grayMat.delete();
+        grayMat = null;
+      }
+      if (contour) {
+        contour.delete();
+        contour = null;
+      }
+    }
+
     // ========== تهيئة OpenCV ==========
-    
-    let cvReady = false, grayMat = null, contour = null, previewCanvas = null;
     
     function waitForCv() {
       if (window.cv && cv.getBuildInformation) {
@@ -384,15 +449,33 @@
       const file = e.target.files[0];
       if (!file) return;
       
+      // تنظيف الذاكرة قبل تحميل صورة جديدة
+      cleanupMemory();
+      
       const img = new Image();
       img.onload = function() {
         previewCanvas = document.getElementById('canvasOriginal');
-        previewCanvas.width = img.width;
-        previewCanvas.height = img.height;
-        previewCanvas.getContext('2d').drawImage(img, 0, 0, previewCanvas.width, previewCanvas.height);
+        
+        // تحديد حجم مناسب للصورة لتجنب استنفاد الذاكرة
+        const maxWidth = 800;
+        const maxHeight = 600;
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.floor(width * ratio);
+          height = Math.floor(height * ratio);
+        }
+        
+        previewCanvas.width = width;
+        previewCanvas.height = height;
+        previewCanvas.getContext('2d').drawImage(img, 0, 0, width, height);
         
         if (cvReady) {
           detectContours();
+        } else {
+          showToast("OpenCV غير جاهز بعد، يرجى الانتظار");
         }
       }
       img.src = URL.createObjectURL(file);
@@ -425,115 +508,132 @@
     // ========== كشف الكفاف المحسن ==========
     
     function detectContours() {
-      let src = cv.imread(previewCanvas);
-      let gray = new cv.Mat();
-      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-      cv.GaussianBlur(gray, gray, new cv.Size(3, 3), 0, 0);
+      if (isProcessing) return;
+      isProcessing = true;
+      
+      try {
+        let src = cv.imread(previewCanvas);
+        let gray = new cv.Mat();
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+        cv.GaussianBlur(gray, gray, new cv.Size(3, 3), 0, 0);
 
-      // حساب العتبات التلقائية لخوارزمية Canny
-      function medianGray(mat) {
-        const total = mat.rows * mat.cols;
-        const step = Math.max(1, Math.floor(total / 5000));
-        const vals = [];
-        
-        for (let i = 0; i < total; i += step) {
-          vals.push(mat.data[i]);
-        }
-        
-        vals.sort((a, b) => a - b);
-        return vals[Math.floor(vals.length / 2)];
-      }
-      
-      const med = medianGray(gray);
-      const sigma = 0.33;
-      const lower = Math.max(0, Math.round((1.0 - sigma) * med));
-      const upper = Math.min(255, Math.round((1.0 + sigma) * med));
-
-      let edges = new cv.Mat();
-      cv.Canny(gray, edges, lower, upper);
-      
-      let k = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
-      cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, k);
-
-      let contours = new cv.MatVector();
-      let hier = new cv.Mat();
-      cv.findContours(edges, contours, hier, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-      
-      let maxArea = 0;
-      let chosen = null;
-      
-      for (let i = 0; i < contours.size(); i++) {
-        const cnt = contours.get(i);
-        const a = cv.contourArea(cnt);
-        if (a > maxArea) {
-          maxArea = a;
-          chosen = cnt.clone();
-        }
-      }
-      
-      contour = chosen;
-
-      if (grayMat) {
-        grayMat.delete();
-      }
-      
-      grayMat = gray.clone();
-
-      // عرض خريطة الحرارة
-      let heat = document.getElementById('canvasHeatmap');
-      heat.width = gray.cols;
-      heat.height = gray.rows;
-      
-      let hctx = heat.getContext('2d');
-      let imgData = hctx.createImageData(heat.width, heat.height);
-      
-      for (let y = 0; y < gray.rows; y++) {
-        for (let x = 0; x < gray.cols; x++) {
-          let v = gray.ucharPtr(y, x)[0];
-          let idx = (y * gray.cols + x) * 4;
-          imgData.data[idx] = v;
-          imgData.data[idx + 1] = 0;
-          imgData.data[idx + 2] = 255 - v;
-          imgData.data[idx + 3] = 255;
-        }
-      }
-      
-      hctx.putImageData(imgData, 0, 0);
-
-      // عرض الكفاف
-      let ccan = document.getElementById('canvasContour');
-      ccan.width = gray.cols;
-      ccan.height = gray.rows;
-      
-      let cctx = ccan.getContext('2d');
-      cctx.drawImage(heat, 0, 0);
-      
-      if (contour) {
-        cctx.strokeStyle = "lime";
-        cctx.lineWidth = 2;
-        cctx.beginPath();
-        
-        for (let i = 0; i < contour.data32S.length; i += 2) {
-          let x = contour.data32S[i];
-          let y = contour.data32S[i + 1];
+        // حساب العتبات التلقائية لخوارزمية Canny
+        function medianGray(mat) {
+          const total = mat.rows * mat.cols;
+          const step = Math.max(1, Math.floor(total / 5000));
+          const vals = [];
           
-          if (i === 0) {
-            cctx.moveTo(x, y);
-          } else {
-            cctx.lineTo(x, y);
+          for (let i = 0; i < total; i += step) {
+            vals.push(mat.data[i]);
+          }
+          
+          vals.sort((a, b) => a - b);
+          return vals[Math.floor(vals.length / 2)];
+        }
+        
+        const med = medianGray(gray);
+        const sigma = 0.33;
+        const lower = Math.max(0, Math.round((1.0 - sigma) * med));
+        const upper = Math.min(255, Math.round((1.0 + sigma) * med));
+
+        let edges = new cv.Mat();
+        cv.Canny(gray, edges, lower, upper);
+        
+        let k = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
+        cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, k);
+
+        let contours = new cv.MatVector();
+        let hier = new cv.Mat();
+        cv.findContours(edges, contours, hier, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+        
+        let maxArea = 0;
+        let chosen = null;
+        
+        for (let i = 0; i < contours.size(); i++) {
+          const cnt = contours.get(i);
+          const a = cv.contourArea(cnt);
+          if (a > maxArea) {
+            maxArea = a;
+            if (chosen) chosen.delete();
+            chosen = cnt.clone();
+          }
+          cnt.delete(); // تنظيف الذاكرة
+        }
+        
+        contour = chosen;
+
+        // تنظيف الذاكرة القديمة
+        if (grayMat) {
+          grayMat.delete();
+        }
+        
+        grayMat = gray.clone();
+
+        // عرض خريطة الحرارة
+        let heat = document.getElementById('canvasHeatmap');
+        heat.width = gray.cols;
+        heat.height = gray.rows;
+        
+        let hctx = heat.getContext('2d');
+        let imgData = hctx.createImageData(heat.width, heat.height);
+        
+        for (let y = 0; y < gray.rows; y++) {
+          for (let x = 0; x < gray.cols; x++) {
+            let v = gray.ucharPtr(y, x)[0];
+            let idx = (y * gray.cols + x) * 4;
+            imgData.data[idx] = v;
+            imgData.data[idx + 1] = 0;
+            imgData.data[idx + 2] = 255 - v;
+            imgData.data[idx + 3] = 255;
           }
         }
         
-        cctx.closePath();
-        cctx.stroke();
+        hctx.putImageData(imgData, 0, 0);
+
+        // عرض الكفاف
+        let ccan = document.getElementById('canvasContour');
+        ccan.width = gray.cols;
+        ccan.height = gray.rows;
+        
+        let cctx = ccan.getContext('2d');
+        cctx.drawImage(heat, 0, 0);
+        
+        if (contour) {
+          cctx.strokeStyle = "lime";
+          cctx.lineWidth = 2;
+          cctx.beginPath();
+          
+          for (let i = 0; i < contour.data32S.length; i += 2) {
+            let x = contour.data32S[i];
+            let y = contour.data32S[i + 1];
+            
+            if (i === 0) {
+              cctx.moveTo(x, y);
+            } else {
+              cctx.lineTo(x, y);
+            }
+          }
+          
+          cctx.closePath();
+          cctx.stroke();
+        }
+        
+        showToast("تم الكشف عن الحواف");
+        
+        // تنظيف الذاكرة المؤقتة
+        src.delete();
+        edges.delete();
+        hier.delete();
+        contours.delete();
+        gray.delete();
+        
+      } catch (error) {
+        console.error("خطأ في كشف الكفاف:", error);
+        showToast("حدث خطأ في معالجة الصورة");
+      } finally {
+        isProcessing = false;
+        updateProgress(0);
       }
-      
-      showToast("تم الكشف عن الحواف");
-      
-      // تنظيف الذاكرة
-      src.delete();
-      edges.delete();
-      hier.delete();
     }
 
     // ========== توليد G-code ==========
@@ -544,68 +644,112 @@
         return "";
       }
       
-      const dir = document.getElementById('scanDir').value;
-      const stepOver = parseFloat(document.getElementById('stepOver').value);
-      const maxDepth = parseFloat(document.getElementById('maxDepth').value);
-      const feed = parseFloat(document.getElementById('feedRate').value);
-      const safeZ = parseFloat(document.getElementById('safeZ').value);
-      const invertZ = document.getElementById('invertZ').value === 'yes';
-
-      const lines = [];
-      lines.push('G21 G90 G17');
-      lines.push(`G0 Z${safeZ.toFixed(2)}`);
-      
-      let totalLen = 0;
-      let step = scaleDown ? stepOver * 4 : stepOver;
-
-      if (dir === 'x') {
-        for (let y = 0; y < previewCanvas.height; y += step) {
-          let row = [];
-          
-          for (let x = 0; x < previewCanvas.width; x++) {
-            let inside = cv.pointPolygonTest(contour, new cv.Point(x, y), false);
-            
-            if (inside >= 0) {
-              let pv = sampleGrayAt(x, y);
-              let z = -((255 - pv) / 255.0) * maxDepth;
-              
-              if (invertZ) {
-                z = -z;
-              }
-              
-              row.push({x, y, z});
-            }
-          }
-          
-          if (row.length > 1) {
-            if ((y / step) % 2 !== 0) {
-              row.reverse();
-            }
-            
-            lines.push(`G0 X${row[0].x} Y${row[0].y} Z${safeZ}`);
-            lines.push(`G1 F${feed}`);
-            
-            for (let i = 0; i < row.length; i++) {
-              let p = row[i];
-              lines.push(`G1 X${p.x} Y${p.y} Z${p.z.toFixed(3)}`);
-              
-              if (i > 0) {
-                totalLen += Math.hypot(p.x - row[i - 1].x, p.y - row[i - 1].y);
-              }
-            }
-            
-            lines.push(`G0 Z${safeZ}`);
-          }
-        }
+      if (isProcessing) {
+        showToast("جاري معالجة عملية سابقة");
+        return "";
       }
       
-      lines.push('M5');
-      lines.push('M30');
+      isProcessing = true;
+      updateProgress(10);
       
-      let timeMin = (totalLen / feed);
-      document.getElementById('estTime').textContent = "تقدير الوقت: " + timeMin.toFixed(1) + " دقيقة";
-      
-      return lines.join('\n');
+      try {
+        const dir = document.getElementById('scanDir').value;
+        const stepOver = parseFloat(document.getElementById('stepOver').value);
+        const maxDepth = parseFloat(document.getElementById('maxDepth').value);
+        const feed = parseFloat(document.getElementById('feedRate').value);
+        const safeZ = parseFloat(document.getElementById('safeZ').value);
+        const invertZ = document.getElementById('invertZ').value === 'yes';
+
+        const lines = [];
+        lines.push('G21 G90 G17');
+        lines.push(`G0 Z${safeZ.toFixed(2)}`);
+        
+        let totalLen = 0;
+        let step = scaleDown ? stepOver * 4 : stepOver;
+        let pointCount = 0;
+        let totalPoints = 0;
+
+        // حساب العدد الإجمالي للنقاط لتحديث التقدم
+        if (dir === 'x') {
+          for (let y = 0; y < previewCanvas.height; y += step) {
+            for (let x = 0; x < previewCanvas.width; x++) {
+              let inside = cv.pointPolygonTest(contour, new cv.Point(x, y), false);
+              if (inside >= 0) totalPoints++;
+            }
+          }
+        }
+
+        updateProgress(20);
+
+        if (dir === 'x') {
+          for (let y = 0; y < previewCanvas.height; y += step) {
+            let row = [];
+            
+            for (let x = 0; x < previewCanvas.width; x++) {
+              let inside = cv.pointPolygonTest(contour, new cv.Point(x, y), false);
+              
+              if (inside >= 0) {
+                let pv = sampleGrayAt(x, y);
+                let z = -((255 - pv) / 255.0) * maxDepth;
+                
+                if (invertZ) {
+                  z = -z;
+                }
+                
+                row.push({x, y, z});
+                pointCount++;
+                
+                // تحديث شريط التقدم بشكل دوري
+                if (pointCount % 100 === 0) {
+                  const progress = 20 + (pointCount / totalPoints) * 70;
+                  updateProgress(progress);
+                  
+                  // إعطاء فرصة للمتصفح للتنفس
+                  await new Promise(resolve => setTimeout(resolve, 0));
+                }
+              }
+            }
+            
+            if (row.length > 1) {
+              if ((y / step) % 2 !== 0) {
+                row.reverse();
+              }
+              
+              lines.push(`G0 X${row[0].x} Y${row[0].y} Z${safeZ}`);
+              lines.push(`G1 F${feed}`);
+              
+              for (let i = 0; i < row.length; i++) {
+                let p = row[i];
+                lines.push(`G1 X${p.x} Y${p.y} Z${p.z.toFixed(3)}`);
+                
+                if (i > 0) {
+                  totalLen += Math.hypot(p.x - row[i - 1].x, p.y - row[i - 1].y);
+                }
+              }
+              
+              lines.push(`G0 Z${safeZ}`);
+            }
+          }
+        }
+        
+        lines.push('M5');
+        lines.push('M30');
+        
+        let timeMin = (totalLen / feed);
+        document.getElementById('estTime').textContent = "تقدير الوقت: " + timeMin.toFixed(1) + " دقيقة";
+        
+        updateProgress(100);
+        setTimeout(() => updateProgress(0), 1000);
+        
+        return lines.join('\n');
+        
+      } catch (error) {
+        console.error("خطأ في توليد G-code:", error);
+        showToast("حدث خطأ في توليد G-code");
+        return "";
+      } finally {
+        isProcessing = false;
+      }
     }
 
     // ========== الإعدادات الافتراضية للماكينات ==========
@@ -631,20 +775,39 @@
 
     // ========== معالجة الأزرار ==========
     
-    document.getElementById('btnGen').addEventListener('click', () => {
-      let gcode = generateRasterGcode(false);
+    document.getElementById('btnGen').addEventListener('click', async () => {
+      const btn = document.getElementById('btnGen');
+      btn.disabled = true;
+      btn.textContent = 'جاري التوليد...';
+      
+      let gcode = await generateRasterGcode(false);
       document.getElementById('gcodeOut').value = gcode;
+      
+      btn.disabled = false;
+      btn.textContent = 'توليد G-code';
       showToast("تم توليد G-code");
     });
     
-    document.getElementById('btnQuick').addEventListener('click', () => {
-      let gcode = generateRasterGcode(true);
+    document.getElementById('btnQuick').addEventListener('click', async () => {
+      const btn = document.getElementById('btnQuick');
+      btn.disabled = true;
+      btn.textContent = 'جاري التوليد...';
+      
+      let gcode = await generateRasterGcode(true);
       document.getElementById('gcodeOut').value = gcode;
+      
+      btn.disabled = false;
+      btn.textContent = 'اختبار سريع';
       showToast("توليد سريع");
     });
     
     document.getElementById('btnDownload').addEventListener('click', () => {
       const text = document.getElementById('gcodeOut').value;
+      if (!text) {
+        showToast("لا يوجد G-code لتحميله");
+        return;
+      }
+      
       const blob = new Blob([text], {type: "text/plain"});
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -654,11 +817,10 @@
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      showToast("تم تحميل الملف");
     });
 
     // ========== معاينة ثلاثية الأبعاد ==========
-    
-    let scene3D = null, camera3D = null, renderer3D = null, controls3D = null, mesh3D = null;
     
     function show3D() {
       const container = document.getElementById('threeContainer');
@@ -699,10 +861,6 @@
       directionalLight.position.set(50, 100, 50);
       scene3D.add(directionalLight);
       
-      // إضافة محور للمساعدة في التوجيه
-      const axesHelper = new THREE.AxesHelper(100);
-      scene3D.add(axesHelper);
-      
       // إعداد التحكم بالمشهد
       controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
       controls3D.enableDamping = true;
@@ -736,8 +894,8 @@
     function create3DMesh() {
       if (!grayMat) return;
       
-      const width = grayMat.cols;
-      const height = grayMat.rows;
+      const width = Math.min(grayMat.cols, 100); // تقليل الدقة لتجنب استنفاد الذاكرة
+      const height = Math.min(grayMat.rows, 100);
       
       // إنشاء هندسة المستوى مع تفاصيل كافية
       const geometry = new THREE.PlaneGeometry(width, height, width - 1, height - 1);
@@ -747,7 +905,11 @@
       
       for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
-          const pixelValue = grayMat.ucharPtr(y, x)[0];
+          // أخذ عينات من الصورة الأصلية بدقة منخفضة
+          const origX = Math.floor((x / width) * grayMat.cols);
+          const origY = Math.floor((y / height) * grayMat.rows);
+          const pixelValue = grayMat.ucharPtr(origY, origX)[0];
+          
           // تحويل قيمة البكسل إلى ارتفاع (0-20 وحدة)
           const z = (pixelValue / 255) * 20;
           
