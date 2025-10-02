@@ -8,6 +8,7 @@
     <!-- مكتبات -->
     <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
     <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.158.0/examples/js/controls/OrbitControls.js"></script>
 
     <style>
         /* الأساسيات */
@@ -343,8 +344,16 @@
             color: #06b6d4;
             margin-top: 4px;
         }
+        
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: #9bb0c8;
+            font-size: 1.1rem;
+        }
     </style>
-  <script type="module" crossorigin src="/CncAi/assets/index-B1fKiz1I.js"></script>
 </head>
 <body>
     <div class="app">
@@ -381,7 +390,9 @@
                 </div>
                 
                 <div id="threeD" class="tab-content">
-                    <div id="threeContainer"></div>
+                    <div id="threeContainer">
+                        <div class="loading">جاري تحميل المعاينة ثلاثية الأبعاد...</div>
+                    </div>
                 </div>
             </div>
 
@@ -1349,76 +1360,112 @@
                 return;
             }
             
+            // تنظيف المشهد السابق
+            cleanup3DScene();
+            
+            const cont = document.getElementById('threeContainer');
+            cont.innerHTML = '<div class="loading">جاري تحميل المعاينة ثلاثية الأبعاد...</div>';
+            
             try {
-                const cont = document.getElementById('threeContainer');
+                // الانتظار حتى يتم تحميل Three.js وOrbitControls
+                if (typeof THREE === 'undefined') {
+                    showToast('❌ Three.js لم يتم تحميله بعد');
+                    return;
+                }
                 
-                // تنظيف المشهد السابق
-                cleanup3DScene();
-                cont.innerHTML = "";
-                
-                // إنشاء المشهد
-                const scene = new THREE.Scene();
-                const camera = new THREE.PerspectiveCamera(45, cont.clientWidth / cont.clientHeight, 0.1, 5000);
-                const renderer = new THREE.WebGLRenderer({ antialias: true });
-                renderer.setSize(cont.clientWidth, cont.clientHeight);
-                cont.appendChild(renderer.domElement);
-
-                // إنشاء سطح ثلاثي الأبعاد من الصورة الرمادية
-                const geom = new THREE.PlaneGeometry(grayMat.cols, grayMat.rows, grayMat.cols - 1, grayMat.rows - 1);
-                
-                for (let y = 0; y < grayMat.rows; y++) {
-                    for (let x = 0; x < grayMat.cols; x++) {
-                        let v = grayMat.ucharPtr(y, x)[0];
-                        let z = (v / 255.0) * 10;
-                        let idx = y * grayMat.cols + x;
+                // الانتظار لمدة قصيرة للتأكد من تحميل المكتبات
+                setTimeout(() => {
+                    try {
+                        // إنشاء المشهد
+                        const scene = new THREE.Scene();
+                        const camera = new THREE.PerspectiveCamera(45, cont.clientWidth / cont.clientHeight, 0.1, 5000);
+                        const renderer = new THREE.WebGLRenderer({ antialias: true });
+                        renderer.setSize(cont.clientWidth, cont.clientHeight);
+                        renderer.setClearColor(0x081224, 1);
                         
-                        geom.attributes.position.setZ(idx, z);
+                        cont.innerHTML = '';
+                        cont.appendChild(renderer.domElement);
+
+                        // إنشاء سطح ثلاثي الأبعاد من الصورة الرمادية
+                        const geometry = new THREE.PlaneGeometry(grayMat.cols, grayMat.rows, grayMat.cols - 1, grayMat.rows - 1);
+                        
+                        // تحديث ارتفاع النقاط بناءً على قيم البكسل
+                        const positions = geometry.attributes.position.array;
+                        for (let i = 0; i < positions.length; i += 3) {
+                            const x = positions[i];
+                            const y = positions[i + 1];
+                            
+                            // تحويل الإحداثيات من [-width/2, width/2] إلى [0, width-1]
+                            const pixelX = Math.round((x + grayMat.cols / 2) * (grayMat.cols - 1) / grayMat.cols);
+                            const pixelY = Math.round((y + grayMat.rows / 2) * (grayMat.rows - 1) / grayMat.rows);
+                            
+                            if (pixelX >= 0 && pixelX < grayMat.cols && pixelY >= 0 && pixelY < grayMat.rows) {
+                                const grayValue = grayMat.ucharPtr(pixelY, pixelX)[0];
+                                positions[i + 2] = (grayValue / 255.0) * 20; // ارتفاع يصل إلى 20 وحدة
+                            }
+                        }
+                        
+                        geometry.attributes.position.needsUpdate = true;
+                        geometry.computeVertexNormals();
+
+                        // إنشاء المادة والشبكة
+                        const material = new THREE.MeshStandardMaterial({
+                            color: 0xcccccc,
+                            side: THREE.DoubleSide,
+                            flatShading: false,
+                            wireframe: false
+                        });
+                        
+                        const mesh = new THREE.Mesh(geometry, material);
+                        scene.add(mesh);
+
+                        // الإضاءة
+                        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+                        scene.add(ambientLight);
+                        
+                        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                        directionalLight.position.set(50, 100, 50);
+                        scene.add(directionalLight);
+
+                        // وضع الكاميرا
+                        camera.position.set(0, -grayMat.rows * 0.8, grayMat.rows * 0.8);
+                        camera.lookAt(0, 0, 0);
+
+                        // التحكم بالكاميرا
+                        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+                        controls.enableDamping = true;
+                        controls.dampingFactor = 0.05;
+
+                        // حفظ المرجع للمشهد الحالي
+                        currentScene = { scene, renderer, controls, camera, geometry, material, mesh };
+
+                        // التصيير المستمر
+                        function animate() {
+                            requestAnimationFrame(animate);
+                            controls.update();
+                            renderer.render(scene, camera);
+                        }
+                        
+                        animate();
+
+                        // إعادة الحجم عند تغيير حجم النافذة
+                        window.addEventListener('resize', () => {
+                            camera.aspect = cont.clientWidth / cont.clientHeight;
+                            camera.updateProjectionMatrix();
+                            renderer.setSize(cont.clientWidth, cont.clientHeight);
+                        });
+                        
+                        showToast('✅ تم تحميل المعاينة ثلاثية الأبعاد');
+                    } catch (error) {
+                        console.error('Error in 3D preview:', error);
+                        cont.innerHTML = '<div class="loading">❌ خطأ في تحميل المعاينة ثلاثية الأبعاد</div>';
+                        showToast('❌ خطأ في تحميل المعاينة ثلاثية الأبعاد');
                     }
-                }
+                }, 100);
                 
-                geom.attributes.position.needsUpdate = true;
-                geom.computeVertexNormals();
-                geom.rotateX(-Math.PI / 2); // تدوير السطح ليكون أفقي
-
-                // إنشاء الشبكة وإضافتها للمشهد
-                const mesh = new THREE.Mesh(
-                    geom,
-                    new THREE.MeshStandardMaterial({
-                        color: 0xcccccc,
-                        side: THREE.DoubleSide,
-                        flatShading: true
-                    })
-                );
-                
-                scene.add(mesh);
-                
-                // الإضاءة
-                const light = new THREE.DirectionalLight(0xffffff, 1);
-                light.position.set(50, 100, 150);
-                scene.add(light);
-                scene.add(new THREE.AmbientLight(0x404040));
-
-                // وضع الكاميرا
-                camera.position.set(0, -grayMat.rows, grayMat.rows * 1.2);
-                
-                // التحكم بالكاميرا
-                const controls = new OrbitControls(camera, renderer.domElement);
-                
-                // حفظ المرجع للمشهد الحالي
-                currentScene = { scene, renderer, controls, camera };
-                
-                // التصيير المستمر
-                function animate() {
-                    requestAnimationFrame(animate);
-                    controls.update();
-                    renderer.render(scene, camera);
-                }
-                
-                animate();
-                
-                showToast('✅ تم تحميل المعاينة ثلاثية الأبعاد');
             } catch (error) {
-                console.error('Error in 3D preview:', error);
+                console.error('Error initializing 3D preview:', error);
+                cont.innerHTML = '<div class="loading">❌ خطأ في تحميل المعاينة ثلاثية الأبعاد</div>';
                 showToast('❌ خطأ في تحميل المعاينة ثلاثية الأبعاد');
             }
         }
