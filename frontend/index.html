@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CNC AI - النسخة الكاملة</title>
+
+  <!-- مكتبات -->
+  <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+  <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.158.0/examples/js/controls/OrbitControls.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #041022;
+      color: #e6eef6;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background: #0b1320;
+      padding: 15px;
+      color: #06b6d4;
+      font-size: 1.3rem;
+      font-weight: bold;
+      border-bottom: 1px solid #1e293b;
+      text-align: center;
+    }
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+      padding: 15px;
+      gap: 15px;
+    }
+    .panel {
+      background: #0b1320;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      padding: 15px;
+      flex: 1;
+      min-width: 300px;
+    }
+    h3 {
+      color: #9bb0c8;
+      margin-top: 0;
+      font-size: 1.1rem;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #1e293b;
+    }
+    canvas {
+      width: 100%;
+      border-radius: 6px;
+      background: #000;
+      margin: 0 auto;
+    }
+    #threeContainer {
+      width: 100%;
+      height: 300px;
+      border-radius: 8px;
+      background: #081224;
+    }
+    textarea {
+      width: 100%;
+      height: 200px;
+      background: #021024;
+      color: #cfeaf2;
+      border-radius: 8px;
+      padding: 10px;
+      font-family: monospace;
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+      font-weight: bold;
+      color: #cfeaf2;
+    }
+    input, select {
+      width: 100%;
+      padding: 6px 8px;
+      margin-top: 4px;
+      border-radius: 6px;
+      border: 1px solid #1e293b;
+      background: #0f172a;
+      color: #e6eef6;
+    }
+    button {
+      margin-top: 10px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button.primary {
+      background: #06b6d4;
+      color: #021;
+    }
+    button.secondary {
+      background: #1e293b;
+      color: #e6eef6;
+    }
+    #estTime {
+      margin-top: 12px;
+      color: #9bb0c8;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <header>🛠️ CNC AI - النسخة الكاملة</header>
+
+  <div class="container">
+    <!-- معاينات -->
+    <div class="panel">
+      <h3>📂 رفع صورة</h3>
+      <input type="file" id="fileInput" accept="image/*">
+      <h3>📷 الصورة الأصلية</h3>
+      <canvas id="canvasOriginal"></canvas>
+      <h3>🖼️ المعالجة 2D</h3>
+      <canvas id="canvas2D"></canvas>
+      <h3>🌡️ Heatmap</h3>
+      <canvas id="canvasHeatmap"></canvas>
+      <h3>🧊 المعاينة 3D</h3>
+      <div id="threeContainer"></div>
+    </div>
+
+    <!-- إعدادات -->
+    <div class="panel">
+      <h3>⚙️ الإعدادات</h3>
+      <label>اتجاه المسح</label>
+      <select id="scanDir">
+        <option value="x">X</option>
+        <option value="y">Y</option>
+      </select>
+      <label>Step Over (px)</label>
+      <input type="number" id="stepOver" value="2">
+      <label>أقصى عمق (mm)</label>
+      <input type="number" id="maxDepth" value="3">
+      <label>سرعة التغذية (mm/min)</label>
+      <input type="number" id="feedRate" value="800">
+      <label>Safe Z (mm)</label>
+      <input type="number" id="safeZ" value="5">
+      <label>عكس Z</label>
+      <select id="invertZ">
+        <option value="no">لا</option>
+        <option value="yes">نعم</option>
+      </select>
+      <button class="primary" onclick="generateAndShowGcode()">🔄 توليد G-code</button>
+      <div id="estTime">⏱️ تقدير الوقت: 0 دقيقة</div>
+      <h3>📜 G-code</h3>
+      <textarea id="gcodeBox" readonly></textarea>
+    </div>
+  </div>
+
+  <script>
+    let grayMat = null;
+
+    // تحميل الصورة
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+      let file = e.target.files[0];
+      if (!file) return;
+      let img = new Image();
+      img.onload = function() {
+        let c = document.getElementById('canvasOriginal');
+        c.width = img.width;
+        c.height = img.height;
+        let ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+
+        // تحويل للصورة الرمادية
+        let src = cv.imread(c);
+        cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY, 0);
+        grayMat = src.clone();
+        cv.imshow('canvas2D', grayMat);
+
+        // heatmap + 3D
+        renderHeatmap(grayMat);
+        show3D();
+      };
+      img.src = URL.createObjectURL(file);
+    });
+
+    // ✅ تحسين colormap
+    function renderHeatmap(gray) {
+      let heat = document.getElementById('canvasHeatmap');
+      heat.width = gray.cols;
+      heat.height = gray.rows;
+      let hctx = heat.getContext('2d');
+      let imgData = hctx.createImageData(heat.width, heat.height);
+      for (let y = 0; y < gray.rows; y++) {
+        for (let x = 0; x < gray.cols; x++) {
+          let v = gray.ucharPtr(y, x)[0];
+          let idx = (y * gray.cols + x) * 4;
+          let r = Math.min(255, Math.max(0, 255 * (v / 128 - 1)));
+          let g = Math.min(255, Math.max(0, 255 * (1 - Math.abs(v - 128) / 128)));
+          let b = Math.min(255, Math.max(0, 255 * (1 - v / 128)));
+          imgData.data[idx] = r;
+          imgData.data[idx + 1] = g;
+          imgData.data[idx + 2] = b;
+          imgData.data[idx + 3] = 255;
+        }
+      }
+      hctx.putImageData(imgData, 0, 0);
+    }
+
+    // ✅ توليد G-code مع دعم اتجاه Y
+    function generateRasterGcode() {
+      if (!grayMat) return "";
+      const dir = document.getElementById('scanDir').value;
+      const stepOver = parseFloat(document.getElementById('stepOver').value) || 5;
+      const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3;
+      const feed = parseFloat(document.getElementById('feedRate').value) || 800;
+      const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
+      const invertZ = document.getElementById('invertZ').value === 'yes';
+
+      const lines = [];
+      lines.push('G21 G90 G17');
+      lines.push('G0 Z' + safeZ.toFixed(2));
+      let totalLen = 0;
+
+      if (dir === 'x') {
+        for (let y = 0; y < grayMat.rows; y += stepOver) {
+          let row = [];
+          for (let x = 0; x < grayMat.cols; x++) {
+            let v = grayMat.ucharPtr(y, x)[0];
+            let z = -((255 - v) / 255.0) * maxDepth;
+            if (invertZ) z = -z;
+            row.push({x, y, z});
+          }
+          if (row.length > 1) {
+            if ((y / stepOver) % 2 !== 0) row.reverse();
+            lines.push(`G0 X${row[0].x} Y${row[0].y} Z${safeZ}`);
+            lines.push('G1 F' + feed);
+            for (let i = 0; i < row.length; i++) {
+              let p = row[i];
+              lines.push(`G1 X${p.x} Y${p.y} Z${p.z.toFixed(3)}`);
+              if (i > 0) totalLen += Math.hypot(p.x - row[i-1].x, p.y - row[i-1].y);
+            }
+            lines.push('G0 Z' + safeZ);
+          }
+        }
+      } else if (dir === 'y') {
+        for (let x = 0; x < grayMat.cols; x += stepOver) {
+          let col = [];
+          for (let y = 0; y < grayMat.rows; y++) {
+            let v = grayMat.ucharPtr(y, x)[0];
+            let z = -((255 - v) / 255.0) * maxDepth;
+            if (invertZ) z = -z;
+            col.push({x, y, z});
+          }
+          if (col.length > 1) {
+            if ((x / stepOver) % 2 !== 0) col.reverse();
+            lines.push(`G0 X${col[0].x} Y${col[0].y} Z${safeZ}`);
+            lines.push('G1 F' + feed);
+            for (let i = 0; i < col.length; i++) {
+              let p = col[i];
+              lines.push(`G1 X${p.x} Y${p.y} Z${p.z.toFixed(3)}`);
+              if (i > 0) totalLen += Math.hypot(p.x - col[i-1].x, p.y - col[i-1].y);
+            }
+            lines.push('G0 Z' + safeZ);
+          }
+        }
+      }
+
+      lines.push('M5');
+      lines.push('M30');
+      let timeMin = (totalLen / feed);
+      document.getElementById('estTime').textContent = "⏱️ تقدير الوقت: " + timeMin.toFixed(1) + " دقيقة";
+      return lines.join('\n');
+    }
+
+    function generateAndShowGcode() {
+      let code = generateRasterGcode();
+      document.getElementById('gcodeBox').value = code;
+    }
+
+    // ✅ معاينة 3D مربوطة بالـ maxDepth
+    function show3D() {
+      if (!grayMat) return;
+      const cont = document.getElementById('threeContainer');
+      cont.innerHTML = "";
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(45, cont.clientWidth / cont.clientHeight, 0.1, 5000);
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(cont.clientWidth, cont.clientHeight);
+      cont.appendChild(renderer.domElement);
+
+      const geom = new THREE.PlaneGeometry(grayMat.cols, grayMat.rows, grayMat.cols - 1, grayMat.rows - 1);
+      const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3;
+
+      for (let y = 0; y < grayMat.rows; y++) {
+        for (let x = 0; x < grayMat.cols; x++) {
+          let v = grayMat.ucharPtr(y, x)[0];
+          let z = (v / 255.0) * maxDepth;
+          let idx = y * grayMat.cols + x;
+          geom.attributes.position.setZ(idx, z);
+        }
+      }
+
+      geom.attributes.position.needsUpdate = true;
+      geom.computeVertexNormals();
+      geom.rotateX(-Math.PI / 2);
+
+      const mesh = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({
+        color: 0xcccccc, side: THREE.DoubleSide, flatShading: true
+      }));
+      scene.add(mesh);
+
+      const light = new THREE.DirectionalLight(0xffffff, 1);
+      light.position.set(50, 100, 150);
+      scene.add(light);
+      scene.add(new THREE.AmbientLight(0x404040));
+
+      camera.position.set(0, -grayMat.rows, grayMat.rows * 1.2);
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+    }
+  </script>
+</body>
+</html>
