@@ -122,7 +122,7 @@
   <div id="toast"></div>
 
   <script>
-    let cvReady=false, grayMat=null, contour=null, previewCanvas=null;
+    let cvReady=false, grayMat=null, previewCanvas=null;
 
     function showToast(msg, ms=2000){
       const t=document.getElementById('toast');
@@ -160,19 +160,15 @@
       img.src=URL.createObjectURL(file);
     });
 
+    // 🔹 هنا بنرجع لاستخراج الحواف الأصلي (Canny فقط + عرضها)
     function detectContours(){
       let src=cv.imread(previewCanvas);
       let gray=new cv.Mat();cv.cvtColor(src,gray,cv.COLOR_RGBA2GRAY);
       let edges=new cv.Mat();cv.Canny(gray,edges,50,150);
-      let contours=new cv.MatVector(),hier=new cv.Mat();
-      cv.findContours(edges,contours,hier,cv.RETR_EXTERNAL,cv.CHAIN_APPROX_SIMPLE);
-      let maxArea=0;contour=null;
-      for(let i=0;i<contours.size();i++){let c=contours.get(i);let a=cv.contourArea(c);if(a>maxArea){maxArea=a;contour=c;}}
-      grayMat=gray.clone();
       cv.imshow('canvasHeatmap',gray);
-      cv.drawContours(src,contours,-1,new cv.Scalar(255,0,0,255),2);
-      cv.imshow('canvasContour',src);
-      src.delete();edges.delete();hier.delete();contours.delete();gray.delete();
+      cv.imshow('canvasContour',edges);
+      grayMat=gray.clone();
+      src.delete();edges.delete();
     }
 
     function sampleGrayAt(x,y){
@@ -180,7 +176,7 @@
     }
 
     function generateRasterGcode(scaleDown=false){
-      if(!grayMat||!contour){showToast("❌ لا توجد صورة جاهزة");return"";}
+      if(!grayMat){showToast("❌ لا توجد صورة جاهزة");return"";}
       const dir=document.getElementById('scanDir').value;
       const stepOver=parseFloat(document.getElementById('stepOver').value)||5;
       const maxDepth=parseFloat(document.getElementById('maxDepth').value)||3;
@@ -193,12 +189,10 @@
         for(let y=0;y<grayMat.rows;y+=Math.max(1,Math.round(step))){
           let row=[];
           for(let x=0;x<grayMat.cols;x++){
-            if(cv.pointPolygonTest(contour,new cv.Point(x,y),false)>=0){
-              const v=sampleGrayAt(x,y);
-              let z=-((255-v)/255)*maxDepth;
-              if(invertZ)z=-z;
-              row.push(`X${x} Y${y} Z${z.toFixed(2)}`);
-            }
+            const v=sampleGrayAt(x,y);
+            let z=-((255-v)/255)*maxDepth;
+            if(invertZ)z=-z;
+            row.push(`X${x} Y${y} Z${z.toFixed(2)}`);
           }
           if(row.length){lines.push("G0 Z"+safeZ);lines.push("G1 F"+feed);row.forEach(r=>lines.push("G1 "+r));}
         }
@@ -206,12 +200,10 @@
         for(let x=0;x<grayMat.cols;x+=Math.max(1,Math.round(step))){
           let col=[];
           for(let y=0;y<grayMat.rows;y++){
-            if(cv.pointPolygonTest(contour,new cv.Point(x,y),false)>=0){
-              const v=sampleGrayAt(x,y);
-              let z=-((255-v)/255)*maxDepth;
-              if(invertZ)z=-z;
-              col.push(`X${x} Y${y} Z${z.toFixed(2)}`);
-            }
+            const v=sampleGrayAt(x,y);
+            let z=-((255-v)/255)*maxDepth;
+            if(invertZ)z=-z;
+            col.push(`X${x} Y${y} Z${z.toFixed(2)}`);
           }
           if(col.length){lines.push("G0 Z"+safeZ);lines.push("G1 F"+feed);col.forEach(c=>lines.push("G1 "+c));}
         }
