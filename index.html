@@ -3,691 +3,174 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>CNC AI — متكامل (Upload + 2D + Heatmap + 3D + G-code)</title>
+  <title>CNC AI — Multi Machine Raster Engraving</title>
 
   <!-- مكتبات -->
   <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
+  <script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.158.0/examples/js/controls/OrbitControls.js"></script>
 
   <style>
+    /* نفس التنسيقات التي عندك - بدون تغيير */
     *{box-sizing:border-box}
-    body{margin:0;font-family:Arial,Segoe UI,system-ui;background:#041022;color:#e6eef6}
-    .app{max-width:1300px;margin:14px auto;padding:12px}
-    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #10202b}
-    h1{margin:0;color:#06b6d4}
-    .grid{display:grid;grid-template-columns:1fr 420px;gap:14px}
-    @media(max-width:1000px){.grid{grid-template-columns:1fr}}
-    .panel{background:#081226;padding:14px;border-radius:10px;border:1px solid #162834}
-    .tabs{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid #162834;padding-bottom:8px}
-    .tabs button{background:transparent;border:none;padding:8px 12px;border-radius:6px 6px 0 0;color:#9bb0c8;cursor:pointer}
+    body{margin:0;font-family:Arial,Segoe UI,system-ui;background:#041022;color:#e6eef6;line-height:1.5}
+    .app{max-width:1400px;margin:16px auto;padding:14px}
+    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #1e293b}
+    .grid{display:grid;grid-template-columns:1fr 480px;gap:16px}
+    @media (max-width:1000px){.grid{grid-template-columns:1fr}}
+    .panel{background:#0b1320;padding:16px;border-radius:10px;border:1px solid #1e293b}
+    .tabs{display:flex;margin-top:12px;border-bottom:1px solid #1e293b}
+    .tabs button{margin-left:6px;padding:8px 14px;border:none;border-radius:6px 6px 0 0;cursor:pointer;background:transparent;color:#9bb0c8;transition:.2s;font-size:.9rem}
     .tabs button.active{background:#06b6d4;color:#021}
-    .tab-content{display:none;padding-top:12px}
+    .tab-content{display:none;margin-top:12px}
     .tab-content.active{display:block}
-    canvas{background:#000;display:block;border-radius:6px;max-width:100%}
-    #threeContainer,#gcodeSimContainer{width:100%;height:380px;background:#06111a;border-radius:8px;overflow:hidden;position:relative}
-    input,select,textarea{background:#0e1a26;color:#e6eef6;border:1px solid #163043;padding:8px;border-radius:6px}
-    label{display:block;margin-top:10px;color:#cfeaf2;font-weight:600}
-    .input-group{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .button-group{display:flex;flex-direction:column;gap:8px;margin-top:12px}
-    button.primary{background:#06b6d4;color:#021;border:none;padding:10px;border-radius:8px;cursor:pointer}
-    button.secondary{background:#163043;color:#e6eef6;border:none;padding:10px;border-radius:8px;cursor:pointer}
-    .material-preset{background:#102533;border-radius:6px;padding:8px;margin-top:8px;cursor:pointer}
-    .dimension-info{color:#06b6d4;font-size:0.9em;margin-top:6px}
-    #toast{position:fixed;left:16px;bottom:16px;background:rgba(0,0,0,0.8);color:#fff;padding:10px 12px;border-radius:8px;display:none;z-index:9999}
-    .three-controls{display:flex;align-items:center;gap:8px;margin-top:8px}
-    .progress-bar{width:100%;height:6px;background:#102533;border-radius:4px;overflow:hidden;margin-top:8px}
-    .progress-fill{height:100%;background:#06b6d4;width:0%;transition:width .25s}
-    textarea{font-family:monospace;height:200px}
+    canvas{max-width:100%;border-radius:6px;background:#000;display:block;margin:0 auto}
+    #threeContainer{width:100%;height:360px;background:#081224;border-radius:8px;overflow:hidden}
+    textarea{width:100%;height:200px;background:#021024;color:#cfeaf2;font-family:monospace;border-radius:8px;padding:10px;border:1px solid #1e293b;resize:vertical}
+    button.primary{background:#06b6d4;color:#021;font-weight:bold;border:none;padding:10px;border-radius:8px;cursor:pointer}
+    button.secondary{background:#1e293b;color:#e6eef6;border:none;padding:10px;border-radius:8px;cursor:pointer}
+    #toast{position:fixed;left:16px;bottom:16px;background:rgba(0,0,0,.85);color:#fff;padding:10px 14px;border-radius:8px;display:none;z-index:10000}
+    h1{margin:0;color:#06b6d4;font-size:1.5rem}
   </style>
 </head>
 <body>
   <div class="app">
     <header>
-      <h1>CNC AI — متكامل</h1>
-      <div id="cvState">⏳ جاري تحميل OpenCV...</div>
+      <h1>CNC AI — Multi Machine Raster Engraving</h1>
+      <div id="cvState">جاري تحميل OpenCV...</div>
     </header>
 
     <div class="grid">
-      <!-- يسار: عرض الصور والتبويبات -->
+      <!-- لوحة الصورة -->
       <div class="panel">
-        <div style="margin-bottom:10px">
-          <label class="file-input-label" style="display:block;background:#163043;padding:8px;border-radius:6px;text-align:center;cursor:pointer;">
-            اختر صورة للمعالجة
-            <input id="fileInput" type="file" accept="image/*" style="position:absolute;left:0;top:0;opacity:0;width:100%;height:100%;cursor:pointer"/>
-          </label>
-          <div class="progress-bar"><div id="genProgress" class="progress-fill"></div></div>
-        </div>
-
+        <input id="fileInput" type="file" accept="image/*" style="margin-bottom:10px"/>
         <div class="tabs">
-          <button data-tab="original" class="active">🖼 الصورة الأصلية</button>
-          <button data-tab="heatmap">🔥 Heatmap</button>
+          <button data-tab="original" class="active">🖼️ الأصلية</button>
+          <button data-tab="heatmap">🔥 الحرارة</button>
           <button data-tab="contour">📐 الحواف</button>
-          <button data-tab="threeD">📦 المعاينة 3D</button>
-          <button data-tab="gcodeSim" id="gcodeSimTab" disabled>🎮 محاكاة G-code</button>
+          <button data-tab="threeD">📦 ثلاثية الأبعاد</button>
         </div>
-
-        <div id="original" class="tab-content active">
-          <canvas id="canvasOriginal"></canvas>
-        </div>
-
-        <div id="heatmap" class="tab-content">
-          <canvas id="canvasHeatmap"></canvas>
-        </div>
-
-        <div id="contour" class="tab-content">
-          <canvas id="canvasContour"></canvas>
-        </div>
-
-        <div id="threeD" class="tab-content">
-          <div id="threeContainer">
-            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#9bb0c8">جاري تحضير المعاينة ثلاثية الأبعاد...</div>
-          </div>
-
-          <div class="three-controls">
-            <label for="scaleZSlider">مقياس الارتفاع Z: <span id="scaleZVal">1.00</span>x</label>
-            <input id="scaleZSlider" type="range" min="0" max="5" step="0.05" value="1" style="flex:1"/>
-            <label style="margin-left:8px;font-weight:600;color:#cfeaf2">maxDepth(mm)</label>
-            <input id="maxDepth" type="number" value="3.0" step="0.1" min="0.1" style="width:90px"/>
-          </div>
-        </div>
-
-        <div id="gcodeSim" class="tab-content">
-          <div id="gcodeSimContainer">
-            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#9bb0c8">سيتم تفعيل المحاكاة بعد توليد G-code</div>
-          </div>
-        </div>
+        <div id="original" class="tab-content active"><canvas id="canvasOriginal"></canvas></div>
+        <div id="heatmap" class="tab-content"><canvas id="canvasHeatmap"></canvas></div>
+        <div id="contour" class="tab-content"><canvas id="canvasContour"></canvas></div>
+        <div id="threeD" class="tab-content"><div id="threeContainer"></div></div>
       </div>
 
-      <!-- يمين: إعدادات و G-code -->
+      <!-- لوحة التحكم -->
       <div class="panel">
-        <div class="panel-section">
-          <h3 style="margin:0 0 6px 0">⚙️ إعدادات الماكينة & العمل</h3>
-
-          <label for="machineType">نوع الماكينة</label>
-          <select id="machineType">
-            <option value="router">Router CNC</option>
-            <option value="laser">Laser Engraver</option>
-            <option value="plasma">Plasma Cutter</option>
-            <option value="3dprinter">3D Printer</option>
-          </select>
-
-          <div class="info-text" id="machineDescription" style="margin-top:8px;color:#9bb0c8">Router CNC - مناسبة للخشب والأكريليك.</div>
-
-          <label for="workWidth">عرض العمل (سم)</label>
-          <input id="workWidth" type="number" value="30" step="0.1"/>
-
-          <label for="workHeight">ارتفاع العمل (سم)</label>
-          <input id="workHeight" type="number" value="20" step="0.1"/>
-          <div class="dimension-info" id="dimInfo">300.0 × 200.0 مم</div>
-
-          <label for="originX">نقطة الأصل X (سم)</label>
-          <input id="originX" type="number" value="0" step="0.1"/>
-
-          <label for="originY">نقطة الأصل Y (سم)</label>
-          <input id="originY" type="number" value="0" step="0.1"/>
-
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <button id="btnCenterOrigin" class="secondary" style="flex:1">🎯 توسيط نقطة الأصل</button>
-            <button id="btnQuick" class="secondary" style="flex:1">⚡ إعداد اختبار سريع</button>
-          </div>
-        </div>
-
-        <div class="panel-section" style="margin-top:12px">
-          <h3 style="margin:0 0 6px 0">🚀 إعدادات التشغيل</h3>
-
-          <label for="feedRate">سرعة التغذية (مم/دقيقة)</label>
-          <input id="feedRate" type="number" value="800" min="10" max="5000"/>
-
-          <label for="safeZ">ارتفاع الأمان SafeZ (مم)</label>
-          <input id="safeZ" type="number" value="5.0" step="0.1" min="0"/>
-
-          <label for="scanDir">اتجاه المسح</label>
-          <select id="scanDir"><option value="x">أفقي (X)</option><option value="y">رأسي (Y)</option></select>
-
-          <label for="stepOver">خطوة المسح (مم)</label>
-          <input id="stepOver" type="number" value="5" step="0.1" min="0.1"/>
-        </div>
-
-        <div class="button-group">
+        <label>اتجاه المسارات</label>
+        <select id="scanDir"><option value="x">أفقي (X)</option><option value="y">رأسي (Y)</option></select>
+        <label>أقصى عمق (مم)</label><input id="maxDepth" type="number" value="3" step="0.1"/>
+        <label>Safe Z (مم)</label><input id="safeZ" type="number" value="5" step="0.1"/>
+        <label>سرعة التغذية (مم/د)</label><input id="feedRate" type="number" value="800"/>
+        <label>عكس Z</label><select id="invertZ"><option value="no">لا</option><option value="yes">نعم</option></select>
+        <label>خطوة المسح (مم)</label><input id="stepOver" type="number" value="5" step="0.1"/>
+        <div style="margin-top:10px">
           <button id="btnGen" class="primary">⚡ توليد G-code</button>
-          <button id="btnDownload" class="secondary">💾 تحميل G-code</button>
+          <button id="btnQuick" class="secondary">🧪 اختبار سريع</button>
+          <button id="btnDownload" class="secondary">💾 تحميل</button>
         </div>
-
-        <label style="margin-top:12px">📄 مخرجات G-code</label>
-        <textarea id="gcodeOut" readonly placeholder="سيظهر G-code هنا بعد التوليد..."></textarea>
+        <div id="estTime"></div>
+        <textarea id="gcodeOut" readonly placeholder="سيظهر G-code هنا..."></textarea>
       </div>
     </div>
   </div>
-
   <div id="toast"></div>
 
-  <script>
-    // ===== متغيرات عامة =====
-    let cvReady = false;
-    let grayMat = null;
-    let previewCanvas = null;
-    let currentScene = null;
-    let gcodeSimScene = null;
-    let gcodeSimAnimationId = null;
-    let isGcodeGenerated = false;
-    let scaleZ = parseFloat(document.getElementById('scaleZSlider').value || 1.0);
+<script>
+let cvReady=false,grayMat=null,contour=null,previewCanvas=null;
+function showToast(m,ms=2000){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',ms);}
+function cmToMm(cm){return cm*10;}
+function waitForCv(){if(window.cv&&cv.getBuildInformation){cvReady=true;document.getElementById('cvState').textContent='✅ OpenCV جاهز';}else if(window.cv){cv.onRuntimeInitialized=()=>{cvReady=true;document.getElementById('cvState').textContent='✅ OpenCV جاهز';};}else setTimeout(waitForCv,200);} waitForCv();
 
-    // ===== مساعدة: Toast =====
-    function showToast(msg, ms = 2000) {
-      const t = document.getElementById('toast');
-      t.textContent = msg;
-      t.style.display = 'block';
-      clearTimeout(t._t);
-      t._t = setTimeout(() => t.style.display = 'none', ms);
-    }
+document.querySelectorAll('.tabs button').forEach(b=>{b.addEventListener('click',()=>{document.querySelectorAll('.tabs button').forEach(bb=>bb.classList.remove('active'));document.querySelectorAll('.tab-content').forEach(tc=>tc.classList.remove('active'));b.classList.add('active');document.getElementById(b.dataset.tab).classList.add('active');if(b.dataset.tab==="threeD"&&grayMat)show3D();});});
 
-    // ===== وحدة تحويل =====
-    function cmToMm(cm){ return cm * 10; }
+document.getElementById('fileInput').addEventListener('change',e=>{
+  const file=e.target.files[0]; if(!file)return;
+  const img=new Image(); img.onload=function(){
+    previewCanvas=document.getElementById('canvasOriginal');
+    let w=img.width,h=img.height;const maxW=800,maxH=600;
+    if(w>maxW){h=(maxW/w)*h;w=maxW;} if(h>maxH){w=(maxH/h)*w;h=maxH;}
+    previewCanvas.width=w; previewCanvas.height=h;
+    const ctx=previewCanvas.getContext('2d'); ctx.drawImage(img,0,0,w,h);
+    if(cvReady) detectContours(); else showToast("⏳ انتظر OpenCV...");
+  }; img.src=URL.createObjectURL(file);
+});
 
-    // ===== انتظار تهيئة OpenCV =====
-    function waitForCv(){
-      if(window.cv && cv.getBuildInformation){
-        cvReady = true;
-        document.getElementById('cvState').textContent = '✅ OpenCV جاهز';
-        showToast('OpenCV تم تحميله');
-        return;
-      }
-      if(window.cv){
-        cv['onRuntimeInitialized'] = () => {
-          cvReady = true;
-          document.getElementById('cvState').textContent = '✅ OpenCV جاهز';
-          showToast('OpenCV تم تحميله');
-        };
-      } else {
-        setTimeout(waitForCv, 200);
-      }
-    }
-    waitForCv();
+function detectContours(){
+  let src=cv.imread(previewCanvas),gray=new cv.Mat(); cv.cvtColor(src,gray,cv.COLOR_RGBA2GRAY);
+  cv.GaussianBlur(gray,gray,new cv.Size(3,3),0,0);
+  let edges=new cv.Mat(); cv.Canny(gray,edges,50,150);
+  let contours=new cv.MatVector(),hier=new cv.Mat(); cv.findContours(edges,contours,hier,cv.RETR_EXTERNAL,cv.CHAIN_APPROX_SIMPLE);
+  let maxA=0;contour=null;
+  for(let i=0;i<contours.size();i++){let a=cv.contourArea(contours.get(i));if(a>maxA){maxA=a;contour=contours.get(i).clone();}}
+  if(grayMat)grayMat.delete(); grayMat=gray.clone();
+  renderHeatmap(gray); renderContour(gray);
+  src.delete();edges.delete();hier.delete();contours.delete();gray.delete();
+}
 
-    // ===== تبويبات =====
-    document.querySelectorAll('.tabs button').forEach(btn=>{
-      btn.addEventListener('click', ()=> {
-        document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(tc=>tc.classList.remove('active'));
-        btn.classList.add('active');
-        const id = btn.dataset.tab;
-        document.getElementById(id).classList.add('active');
+function renderHeatmap(gray){
+  let c=document.getElementById('canvasHeatmap');c.width=gray.cols;c.height=gray.rows;
+  let ctx=c.getContext('2d'),imgd=ctx.createImageData(c.width,c.height);
+  for(let y=0;y<gray.rows;y++){for(let x=0;x<gray.cols;x++){let v=gray.ucharPtr(y,x)[0],i=(y*gray.cols+x)*4;
+    imgd.data[i]=v; imgd.data[i+1]=0; imgd.data[i+2]=255-v; imgd.data[i+3]=255;}}
+  ctx.putImageData(imgd,0,0);
+}
 
-        if(id === 'threeD' && grayMat) { show3D(); }
-        if(id === 'gcodeSim' && isGcodeGenerated) { initGcodeSimulation(); }
-      });
-    });
+function renderContour(gray){
+  let c=document.getElementById('canvasContour');c.width=gray.cols;c.height=gray.rows;
+  let ctx=c.getContext('2d');ctx.drawImage(document.getElementById('canvasHeatmap'),0,0);
+  if(contour){ctx.strokeStyle="lime";ctx.beginPath();for(let i=0;i<contour.data32S.length;i+=2){let x=contour.data32S[i],y=contour.data32S[i+1];if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.closePath();ctx.stroke();}
+}
 
-    // ===== رفع الصورة ومعالجتها =====
-    document.getElementById('fileInput').addEventListener('change', e=>{
-      const file = e.target.files[0];
-      if(!file) return;
-      if(!file.type.match('image.*')){ showToast('⚠️ اختر ملف صورة'); return; }
-      const img = new Image();
-      img.onload = function(){
-        previewCanvas = document.getElementById('canvasOriginal');
-        const maxW = 900, maxH = 600;
-        let w = img.width, h = img.height;
-        if(w > maxW){ h = Math.round((maxW/w)*h); w = maxW; }
-        if(h > maxH){ w = Math.round((maxH/h)*w); h = maxH; }
-        previewCanvas.width = w; previewCanvas.height = h;
-        const ctx = previewCanvas.getContext('2d');
-        ctx.clearRect(0,0,w,h);
-        ctx.drawImage(img,0,0,w,h);
+function sampleGrayAt(x,y){
+  if(!grayMat)return 128; let gw=grayMat.cols,gh=grayMat.rows;
+  let gx=(x/previewCanvas.width)*(gw-1),gy=(y/previewCanvas.height)*(gh-1);
+  let xi=Math.floor(gx),yi=Math.floor(gy);return grayMat.ucharPtr(yi,xi)[0];
+}
 
-        // افعل المعالجة
-        if(cvReady) { detectContours(); } else { showToast('⏳ انتظار OpenCV...'); }
-      };
-      img.onerror = ()=> showToast('❌ خطأ في تحميل الصورة');
-      img.src = URL.createObjectURL(file);
-    });
+function generateRasterGcode(scaleDown=false){
+  if(!grayMat||!contour){showToast("❌ لا توجد صورة");return"";}
+  const dir=document.getElementById('scanDir').value,step=parseFloat(document.getElementById('stepOver').value),maxD=parseFloat(document.getElementById('maxDepth').value),feed=parseFloat(document.getElementById('feedRate').value),safeZ=parseFloat(document.getElementById('safeZ').value),invert=document.getElementById('invertZ').value==='yes';
+  let lines=["G21 G90 G17","G0 Z"+safeZ],total=0;
+  let st=scaleDown?step*4:step;
+  let sX=1,sY=1;
+  if(dir==='x'){
+    for(let y=0;y<previewCanvas.height;y+=st){
+      let row=[];
+      for(let x=0;x<previewCanvas.width;x++){if(cv.pointPolygonTest(contour,new cv.Point(x,y),false)>=0){let pv=sampleGrayAt(x,y);let z=-((255-pv)/255.0)*maxD;if(invert)z=-z;row.push({x:x*sX,y:y*sY,z});}}
+      if(row.length>1){if((y/st)%2!==0)row.reverse();lines.push(`G0 X${row[0].x.toFixed(2)} Y${row[0].y.toFixed(2)} Z${safeZ}`);lines.push("G1 F"+feed);
+        for(let i=0;i<row.length;i++){let p=row[i];lines.push(`G1 X${p.x.toFixed(2)} Y${p.y.toFixed(2)} Z${p.z.toFixed(2)}`);if(i>0)total+=Math.hypot(p.x-row[i-1].x,p.y-row[i-1].y);}lines.push("G0 Z"+safeZ);}}
+  }else{
+    for(let x=0;x<previewCanvas.width;x+=st){
+      let col=[];
+      for(let y=0;y<previewCanvas.height;y++){if(cv.pointPolygonTest(contour,new cv.Point(x,y),false)>=0){let pv=sampleGrayAt(x,y);let z=-((255-pv)/255.0)*maxD;if(invert)z=-z;col.push({x:x*sX,y:y*sY,z});}}
+      if(col.length>1){if((x/st)%2!==0)col.reverse();lines.push(`G0 X${col[0].x.toFixed(2)} Y${col[0].y.toFixed(2)} Z${safeZ}`);lines.push("G1 F"+feed);
+        for(let i=0;i<col.length;i++){let p=col[i];lines.push(`G1 X${p.x.toFixed(2)} Y${p.y.toFixed(2)} Z${p.z.toFixed(2)}`);if(i>0)total+=Math.hypot(p.x-col[i-1].x,p.y-col[i-1].y);}lines.push("G0 Z"+safeZ);}}
+  }
+  lines.push("M5","M30");document.getElementById('estTime').textContent="⏱️ "+(total/feed).toFixed(1)+" دقيقة";return lines.join("\n");
+}
 
-    // ===== إدارة إعدادات العرض =====
-    function updateDimInfo(){
-      const w = parseFloat(document.getElementById('workWidth').value)||30;
-      const h = parseFloat(document.getElementById('workHeight').value)||20;
-      document.getElementById('dimInfo').textContent = (cmToMm(w).toFixed(1)) + ' × ' + (cmToMm(h).toFixed(1)) + ' مم';
-    }
-    document.getElementById('workWidth').addEventListener('input', updateDimInfo);
-    document.getElementById('workHeight').addEventListener('input', updateDimInfo);
-    updateDimInfo();
+document.getElementById('btnGen').addEventListener('click',()=>{let g=generateRasterGcode(false);document.getElementById('gcodeOut').value=g;});
+document.getElementById('btnQuick').addEventListener('click',()=>{let g=generateRasterGcode(true);document.getElementById('gcodeOut').value=g;});
+document.getElementById('btnDownload').addEventListener('click',()=>{let t=document.getElementById('gcodeOut').value;if(!t){showToast("❌ لا يوجد G-code");return;}let b=new Blob([t],{type:"text/plain"}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download="cnc_output.gcode";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(u);});
 
-    document.getElementById('btnCenterOrigin').addEventListener('click', ()=>{
-      const w = parseFloat(document.getElementById('workWidth').value)||30;
-      const h = parseFloat(document.getElementById('workHeight').value)||20;
-      document.getElementById('originX').value = (w/2).toFixed(1);
-      document.getElementById('originY').value = (h/2).toFixed(1);
-      showToast('✅ تم توسيط نقطة الأصل');
-    });
-    document.getElementById('btnQuick').addEventListener('click', ()=>{
-      document.getElementById('workWidth').value = 15;
-      document.getElementById('workHeight').value = 10;
-      document.getElementById('stepOver').value = 2;
-      document.getElementById('maxDepth').value = 1;
-      updateDimInfo();
-      showToast('⚡ إعداد اختبار سريع مفعل');
-    });
-
-    // ===== معالجة الصور (OpenCV) =====
-    function sampleGrayAt(x,y){
-      if(!grayMat || !previewCanvas) return 128;
-      const gw = grayMat.cols, gh = grayMat.rows;
-      if(x<0||x>=previewCanvas.width||y<0||y>=previewCanvas.height) return 128;
-      const gx_f = (x/previewCanvas.width) * (gw-1);
-      const gy_f = (y/previewCanvas.height) * (gh-1);
-      const x0 = Math.floor(gx_f), y0 = Math.floor(gy_f);
-      const x1 = Math.min(gw-1,x0+1), y1 = Math.min(gh-1,y0+1);
-      const sx = gx_f - x0, sy = gy_f - y0;
-      const v00 = grayMat.ucharPtr(y0,x0)[0];
-      const v10 = grayMat.ucharPtr(y0,x1)[0];
-      const v01 = grayMat.ucharPtr(y1,x0)[0];
-      const v11 = grayMat.ucharPtr(y1,x1)[0];
-      const v0 = v00*(1-sx)+v10*sx;
-      const v1 = v01*(1-sx)+v11*sx;
-      return v0*(1-sy)+v1*sy;
-    }
-
-    function detectContours(){
-      if(!cvReady || !previewCanvas) { showToast('⚠️ افتح صورة أولاً'); return; }
-      try{
-        const src = cv.imread(previewCanvas);
-        grayMat = new cv.Mat();
-        cv.cvtColor(src, grayMat, cv.COLOR_RGBA2GRAY);
-        const blurred = new cv.Mat();
-        cv.GaussianBlur(grayMat, blurred, new cv.Size(5,5), 0);
-        const edges = new cv.Mat();
-        cv.Canny(blurred, edges, 50, 150);
-        const contours = new cv.MatVector();
-        const hierarchy = new cv.Mat();
-        cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-        // رسم الحواف على canvasContour
-        const contourCanvas = document.getElementById('canvasContour');
-        contourCanvas.width = previewCanvas.width; contourCanvas.height = previewCanvas.height;
-        const ctx = contourCanvas.getContext('2d');
-        ctx.clearRect(0,0,contourCanvas.width,contourCanvas.height);
-        ctx.drawImage(previewCanvas,0,0);
-        ctx.strokeStyle = '#06b6d4'; ctx.lineWidth = 2;
-
-        for(let i=0;i<contours.size();i++){
-          const cnt = contours.get(i);
-          ctx.beginPath();
-          for(let j=0;j<cnt.data32S.length;j+=2){
-            const x = cnt.data32S[j], y = cnt.data32S[j+1];
-            if(j===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-          }
-          ctx.closePath(); ctx.stroke();
-        }
-
-        // تحرير مؤقت لبعض المات
-        src.delete(); blurred.delete(); edges.delete(); contours.delete(); hierarchy.delete();
-
-        // إنشاء Heatmap
-        createHeatmap();
-        showToast('✅ انتهت معالجة الصورة');
-      }catch(err){
-        console.error(err);
-        showToast('❌ خطأ أثناء معالجة الصورة');
-      }
-    }
-
-    function createHeatmap(){
-      if(!grayMat || !previewCanvas) return;
-      const heatmapCanvas = document.getElementById('canvasHeatmap');
-      heatmapCanvas.width = previewCanvas.width; heatmapCanvas.height = previewCanvas.height;
-      const ctx = heatmapCanvas.getContext('2d'); ctx.clearRect(0,0,heatmapCanvas.width,heatmapCanvas.height);
-      ctx.drawImage(previewCanvas,0,0);
-      const imageData = ctx.getImageData(0,0,heatmapCanvas.width,heatmapCanvas.height);
-      const data = imageData.data;
-      for(let i=0;i<data.length;i+=4){
-        const px = (i/4)%heatmapCanvas.width; const py = Math.floor((i/4)/heatmapCanvas.width);
-        const g = sampleGrayAt(px,py);
-        let r,gc,b;
-        if(g<64){ r=0; gc=Math.floor((g/64)*255); b=255; }
-        else if(g<128){ r=Math.floor(((g-64)/64)*255); gc=255; b=Math.floor((1-((g-64)/64))*255); }
-        else if(g<192){ r=255; gc=Math.floor((1-((g-128)/64))*255); b=0; }
-        else { r=255; gc=Math.floor((1-((g-192)/64))*128); b=0; }
-        const alpha=0.6;
-        data[i]=Math.floor(data[i]*(1-alpha)+r*alpha);
-        data[i+1]=Math.floor(data[i+1]*(1-alpha)+gc*alpha);
-        data[i+2]=Math.floor(data[i+2]*(1-alpha)+b*alpha);
-      }
-      ctx.putImageData(imageData,0,0);
-    }
-
-    // ===== المعاينة 3D =====
-    function disposeScene(){
-      if(!currentScene) return;
-      try{
-        if(currentScene.renderer && currentScene.renderer.domElement && currentScene.renderer.domElement.parentNode)
-          currentScene.renderer.domElement.parentNode.removeChild(currentScene.renderer.domElement);
-        if(currentScene.geometry) currentScene.geometry.dispose();
-        if(currentScene.material) currentScene.material.dispose();
-        if(currentScene.renderer){ currentScene.renderer.forceContextLoss(); currentScene.renderer.domElement=null; currentScene.renderer=null; }
-      }catch(e){ console.warn('cleanup error',e); }
-      currentScene = null;
-    }
-
-    function show3D(){
-      if(!grayMat || !previewCanvas){ showToast('⚠️ حمل صورة أولاً'); return; }
-      const container = document.getElementById('threeContainer');
-      container.innerHTML = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#9bb0c8">جاري إنشاء المشهد 3D...</div>';
-      disposeScene();
-
-      setTimeout(()=>{
-        try{
-          const workWcm = parseFloat(document.getElementById('workWidth').value) || 30;
-          const workHcm = parseFloat(document.getElementById('workHeight').value) || 20;
-          const workWmm = cmToMm(workWcm), workHmm = cmToMm(workHcm);
-
-          const sceneUnitPerMm = 1/10; // 1 scene unit = 10 mm
-          const planeWidth = workWmm * sceneUnitPerMm;
-          const planeHeight = workHmm * sceneUnitPerMm;
-
-          const segX = Math.max(1, previewCanvas.width-1);
-          const segY = Math.max(1, previewCanvas.height-1);
-
-          const scene = new THREE.Scene();
-          const camera = new THREE.PerspectiveCamera(45, container.clientWidth/container.clientHeight, 0.1, 1000);
-          const renderer = new THREE.WebGLRenderer({antialias:true});
-          renderer.setSize(container.clientWidth, container.clientHeight);
-          renderer.setClearColor(0x041022);
-          container.innerHTML = '';
-          container.appendChild(renderer.domElement);
-
-          const controls = new THREE.OrbitControls(camera, renderer.domElement);
-          controls.enableDamping = true; controls.dampingFactor = 0.05;
-
-          const ambient = new THREE.AmbientLight(0x555555); scene.add(ambient);
-          const dir = new THREE.DirectionalLight(0xffffff,0.9); dir.position.set(1,1,1); scene.add(dir);
-
-          const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight, segX, segY);
-          const material = new THREE.MeshPhongMaterial({color:0x06b6d4,side:THREE.DoubleSide,flatShading:true});
-          const plane = new THREE.Mesh(geometry, material);
-          plane.rotation.x = -Math.PI/2;
-          scene.add(plane);
-
-          // وضع الكاميرا
-          camera.position.set(0, Math.max(planeWidth,planeHeight), Math.max(planeWidth,planeHeight)*0.8 + 2);
-          camera.lookAt(scene.position);
-          controls.update();
-
-          // حفظ المراجع
-          currentScene = { scene, camera, renderer, controls, geometry, material, plane, sceneUnitPerMm, segX, segY, planeWidth, planeHeight };
-
-          // RENDER LOOP
-          function animate(){ requestAnimationFrame(animate); controls.update(); renderer.render(scene,camera); }
-          animate();
-
-          // استمع لتغير الحجم
-          window.addEventListener('resize', ()=> {
-            if(!currentScene || !currentScene.camera || !currentScene.renderer) return;
-            currentScene.camera.aspect = container.clientWidth/container.clientHeight;
-            currentScene.camera.updateProjectionMatrix();
-            currentScene.renderer.setSize(container.clientWidth, container.clientHeight);
-          });
-
-          // حساب ارتفاعات اول مرة
-          update3DHeights();
-          showToast('✅ تم إنشاء المعاينة ثلاثية الأبعاد');
-        }catch(err){ console.error(err); container.innerHTML = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#f88">خطأ في إنشاء 3D</div>'; showToast('❌ خطأ في 3D'); }
-      },50);
-    }
-
-    // إعادة حساب الارتفاعات في الـ geometry عند تغيير scaleZ أو maxDepth
-    function update3DHeights(){
-      if(!currentScene || !grayMat || !previewCanvas) return;
-      const geometry = currentScene.geometry;
-      const positions = geometry.attributes.position.array;
-      const segX = currentScene.segX;
-      const segY = currentScene.segY;
-      const sceneUnitPerMm = currentScene.sceneUnitPerMm;
-      const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3.0;
-      scaleZ = parseFloat(document.getElementById('scaleZSlider').value) || 1.0;
-      document.getElementById('scaleZVal').textContent = scaleZ.toFixed(2);
-
-      for(let i=0;i<positions.length;i+=3){
-        const vi = i/3;
-        const ix = vi % (segX+1);
-        const iy = Math.floor(vi / (segX+1));
-        const xPix = Math.round((ix / (segX)) * (previewCanvas.width-1));
-        const yPix = Math.round((iy / (segY)) * (previewCanvas.height-1));
-        const gray = sampleGrayAt(xPix, yPix);
-        const depthMm = ((255 - gray) / 255) * maxDepth * scaleZ; // mm
-        const depthScene = depthMm * sceneUnitPerMm; // scene units
-        positions[i+2] = depthScene;
-      }
-      geometry.attributes.position.needsUpdate = true;
-      geometry.computeVertexNormals();
-    }
-
-    document.getElementById('scaleZSlider').addEventListener('input', ()=>{
-      if(currentScene) update3DHeights();
-    });
-    document.getElementById('maxDepth').addEventListener('input', ()=>{
-      if(currentScene) update3DHeights();
-    });
-
-    // ===== توليد G-code محسّن =====
-    document.getElementById('btnGen').addEventListener('click', ()=>{
-      if(!grayMat || !previewCanvas){ showToast('⚠️ لا توجد صورة، ارفع صورة أولاً'); return; }
-      try{
-        const workWcm = parseFloat(document.getElementById('workWidth').value) || 30;
-        const workHcm = parseFloat(document.getElementById('workHeight').value) || 20;
-        const workWmm = cmToMm(workWcm), workHmm = cmToMm(workHcm);
-        const originXcm = parseFloat(document.getElementById('originX').value) || 0;
-        const originYcm = parseFloat(document.getElementById('originY').value) || 0;
-        const originXmm = cmToMm(originXcm), originYmm = cmToMm(originYcm);
-        const feedRate = parseFloat(document.getElementById('feedRate').value) || 800;
-        const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
-        const scanDir = document.getElementById('scanDir').value || 'x';
-        const stepOver = parseFloat(document.getElementById('stepOver').value) || 5;
-        const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3.0;
-
-        const scaleX = workWmm / previewCanvas.width;
-        const scaleY = workHmm / previewCanvas.height;
-
-        // clear progress
-        document.getElementById('genProgress').style.width = '0%';
-
-        let gcode = `; G-code generated by CNC AI\\n`;
-        gcode += `; Work area: ${workWmm.toFixed(1)} x ${workHmm.toFixed(1)} mm\\n`;
-        gcode += `; Max depth: ${maxDepth.toFixed(2)} mm | StepOver: ${stepOver.toFixed(2)} mm\\n`;
-        gcode += `G21\\nG90\\nG17\\nG94\\n\\n`;
-        gcode += `G0 Z${safeZ.toFixed(3)} ; safe Z\\n`;
-        gcode += `G0 X${originXmm.toFixed(3)} Y${originYmm.toFixed(3)} ; origin\\n\\n`;
-
-        // stepOver in pixels (choose based on X or Y scaling)
-        const pxPerMmX = previewCanvas.width / workWmm;
-        const pxPerMmY = previewCanvas.height / workHmm;
-        const pxStep = Math.max(1, Math.round(stepOver * Math.max(pxPerMmX, pxPerMmY)));
-
-        // total steps for progress
-        const totalSteps = (scanDir === 'x') ? Math.ceil(previewCanvas.height / pxStep) : Math.ceil(previewCanvas.width / pxStep);
-        let stepIdx = 0;
-
-        if(scanDir === 'x'){
-          for(let y=0; y<previewCanvas.height; y += pxStep){
-            let cutting = false;
-            // move to line start (rapid)
-            const lineYmm = originYmm + y * scaleY;
-            gcode += `G0 X${originXmm.toFixed(3)} Y${lineYmm.toFixed(3)}\\n`;
-            for(let x=0; x<previewCanvas.width; x++){
-              const gray = sampleGrayAt(x,y);
-              const depth = ((255 - gray)/255) * maxDepth; // mm
-              // threshold minimal depth to avoid tiny moves
-              const minDepth = 0.02;
-              const targetZ = depth > minDepth ? -depth : safeZ;
-              const xmm = originXmm + x * scaleX;
-              const ymm = lineYmm;
-              if(depth > minDepth && !cutting){
-                // plunge to cut depth
-                gcode += `G1 Z${(-depth).toFixed(3)} F${Math.max(20, Math.round(feedRate/4))} ; plunge\\n`;
-                cutting = true;
-              } else if(depth <= minDepth && cutting){
-                // lift to safeZ
-                gcode += `G0 Z${safeZ.toFixed(3)} ; lift\\n`;
-                cutting = false;
-              }
-              if(cutting){
-                gcode += `G1 X${xmm.toFixed(3)} Y${ymm.toFixed(3)} Z${(-depth).toFixed(3)} F${feedRate.toFixed(0)}\\n`;
-              } else {
-                gcode += `G0 X${xmm.toFixed(3)} Y${ymm.toFixed(3)} ; rapid\\n`;
-              }
-            }
-            if(cutting){ gcode += `G0 Z${safeZ.toFixed(3)} ; lift end of line\\n`; cutting=false; }
-            stepIdx++;
-            document.getElementById('genProgress').style.width = `${Math.round((stepIdx/totalSteps)*100)}%`;
-          }
-        } else {
-          // scan along Y (columns)
-          for(let x=0; x<previewCanvas.width; x += pxStep){
-            let cutting = false;
-            const lineXmm = originXmm + x * scaleX;
-            gcode += `G0 X${lineXmm.toFixed(3)} Y${originYmm.toFixed(3)}\\n`;
-            for(let y=0; y<previewCanvas.height; y++){
-              const gray = sampleGrayAt(x,y);
-              const depth = ((255 - gray)/255) * maxDepth;
-              const minDepth = 0.02;
-              const targetZ = depth > minDepth ? -depth : safeZ;
-              const xmm = lineXmm;
-              const ymm = originYmm + y * scaleY;
-              if(depth > minDepth && !cutting){
-                gcode += `G1 Z${(-depth).toFixed(3)} F${Math.max(20, Math.round(feedRate/4))} ; plunge\\n`;
-                cutting = true;
-              } else if(depth <= minDepth && cutting){
-                gcode += `G0 Z${safeZ.toFixed(3)} ; lift\\n`;
-                cutting = false;
-              }
-              if(cutting){
-                gcode += `G1 X${xmm.toFixed(3)} Y${ymm.toFixed(3)} Z${(-depth).toFixed(3)} F${feedRate.toFixed(0)}\\n`;
-              } else {
-                gcode += `G0 X${xmm.toFixed(3)} Y${ymm.toFixed(3)} ; rapid\\n`;
-              }
-            }
-            if(cutting){ gcode += `G0 Z${safeZ.toFixed(3)} ; lift end of col\\n`; cutting=false; }
-            stepIdx++;
-            document.getElementById('genProgress').style.width = `${Math.round((stepIdx/totalSteps)*100)}%`;
-          }
-        }
-
-        gcode += `\\nG0 Z${safeZ.toFixed(3)}\\nG0 X${originXmm.toFixed(3)} Y${originYmm.toFixed(3)}\\nM30\\n`;
-        document.getElementById('gcodeOut').value = gcode;
-        document.getElementById('gcodeSimTab').disabled = false;
-        isGcodeGenerated = true;
-        document.getElementById('genProgress').style.width = '100%';
-        showToast('✅ تم توليد G-code');
-      }catch(e){ console.error(e); showToast('❌ خطأ في توليد G-code'); }
-    });
-
-    // ===== تحميل G-code كملف =====
-    document.getElementById('btnDownload').addEventListener('click', ()=>{
-      const g = document.getElementById('gcodeOut').value;
-      if(!g || g.trim()===''){ showToast('⚠️ لا يوجد G-code للتحميل'); return; }
-      const blob = new Blob([g],{type:'text/plain'}); const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = 'cnc_ai_gcode.nc'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-      showToast('💾 تم تحميل G-code');
-    });
-
-    // ===== محاكاة G-code (مبسطة) =====
-    function initGcodeSimulation(){
-      if(!isGcodeGenerated){ showToast('⚠️ توليد G-code أولاً'); return; }
-      const container = document.getElementById('gcodeSimContainer');
-      container.innerHTML = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#9bb0c8">جاري تحضير المحاكاة...</div>';
-      if(gcodeSimScene){ try{ if(gcodeSimScene.renderer && gcodeSimScene.renderer.domElement && gcodeSimScene.renderer.domElement.parentNode) gcodeSimScene.renderer.domElement.parentNode.removeChild(gcodeSimScene.renderer.domElement); if(gcodeSimAnimationId){ cancelAnimationFrame(gcodeSimAnimationId); gcodeSimAnimationId=null; } }catch(e){} gcodeSimScene=null; }
-      setTimeout(()=>{
-        try{
-          const scene = new THREE.Scene();
-          const camera = new THREE.PerspectiveCamera(60, container.clientWidth/container.clientHeight, 0.1, 1000);
-          const renderer = new THREE.WebGLRenderer({antialias:true});
-          renderer.setSize(container.clientWidth, container.clientHeight);
-          renderer.setClearColor(0x06111a);
-          container.innerHTML = ''; container.appendChild(renderer.domElement);
-          const controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping=true; controls.dampingFactor=0.05;
-          const ambient = new THREE.AmbientLight(0x555555); scene.add(ambient);
-          const dir = new THREE.DirectionalLight(0xffffff,0.9); dir.position.set(1,1,1); scene.add(dir);
-          const grid = new THREE.GridHelper(40,40,0x222222,0x111111); scene.add(grid);
-          const axes = new THREE.AxesHelper(20); scene.add(axes);
-
-          // منصة العمل حسب الأبعاد
-          const workWmm = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30);
-          const workHmm = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20);
-          const sceneUnitPerMm = 1/10;
-          const platform = new THREE.Mesh(new THREE.BoxGeometry(workWmm*sceneUnitPerMm, workHmm*sceneUnitPerMm, 0.5), new THREE.MeshPhongMaterial({color:0x333333}));
-          platform.position.z = -0.25; scene.add(platform);
-
-          // أداة
-          const tool = new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.2,1,8), new THREE.MeshPhongMaterial({color:0xff3333}));
-          tool.position.set(0,0,1); scene.add(tool);
-
-          // path
-          const pathPoints = []; const pathGeo = new THREE.BufferGeometry().setFromPoints(pathPoints);
-          const pathMat = new THREE.LineBasicMaterial({color:0x06b6d4});
-          const path = new THREE.Line(pathGeo, pathMat); scene.add(path);
-
-          camera.position.set(20,20,20); camera.lookAt(0,0,0); controls.update();
-
-          gcodeSimScene = { scene, camera, renderer, controls, tool, path, pathPoints, sceneUnitPerMm };
-
-          // controls UI
-          const simControls = document.createElement('div'); simControls.className='sim-controls';
-          simControls.style.position='absolute'; simControls.style.bottom='10px'; simControls.style.left='10px';
-          simControls.innerHTML = '<button id=\"simPlay\">▶</button><button id=\"simPause\">⏸</button><button id=\"simReset\">⏹</button>';
-          container.appendChild(simControls);
-          const simInfo = document.createElement('div'); simInfo.className='sim-info'; simInfo.style.position='absolute'; simInfo.style.top='10px'; simInfo.style.left='10px'; simInfo.textContent='جاهز للمحاكاة'; container.appendChild(simInfo);
-
-          document.getElementById('simPlay').addEventListener('click', ()=> startGcodeSimulation());
-          document.getElementById('simPause').addEventListener('click', ()=>{
-            if(gcodeSimAnimationId){ cancelAnimationFrame(gcodeSimAnimationId); gcodeSimAnimationId=null; simInfo.textContent='متوقف'; }
-          });
-          document.getElementById('simReset').addEventListener('click', ()=>{
-            if(gcodeSimAnimationId){ cancelAnimationFrame(gcodeSimAnimationId); gcodeSimAnimationId=null; }
-            gcodeSimScene.tool.position.set(0,0,1); gcodeSimScene.pathPoints.length=0; gcodeSimScene.path.geometry.setFromPoints(gcodeSimScene.pathPoints); simInfo.textContent='جاهز';
-          });
-
-          function animate(){ requestAnimationFrame(animate); controls.update(); renderer.render(scene,camera); }
-          animate();
-          showToast('✅ تم تحضير المحاكاة');
-        }catch(e){ console.error(e); container.innerHTML = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#f88">خطأ في تحضير المحاكاة</div>'; showToast('❌ خطأ في المحاكاة'); }
-      },50);
-    }
-
-    function startGcodeSimulation(){
-      if(!gcodeSimScene){ showToast('⚠️ لم يتم تهيئة المحاكاة'); return; }
-      const gcode = document.getElementById('gcodeOut').value;
-      if(!gcode || gcode.trim()===''){ showToast('⚠️ لا يوجد G-code'); return; }
-      const lines = gcode.split('\\n');
-      const tool = gcodeSimScene.tool;
-      const path = gcodeSimScene.path;
-      const points = gcodeSimScene.pathPoints;
-      points.length = 0; path.geometry.setFromPoints(points);
-      let idx = 0;
-      function step(){
-        if(idx >= lines.length){ gcodeSimAnimationId = null; return; }
-        const line = lines[idx++].trim();
-        if(line.startsWith('G1')||line.startsWith('G0')){
-          const xm = (line.match(/X([\\d.-]+)/) || [])[1];
-          const ym = (line.match(/Y([\\d.-]+)/) || [])[1];
-          const zm = (line.match(/Z([\\d.-]+)/) || [])[1];
-          if(xm && ym){
-            const x = parseFloat(xm) / 10; // mm->scene units scale used earlier
-            const y = parseFloat(ym) / 10;
-            const z = zm ? (parseFloat(zm)/10 + 1) : tool.position.z;
-            tool.position.set(x, y, z);
-            points.push(new THREE.Vector3(x,y,z));
-            path.geometry.setFromPoints(points);
-          }
-        }
-        gcodeSimAnimationId = requestAnimationFrame(step);
-      }
-      step();
-    }
-
-    // ===== انتهاء التهيئة الصفحة =====
-    document.addEventListener('DOMContentLoaded', ()=>{
-      setTimeout(()=> showToast('مرحباً — ارفع صورة للبدء'), 700);
-    });
-  </script>
+function show3D(){
+  const cont=document.getElementById('threeContainer');cont.innerHTML="";
+  const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(45,cont.clientWidth/cont.clientHeight,.1,5000),renderer=new THREE.WebGLRenderer({antialias:true});
+  renderer.setSize(cont.clientWidth,cont.clientHeight);cont.appendChild(renderer.domElement);
+  let scale=Math.max(grayMat.cols,grayMat.rows)>300?2:1; // downsample
+  let geom=new THREE.PlaneGeometry(grayMat.cols/scale,grayMat.rows/scale,grayMat.cols/scale-1,grayMat.rows/scale-1);
+  let colors=new Uint8Array((grayMat.cols/scale)*(grayMat.rows/scale)*3);
+  for(let y=0;y<grayMat.rows;y+=scale){for(let x=0;x<grayMat.cols;x+=scale){let v=grayMat.ucharPtr(y,x)[0],z=(1-v/255.0)*parseFloat(document.getElementById('maxDepth').value)*10;let idx=(y/scale)*(grayMat.cols/scale)+(x/scale);geom.attributes.position.setZ(idx,z);colors[idx*3]=v;colors[idx*3+1]=0;colors[idx*3+2]=255-v;}}
+  geom.attributes.position.needsUpdate=true;geom.computeVertexNormals();geom.rotateX(-Math.PI/2);
+  let tex=new THREE.DataTexture(colors,grayMat.cols/scale,grayMat.rows/scale,THREE.RGBFormat);tex.needsUpdate=true;
+  let mesh=new THREE.Mesh(geom,new THREE.MeshStandardMaterial({map:tex,side:THREE.DoubleSide}));scene.add(mesh);
+  let light=new THREE.DirectionalLight(0xffffff,1);light.position.set(50,100,150);scene.add(light);scene.add(new THREE.AmbientLight(0x404040));
+  camera.position.set(0,-grayMat.rows,grayMat.rows*1.5);
+  let controls=new THREE.OrbitControls(camera,renderer.domElement);
+  (function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera);})();
+}
+</script>
 </body>
 </html>
