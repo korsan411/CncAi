@@ -1,672 +1,221 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>CNC AI — Dual Mode (Raster + Contour)</title>
-
-  <!-- مكتبات -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/controls/OrbitControls.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CNC AI - Raster مع إعدادات متقدمة</title>
   <script async src="https://docs.opencv.org/4.8.0/opencv.js"></script>
-
   <style>
-    :root{
-      --bg:#041022; --panel:#0b1320; --muted:#9bb0c8; --accent:#06b6d4; --text:#e6eef6; --card-border:#1e293b;
-    }
-    body{ margin:0; font-family:Arial,Segoe UI,system-ui; background:var(--bg); color:var(--text); }
-    .app{ max-width:1400px; margin:16px auto; padding:14px; }
-    header{ display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--card-border); }
-    .grid{ display:grid; grid-template-columns:1fr 440px; gap:16px; }
-    @media(max-width:1000px){ .grid{ grid-template-columns:1fr; } }
-    .panel{ background:var(--panel); padding:14px; border-radius:10px; border:1px solid var(--card-border); }
-    .tabs{ display:flex; gap:6px; border-bottom:1px solid var(--card-border); margin-top:12px;}
-    .tabs button{ padding:8px 12px; border-radius:6px 6px 0 0; border:none; background:transparent; color:var(--muted); cursor:pointer; }
-    .tabs button.active{ background:var(--accent); color:#021; }
-    .tab-content{ display:none; margin-top:12px; }
-    .tab-content.active{ display:block; }
-    .canvas-placeholder{ width:100%; height:300px; background:#000; border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--muted); border:1px solid #334155; }
-    canvas{ display:block; border-radius:6px; background:#000; max-width:100%; border:1px solid #334155; transform-origin: top left; }
-    .file-input-container{ position:relative; width:100%; margin-bottom:8px; }
-    .file-input-label{ display:block; padding:10px; background:#1e293b; color:var(--text); text-align:center; border-radius:6px; cursor:pointer; border:2px dashed #334155; }
-    .controls-row{ display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap;}
-    label{ font-weight:bold; color:var(--text); display:block; margin-top:8px; }
-    input, select, textarea{ padding:8px 10px; border-radius:6px; border:1px solid var(--card-border); background:#0f172a; color:var(--text); margin-top:6px; }
-    .button-group{ display:flex; flex-direction:column; gap:8px; margin-top:12px; }
-    button.primary{ background:var(--accent); color:#021; border:none; padding:10px; border-radius:8px; cursor:pointer; }
-    button.secondary{ background:#1e293b; color:var(--text); border:none; padding:10px; border-radius:8px; cursor:pointer; }
-    #toast{ position:fixed; left:16px; bottom:16px; background:rgba(0,0,0,0.85); color:#fff; padding:10px 14px; border-radius:8px; display:none; z-index:10000; }
-    .progress-bar{ width:100%; height:8px; background:#111827; border-radius:6px; overflow:hidden; margin-top:8px; }
-    .progress-fill{ height:100%; width:0%; background:var(--accent); transition:width .2s; }
-    .meta-line{ font-size:0.85rem; color:var(--muted); margin-top:8px; }
-    #threeContainer{ width:100%; height:400px; background:#081224; border-radius:8px; overflow:hidden; position:relative; }
-    textarea{ width:100%; height:200px; resize:vertical; background:#021024; color:#cfeaf2; border-radius:8px; padding:8px; border:1px solid var(--card-border); }
+    body { font-family: Arial, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 0; }
+    header { background: #1e293b; padding: 10px 20px; font-size: 1.2rem; color: #06b6d4; }
+    .container { display: flex; gap: 16px; padding: 16px; }
+    .panel { background: #1e293b; padding: 12px; border-radius: 8px; flex: 1; }
+    canvas { max-width: 100%; background: #000; border-radius: 6px; display: block; margin: 0 auto; }
+    label { display: block; margin-top: 8px; }
+    input, select { padding: 6px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; width: 100%; }
+    button { margin-top: 10px; padding: 10px; border: none; border-radius: 6px; cursor: pointer; }
+    button.primary { background: #06b6d4; color: #021; width: 100%; }
+    #advancedSettings { display: none; margin-top: 10px; padding: 10px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; }
+    .toggle-adv { background: #334155; color: #e2e8f0; width: 100%; }
+    textarea { width: 100%; height: 200px; margin-top: 10px; border-radius: 6px; background: #0f172a; color: #cbd5e1; border: 1px solid #334155; padding: 8px; }
   </style>
 </head>
 <body>
-  <div class="app">
-    <header>
-      <h1 style="margin:0; color:var(--accent)">CNC AI — Dual Mode</h1>
-      <div style="display:flex; gap:10px; align-items:center;">
-        <div id="cvState"><span style="display:inline-block;width:14px;height:14px;border:2px solid var(--accent);border-radius:50%;margin-left:8px"></span> جاري تحميل OpenCV...</div>
-      </div>
-    </header>
+  <header>🪵 CNC AI - Raster مع إعدادات متقدمة</header>
+  <div class="container">
+    <!-- المعاينة -->
+    <div class="panel">
+      <input type="file" id="fileInput" accept="image/*">
+      <canvas id="canvasOriginal"></canvas>
+    </div>
 
-    <div class="grid">
-      <!-- left: preview -->
-      <div class="panel">
-        <div class="file-input-container">
-          <input id="fileInput" type="file" accept="image/*" style="opacity:0; position:absolute; left:0; top:0; width:100%; height:100%; cursor:pointer;"/>
-          <label class="file-input-label" for="fileInput">📁 اختر صورة للتحميل</label>
-        </div>
-        <div class="meta-line" id="imageMeta">لا توجد صورة محملة</div>
+    <!-- الإعدادات -->
+    <div class="panel">
+      <h3>⚙️ الإعدادات الأساسية</h3>
+      <label>عرض العمل (سم): <input type="number" id="workWidth" value="30"></label>
+      <label>ارتفاع العمل (سم): <input type="number" id="workHeight" value="20"></label>
+      <label>عمق العمل (مم): <input type="number" id="workDepth" value="3.0"></label>
+      <label>سرعة التغذية (مم/دقيقة): <input type="number" id="feedRate" value="800"></label>
+      <label>ارتفاع الأمان Z (مم): <input type="number" id="safeZ" value="5"></label>
+      <label>خطوة المسح (مم): <input type="number" id="stepOver" value="5"></label>
 
-        <div class="tabs">
-          <button data-tab="original" class="active">🖼️ الأصلية</button>
-          <button data-tab="heatmap">🔥 Heatmap</button>
-          <button data-tab="contour">📐 الحواف</button>
-          <button data-tab="simulation">🎬 محاكاة 3D</button>
-        </div>
-
-        <div id="original" class="tab-content active">
-          <div class="canvas-placeholder" id="originalPlaceholder">سيتم عرض الصورة هنا</div>
-          <canvas id="canvasOriginal" style="display:none;"></canvas>
-          <div class="controls-row">
-            <button id="origZoomIn" class="secondary">+</button>
-            <button id="origZoomOut" class="secondary">−</button>
-            <button id="origReset" class="secondary">⟲</button>
-            <label style="margin-left:8px"><input type="checkbox" id="autoResize" checked/> ضغط تلقائي للصورة</label>
-          </div>
-        </div>
-
-        <div id="heatmap" class="tab-content">
-          <div class="canvas-placeholder" id="heatmapPlaceholder">Heatmap ستظهر هنا</div>
-          <canvas id="canvasHeatmap" style="display:none;"></canvas>
-          <div class="controls-row">
-            <button id="heatZoomIn" class="secondary">+</button>
-            <button id="heatZoomOut" class="secondary">−</button>
-            <button id="heatReset" class="secondary">⟲</button>
-            <label>Colormap:
-              <select id="colormapSelect">
-                <option value="jet">Jet</option>
-                <option value="hot">Hot</option>
-                <option value="cool">Cool</option>
-                <option value="gray">Gray</option>
-              </select>
-            </label>
-          </div>
-        </div>
-
-        <div id="contour" class="tab-content">
-          <div class="canvas-placeholder" id="contourPlaceholder">Contour ستظهر هنا</div>
-          <canvas id="canvasContour" style="display:none;"></canvas>
-          <div class="controls-row">
-            <button id="contZoomIn" class="secondary">+</button>
-            <button id="contZoomOut" class="secondary">−</button>
-            <button id="contReset" class="secondary">⟲</button>
-            <label><input type="checkbox" id="showAllContours" checked/> إظهار الكونتورات التفصيلية</label>
-          </div>
-        </div>
-
-        <div id="simulation" class="tab-content">
-          <div id="threeContainer">
-            <div class="canvas-placeholder" id="simulationPlaceholder">محاكاة 3D ستظهر هنا بعد توليد G-code</div>
-          </div>
-        </div>
+      <button class="toggle-adv" id="toggleAdvanced">⚙️ الإعدادات المتقدمة</button>
+      <div id="advancedSettings">
+        <label>🪄 نعومة السطح (Smoothing):
+          <select id="smoothing">
+            <option value="none">بدون</option>
+            <option value="low">منخفض</option>
+            <option value="medium">متوسط</option>
+            <option value="high">عالي</option>
+          </select>
+        </label>
+        <label>📏 مقياس العمق Z:
+          <input type="number" id="zScale" value="1.0" step="0.1">
+        </label>
+        <label><input type="checkbox" id="invertZ"> عكس العمق (Invert Z)</label>
+        <label>↔️ اتجاه المسح:
+          <select id="scanDir">
+            <option value="x">أفقي (X)</option>
+            <option value="y">عمودي (Y)</option>
+            <option value="diag">قطري</option>
+          </select>
+        </label>
+        <label><input type="checkbox" id="detailFilter"> فلترة التفاصيل الصغيرة</label>
       </div>
 
-      <!-- right: settings + actions -->
-      <div class="panel">
-        <h3 style="margin-top:0;color:var(--muted)">⚙️ إعدادات</h3>
-
-        <label>نوع الماكينة</label>
-        <select id="machineType">
-          <option value="router">Router CNC</option>
-          <option value="laser">Laser Engraver</option>
-          <option value="plasma">Plasma Cutter</option>
-          <option value="3dprinter">3D Printer</option>
-        </select>
-
-        <label>عرض العمل (سم)</label>
-        <input id="workWidth" type="number" value="30" step="0.1"/>
-        <label>ارتفاع العمل (سم)</label>
-        <input id="workHeight" type="number" value="20" step="0.1"/>
-        <label>عمق العمل (مم)</label>
-        <input id="workDepth" type="number" value="3.0" step="0.1"/>
-
-        <label>سرعة التغذية (مم/دقيقة)</label>
-        <input id="feedRate" type="number" value="800" />
-        <label>ارتفاع الأمان (مم)</label>
-        <input id="safeZ" type="number" value="5" step="0.1"/>
-        <label>خطوة المسح (مم)</label>
-        <input id="stepOver" type="number" value="5" step="0.1"/>
-        <label>أقصى عمق (مم)</label>
-        <input id="maxDepth" type="number" value="3.0" step="0.1"/>
-
-        <div style="margin-top:10px;" class="controls-row">
-          <!-- هذان الزران: الرستر القديم والكونتور الجديد -->
-          <button id="btnGenRaster" class="primary">⚡ توليد G-code (Raster)</button>
-          <button id="btnGenContour" class="primary">📐 توليد G-code (Contour)</button>
-          <button id="btnDownload" class="secondary">💾 تحميل G-code</button>
-        </div>
-
-        <div class="progress-bar" aria-hidden="true"><div class="progress-fill" id="procFill"></div></div>
-        <div id="estTime" class="meta-line"></div>
-
-        <label style="margin-top:12px">📄 مخرجات G-code</label>
-        <textarea id="gcodeOut" readonly></textarea>
-      </div>
+      <button class="primary" id="btnGen">⚡ توليد G-code (Raster)</button>
+      <button class="primary" id="btnDownload">💾 تحميل G-code</button>
+      <textarea id="gcodeOut" readonly></textarea>
     </div>
   </div>
 
-  <div id="toast"></div>
-
   <script>
-  /************************************************************************
-   * CNC AI — Dual Mode
-   * - Raster generator: طريقةك القديمة (محفوظة كخيار "آمن")
-   * - Contour generator: توليد من الكونتور (segments), يمكنك تجربته بسهولة
-   *
-   * ملاحظات:
-   * - افتح الملف عبر خادم محلي إن احتجت (مثال: `python -m http.server`)
-   * - هذا الملف ينظف cv.Mat بعد الاستخدام
-   ************************************************************************/
+    let grayMat = null;
+    let previewCanvas = document.getElementById("canvasOriginal");
+    let ctx = previewCanvas.getContext("2d");
+    let currentImageName = "image";
 
-  // ---------- UI helpers ----------
-  function showToast(msg, ms = 2500) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.style.display = 'block';
-    clearTimeout(t._t);
-    t._t = setTimeout(()=> t.style.display='none', ms);
-  }
-
-  // Tabs
-  document.querySelectorAll('.tabs button').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(tc=>tc.classList.remove('active'));
-      btn.classList.add('active');
-      document.getElementById(btn.dataset.tab).classList.add('active');
-      if (btn.dataset.tab === 'simulation' && document.getElementById('gcodeOut').value) initSimulation();
+    // زر فتح/إغلاق الإعدادات المتقدمة
+    document.getElementById("toggleAdvanced").addEventListener("click", () => {
+      const adv = document.getElementById("advancedSettings");
+      adv.style.display = adv.style.display === "block" ? "none" : "block";
     });
-  });
 
-  // Zoom control (simple CSS scale)
-  function applyZoom(canvasId, scale) {
-    const c = document.getElementById(canvasId);
-    if (!c) return;
-    c.style.transform = `scale(${scale})`;
-    c._scale = scale;
-  }
-  function wireZoom(inId, outId, resetId, canvasId) {
-    let s = 1;
-    document.getElementById(inId).addEventListener('click', () => { s = Math.min(4, s+0.25); applyZoom(canvasId, s); });
-    document.getElementById(outId).addEventListener('click', () => { s = Math.max(0.25, s-0.25); applyZoom(canvasId, s); });
-    document.getElementById(resetId).addEventListener('click', () => { s = 1; applyZoom(canvasId, s); });
-  }
-  wireZoom('origZoomIn','origZoomOut','origReset','canvasOriginal');
-  wireZoom('heatZoomIn','heatZoomOut','heatReset','canvasHeatmap');
-  wireZoom('contZoomIn','contZoomOut','contReset','canvasContour');
+    // تحميل الصورة
+    document.getElementById("fileInput").addEventListener("change", e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      currentImageName = f.name.replace(/\.[^/.]+$/, "");
+      const img = new Image();
+      img.onload = () => {
+        previewCanvas.width = img.width;
+        previewCanvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        if (grayMat) grayMat.delete();
+        let src = cv.imread(previewCanvas);
+        grayMat = new cv.Mat();
+        cv.cvtColor(src, grayMat, cv.COLOR_RGBA2GRAY);
+        src.delete();
+      };
+      img.src = URL.createObjectURL(f);
+    });
 
-  // ---------- OpenCV readiness ----------
-  let cvReady = false;
-  function onOpenCvReady() {
-    cvReady = true;
-    document.getElementById('cvState').innerText = '✅ OpenCV جاهز';
-    showToast('OpenCV جاهز');
-  }
-  (function waitCv(){
-    if (typeof cv !== 'undefined' && cv.getBuildInformation) {
-      if (cv.onRuntimeInitialized !== undefined) {
-        cv['onRuntimeInitialized'] = onOpenCvReady;
-      } else {
-        onOpenCvReady();
-      }
-    } else {
-      setTimeout(waitCv, 150);
+    // تطبيق الفلترة حسب الاختيار
+    function applySmoothing(mat) {
+      let out = new cv.Mat();
+      let s = document.getElementById("smoothing").value;
+      if (s === "low") cv.GaussianBlur(mat, out, new cv.Size(3,3), 0);
+      else if (s === "medium") cv.GaussianBlur(mat, out, new cv.Size(5,5), 0);
+      else if (s === "high") cv.GaussianBlur(mat, out, new cv.Size(9,9), 0);
+      else { mat.copyTo(out); }
+      return out;
     }
-  })();
 
-  // ---------- Core state ----------
-  let grayMat = null;
-  let mainContour = null;
-  let extraContours = [];
-  let previewCanvas = null;
-  let currentImageName = 'image';
+    // توليد G-code Raster
+    function generateRasterGcode() {
+      if (!grayMat) return "";
+      let workWidth = parseFloat(document.getElementById("workWidth").value) * 10;
+      let workHeight = parseFloat(document.getElementById("workHeight").value) * 10;
+      let maxDepth = parseFloat(document.getElementById("workDepth").value);
+      let feed = parseFloat(document.getElementById("feedRate").value);
+      let safeZ = parseFloat(document.getElementById("safeZ").value);
+      let stepOver = parseFloat(document.getElementById("stepOver").value);
+      let zScale = parseFloat(document.getElementById("zScale").value) || 1.0;
+      let invertZ = document.getElementById("invertZ").checked;
+      let scanDir = document.getElementById("scanDir").value;
+      let detailFilter = document.getElementById("detailFilter").checked;
 
-  // ---------- Load image ----------
-  document.getElementById('fileInput').addEventListener('change', (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    currentImageName = (f.name || 'image').replace(/\.[^/.]+$/, "").replace(/\s+/g,'_');
-    const img = new Image();
-    img.onload = () => {
-      previewCanvas = document.getElementById('canvasOriginal');
-      const ctx = previewCanvas.getContext('2d');
-      let w = img.width, h = img.height;
-      const auto = document.getElementById('autoResize').checked;
-      const maxW = auto ? 1000 : 1600;
-      const maxH = auto ? 700 : 1200;
-      if (w > maxW) { h = Math.round((maxW / w) * h); w = maxW; }
-      if (h > maxH) { w = Math.round((maxH / h) * w); h = maxH; }
-      previewCanvas.width = w; previewCanvas.height = h;
-      ctx.clearRect(0,0,w,h); ctx.drawImage(img,0,0,w,h);
-      document.getElementById('originalPlaceholder').style.display = 'none'; previewCanvas.style.display = 'block';
-      document.getElementById('imageMeta').textContent = `الملف: ${f.name} — معاينة: ${w}×${h}`;
-      // cleanup
-      if (grayMat) { try{ grayMat.delete(); } catch(e){} grayMat = null; }
-      if (mainContour) { try{ mainContour.delete(); } catch(e){} mainContour = null; }
-      extraContours.forEach(c => { try{ c.delete(); } catch(e){} });
-      extraContours = [];
-      // process
-      if (cvReady) detectAndRender();
-      else {
-        showToast('انتظار OpenCV...'); const t = setInterval(()=>{ if (cvReady) { clearInterval(t); detectAndRender(); } }, 150);
-      }
-    };
-    img.onerror = () => showToast('فشل تحميل الصورة');
-    img.src = URL.createObjectURL(f);
-  });
+      let src = applySmoothing(grayMat);
+      let w = src.cols, h = src.rows;
 
-  // ---------- Detect & render ----------
-  function detectAndRender() {
-    try {
-      showToast('جاري معالجة الصورة...');
-      const src = cv.imread(previewCanvas);
-      const gray = new cv.Mat();
-      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-      const blurred = new cv.Mat();
-      cv.GaussianBlur(gray, blurred, new cv.Size(5,5), 0);
-
-      const edges = new cv.Mat();
-      const median = cv.mean(blurred).w;
-      const lower = Math.max(0, (1.0 - 0.33) * median);
-      const upper = Math.min(255, (1.0 + 0.33) * median);
-      cv.Canny(blurred, edges, lower, upper);
-
-      const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3,3));
-      cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel);
-
-      const contours = new cv.MatVector();
-      const hierarchy = new cv.Mat();
-      cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
-
-      const minArea = (gray.cols * gray.rows) * 0.005;
-      const valids = [];
-      for (let i=0;i<contours.size();i++) {
-        const cnt = contours.get(i);
-        const area = cv.contourArea(cnt);
-        if (area > minArea) valids.push({ contour: cnt, area });
-        else cnt.delete();
+      // فلترة التفاصيل
+      if (detailFilter) {
+        let tmp = new cv.Mat();
+        cv.resize(src, tmp, new cv.Size(Math.floor(w/2), Math.floor(h/2)), 0, 0, cv.INTER_AREA);
+        src.delete();
+        src = tmp;
+        w = src.cols; h = src.rows;
       }
 
-      if (valids.length === 0) {
-        showToast('لم يتم العثور على كونتور كافٍ');
-      } else {
-        valids.sort((a,b)=> b.area - a.area);
-        mainContour = valids[0].contour;
-        extraContours = valids.slice(1).map(v => v.contour);
-        showToast(`تم العثور على ${valids.length} كونتور — استخدام الأكبر`);
-      }
+      let lines = [];
+      lines.push("; Raster G-code مع إعدادات متقدمة");
+      lines.push("G21 G90 G17");
+      lines.push("G0 Z" + safeZ.toFixed(2));
 
-      if (grayMat) { try{ grayMat.delete(); }catch(e){} }
-      grayMat = gray.clone();
+      let scaleX = workWidth / w;
+      let scaleY = workHeight / h;
 
-      renderHeatmap(grayMat);
-      renderContours(grayMat, mainContour);
-
-      // cleanup local mats
-      src.delete(); blurred.delete(); edges.delete(); hierarchy.delete(); contours.delete(); kernel.delete();
-    } catch (err) {
-      console.error(err);
-      showToast('خطأ في المعالجة: ' + (err.message || err));
-    }
-  }
-
-  // ---------- Heatmap ----------
-  function renderHeatmap(gray) {
-    const c = document.getElementById('canvasHeatmap');
-    const ctx = c.getContext('2d');
-    c.width = gray.cols; c.height = gray.rows;
-    const img = ctx.createImageData(c.width, c.height);
-    const data = gray.data;
-    const cmap = document.getElementById('colormapSelect').value;
-    for (let i=0;i<data.length;i++){
-      const v = data[i];
-      const idx = i*4;
-      let r=0,g=0,b=0;
-      if (cmap === 'jet') {
-        r = Math.max(0, Math.min(255, (v-128)*2 ));
-        g = Math.max(0, Math.min(255, 255 - Math.abs(v-128)*2 ));
-        b = Math.max(0, Math.min(255, (128-v)*2 ));
-      } else if (cmap === 'hot') {
-        r = v; g = Math.round(v*0.5); b = Math.round(v*0.1);
-      } else if (cmap === 'cool') {
-        r = 255 - v; g = v; b = 255;
-      } else {
-        r=g=b=v;
-      }
-      img.data[idx]=r; img.data[idx+1]=g; img.data[idx+2]=b; img.data[idx+3]=255;
-    }
-    ctx.putImageData(img, 0, 0);
-    document.getElementById('heatmapPlaceholder').style.display='none';
-    c.style.display='block';
-  }
-
-  // ---------- Contour render ----------
-  function renderContours(gray, mainCnt) {
-    const c = document.getElementById('canvasContour');
-    const ctx = c.getContext('2d');
-    c.width = gray.cols; c.height = gray.rows;
-    const heat = document.getElementById('canvasHeatmap');
-    if (heat.width !== c.width || heat.height !== c.height) renderHeatmap(gray);
-    ctx.clearRect(0,0,c.width,c.height);
-    ctx.drawImage(heat,0,0);
-    if (mainCnt) {
-      ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 2; ctx.beginPath();
-      const d = mainCnt.data32S;
-      for (let i=0;i<d.length;i+=2) {
-        const x=d[i], y=d[i+1];
-        if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-      }
-      ctx.closePath(); ctx.stroke();
-    }
-    if (document.getElementById('showAllContours').checked) {
-      ctx.strokeStyle = '#ffff00'; ctx.lineWidth = 1;
-      extraContours.forEach(cnt => {
-        ctx.beginPath();
-        const d = cnt.data32S;
-        for (let i=0;i<d.length;i+=2) {
-          const x=d[i], y=d[i+1];
-          if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-        }
-        ctx.closePath(); ctx.stroke();
-      });
-    }
-    document.getElementById('contourPlaceholder').style.display='none';
-    c.style.display='block';
-  }
-
-  // ---------- Raster generator (OLD stable) ----------
-  function sampleGrayAtFromMat(mat, x, y, canvasW, canvasH) {
-    // bilinear sampling between mat resolution and canvas transform
-    if (!mat) return 128;
-    const gw = mat.cols, gh = mat.rows;
-    const gx_f = (x / canvasW) * (gw - 1);
-    const gy_f = (y / canvasH) * (gh - 1);
-    const x0 = Math.floor(gx_f), y0 = Math.floor(gy_f);
-    const x1 = Math.min(gw-1, x0+1), y1 = Math.min(gh-1, y0+1);
-    const sx = gx_f - x0, sy = gy_f - y0;
-    const v00 = mat.data[y0*gw + x0], v10 = mat.data[y0*gw + x1];
-    const v01 = mat.data[y1*gw + x0], v11 = mat.data[y1*gw + x1];
-    const v0 = v00 * (1 - sx) + v10 * sx;
-    const v1 = v01 * (1 - sx) + v11 * sx;
-    return Math.round(v0 * (1 - sy) + v1 * sy);
-  }
-
-  function generateRasterGcodeSimple() {
-    if (!grayMat || !previewCanvas) { showToast('لا توجد بيانات جاهزة'); return ''; }
-    try {
-      const dir = 'x';
-      const stepOver = parseFloat(document.getElementById('stepOver').value) || 5;
-      const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3;
-      const feed = parseFloat(document.getElementById('feedRate').value) || 800;
-      const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
-      const invertZ = false;
-      const workWidth = (parseFloat(document.getElementById('workWidth').value) || 30) * 10;
-      const workHeight = (parseFloat(document.getElementById('workHeight').value) || 20) * 10;
-      const originX = 0, originY = 0;
-      const lines = [];
-      lines.push('; Raster G-code (stable)');
-      lines.push('G21 G90 G17');
-      lines.push('G0 Z' + safeZ.toFixed(2));
-      const canvasW = previewCanvas.width, canvasH = previewCanvas.height;
-      const scaleX = workWidth / canvasW, scaleY = workHeight / canvasH;
-      let totalLen = 0;
-      for (let y = 0; y < canvasH; y += Math.max(1, Math.round(stepOver))) {
-        const rowPoints = [];
-        for (let x = 0; x < canvasW; x++) {
-          const pv = sampleGrayAtFromMat(grayMat, x, y, canvasW, canvasH);
-          let z = -((255 - pv) / 255.0) * maxDepth;
-          if (invertZ) z = -z;
-          const sx = (x * scaleX) + originX;
-          const sy = (y * scaleY) + originY;
-          rowPoints.push({ x: sx, y: sy, z });
-        }
-        if (rowPoints.length > 1) {
-          lines.push('G0 X' + rowPoints[0].x.toFixed(2) + ' Y' + rowPoints[0].y.toFixed(2) + ' Z' + safeZ.toFixed(2));
-          lines.push('G1 F' + feed.toFixed(0));
-          for (const p of rowPoints) lines.push('G1 X' + p.x.toFixed(2) + ' Y' + p.y.toFixed(2) + ' Z' + p.z.toFixed(3));
-          lines.push('G0 Z' + safeZ.toFixed(2));
-          totalLen += rowPoints.length;
-        }
-      }
-      lines.push('M5'); lines.push('M30');
-      document.getElementById('estTime').textContent = `⏱️ تقدير عناصر: ${totalLen}`;
-      return lines.join('\n');
-    } catch (err) {
-      console.error(err); showToast('خطأ في توليد Raster: ' + (err.message || err)); return '';
-    }
-  }
-
-  // ---------- Contour-based generator (NEW) ----------
-  // build scanline segments using cv.pointPolygonTest
-  function buildScanlineSegments(stepPx = 1) {
-    if (!mainContour || !grayMat) return [];
-    const w = grayMat.cols, h = grayMat.rows;
-    const rect = cv.boundingRect(mainContour);
-    const minX = Math.max(0, rect.x), maxX = Math.min(w-1, rect.x + rect.width - 1);
-    const minY = Math.max(0, rect.y), maxY = Math.min(h-1, rect.y + rect.height - 1);
-    const segments = [];
-    for (let y = minY; y <= maxY; y += stepPx) {
-      let inside = false;
-      let segStart = -1;
-      const segsForY = [];
-      for (let x = minX; x <= maxX; x++) {
-        const pt = new cv.Point(x, y);
-        const res = cv.pointPolygonTest(mainContour, pt, false);
-        pt.delete();
-        if (res >= 0) {
-          if (!inside) { inside = true; segStart = x; }
-        } else {
-          if (inside) { inside = false; segsForY.push({ x0: segStart, x1: x - 1 }); segStart = -1; }
-        }
-      }
-      if (inside && segStart >= 0) segsForY.push({ x0: segStart, x1: maxX });
-      if (segsForY.length > 0) segments.push({ y: y, segments: segsForY });
-    }
-    return segments;
-  }
-
-  // Worker generator for segments as blob
-  function createSegmentsWorker() {
-    const code = `
-      onmessage = function(e) {
-        try {
-          const { buf, width, height, segments, params } = e.data;
-          const feed = params.feed, safeZ = params.safeZ, maxDepth = params.maxDepth, includeComments = params.includeComments;
-          const lines = [];
-          lines.push('; Contour-based G-code');
-          lines.push('G21 G90 G17');
-          lines.push('G0 Z' + safeZ.toFixed(2));
-          const total = segments.length;
-          for (let i=0;i<segments.length;i++){
-            const row = segments[i];
-            for (let s=0;s<row.segments.length;s++){
-              const seg = row.segments[s];
-              const pts = [];
-              for (let x = seg.x0; x <= seg.x1; x++) {
-                const pv = buf[row.y * width + x];
-                let z = -((255 - pv) / 255.0) * maxDepth;
-                pts.push({x:x,y:row.y,z:z});
-              }
-              if (pts.length === 0) continue;
-              if (includeComments) lines.push('; Y=' + row.y + ' seg=' + s);
-              lines.push('G0 X' + pts[0].x.toFixed(2) + ' Y' + pts[0].y.toFixed(2) + ' Z' + safeZ.toFixed(2));
-              lines.push('G1 F' + feed.toFixed(0));
-              for (const p of pts) lines.push('G1 X' + p.x.toFixed(2) + ' Y' + p.y.toFixed(2) + ' Z' + p.z.toFixed(3));
-              lines.push('G0 Z' + safeZ.toFixed(2));
-            }
-            if (i % Math.max(1,Math.floor(total/20)) === 0) postMessage({ type:'progress', progress: Math.round((i/total)*100) });
+      if (scanDir === "x") {
+        for (let y = 0; y < h; y += stepOver) {
+          let row = [];
+          for (let x = 0; x < w; x++) {
+            let v = src.ucharPtr(y,x)[0];
+            let z = ((255-v)/255) * -maxDepth * zScale;
+            if (invertZ) z = -z;
+            row.push(`G1 X${(x*scaleX).toFixed(2)} Y${(y*scaleY).toFixed(2)} Z${z.toFixed(3)}`);
           }
-          lines.push('M5'); lines.push('M30');
-          postMessage({ type:'done', gcode: lines.join('\\n'), stats:{segments: total} });
-        } catch (err) {
-          postMessage({ type:'error', message: err.message || err });
+          if (row.length) {
+            lines.push("G0 Z" + safeZ.toFixed(2));
+            lines.push("G1 F" + feed);
+            lines.push(...row);
+          }
         }
-      };
-    `;
-    const blob = new Blob([code], { type: 'application/javascript' });
-    return new Worker(URL.createObjectURL(blob));
-  }
-
-  async function generateContourGcodeAsync() {
-    if (!grayMat || !mainContour) { showToast('لا توجد بيانات (حَمّل صورة واكشف الحواف)'); return ''; }
-    // prepare buffer
-    const w = grayMat.cols, h = grayMat.rows;
-    const buf = new Uint8ClampedArray(w*h);
-    for (let i=0;i<w*h;i++) buf[i] = grayMat.data[i];
-    // build segments
-    showToast('بناء المقاطع (segments)...');
-    const stepPx = Math.max(1, Math.round((parseFloat(document.getElementById('stepOver').value)||5) / ( ( (parseFloat(document.getElementById('workWidth').value)||30) * 10) / w ) )); // heuristic
-    const segments = buildScanlineSegments(stepPx);
-    if (!segments || segments.length === 0) { showToast('لا توجد مقاطع ضمن الكونتور'); return ''; }
-    // params
-    const feed = parseFloat(document.getElementById('feedRate').value) || 800;
-    const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
-    const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3;
-    const includeComments = true;
-    // progress reset
-    document.getElementById('procFill').style.width = '0%';
-    const worker = createSegmentsWorker();
-    return new Promise((resolve) => {
-      worker.onmessage = function(ev) {
-        const d = ev.data;
-        if (d.type === 'progress') document.getElementById('procFill').style.width = d.progress + '%';
-        else if (d.type === 'done') {
-          document.getElementById('procFill').style.width = '100%';
-          // convert pixel XY in gcode to machine mm
-          const workW = (parseFloat(document.getElementById('workWidth').value) || 30) * 10;
-          const workH = (parseFloat(document.getElementById('workHeight').value) || 20) * 10;
-          const originX = 0, originY = 0;
-          const scaleX = workW / w, scaleY = workH / h;
-          let g = d.gcode.split('\\n').map(line => {
-            const xm = line.match(/X([\\d.-]+)/); const ym = line.match(/Y([\\d.-]+)/);
-            if (xm && ym) {
-              const px = parseFloat(xm[1]), py = parseFloat(ym[1]);
-              const mx = (px * scaleX) + originX; const my = (py * scaleY) + originY;
-              line = line.replace(/X[\\d.-]+/, 'X' + mx.toFixed(2));
-              line = line.replace(/Y[\\d.-]+/, 'Y' + my.toFixed(2));
+      } else if (scanDir === "y") {
+        for (let x = 0; x < w; x += stepOver) {
+          let col = [];
+          for (let y = 0; y < h; y++) {
+            let v = src.ucharPtr(y,x)[0];
+            let z = ((255-v)/255) * -maxDepth * zScale;
+            if (invertZ) z = -z;
+            col.push(`G1 X${(x*scaleX).toFixed(2)} Y${(y*scaleY).toFixed(2)} Z${z.toFixed(3)}`);
+          }
+          if (col.length) {
+            lines.push("G0 Z" + safeZ.toFixed(2));
+            lines.push("G1 F" + feed);
+            lines.push(...col);
+          }
+        }
+      } else {
+        // مسح قطري بسيط
+        let max = Math.max(w,h);
+        for (let d = 0; d < max; d += stepOver) {
+          let diag = [];
+          for (let x = 0; x <= d; x++) {
+            let y = d-x;
+            if (x<w && y<h) {
+              let v = src.ucharPtr(y,x)[0];
+              let z = ((255-v)/255) * -maxDepth * zScale;
+              if (invertZ) z = -z;
+              diag.push(`G1 X${(x*scaleX).toFixed(2)} Y${(y*scaleY).toFixed(2)} Z${z.toFixed(3)}`);
             }
-            return line;
-          }).join('\\n');
-          document.getElementById('estTime').textContent = `⏱️ segments: ${d.stats.segments}`;
-          worker.terminate();
-          resolve(g);
-        } else if (d.type === 'error') {
-          showToast('خطأ في Worker: ' + d.message);
-          worker.terminate();
-          resolve('');
+          }
+          if (diag.length) {
+            lines.push("G0 Z" + safeZ.toFixed(2));
+            lines.push("G1 F" + feed);
+            lines.push(...diag);
+          }
         }
-      };
-      worker.postMessage({ buf, width: w, height: h, segments, params: { feed, safeZ, maxDepth, includeComments } });
+      }
+
+      lines.push("M5");
+      lines.push("M30");
+      src.delete();
+      return lines.join("\n");
+    }
+
+    // أزرار
+    document.getElementById("btnGen").addEventListener("click", () => {
+      document.getElementById("gcodeOut").value = generateRasterGcode();
     });
-  }
 
-  // ---------- Buttons wiring ----------
-  document.getElementById('btnGenRaster').addEventListener('click', () => {
-    const g = generateRasterGcodeSimple();
-    if (g) {
-      document.getElementById('gcodeOut').value = g;
-      showToast('تم توليد G-code (Raster) — النسخة الموثوقة');
-      document.querySelector('[data-tab="simulation"]').click();
-    }
-  });
-
-  document.getElementById('btnGenContour').addEventListener('click', async () => {
-    document.getElementById('gcodeOut').value = '';
-    const g = await generateContourGcodeAsync();
-    if (g) {
-      document.getElementById('gcodeOut').value = g;
-      showToast('تم توليد G-code (Contour)');
-      document.querySelector('[data-tab="simulation"]').click();
-    }
-  });
-
-  // Download with name including image and timestamp
-  document.getElementById('btnDownload').addEventListener('click', () => {
-    const g = document.getElementById('gcodeOut').value;
-    if (!g) { showToast('لا يوجد G-code لتحميل'); return; }
-    const now = new Date(); const pad = n => n.toString().padStart(2,'0');
-    const stamp = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}`;
-    const name = `cnc_${currentImageName}_${stamp}.gcode`;
-    const blob = new Blob([g], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast('تم تحميل: ' + name);
-  });
-
-  // ---------- Simple 3D sim ----------
-  let scene, camera, renderer, controls;
-  function parseGcodeForSimulation(gcode) {
-    const lines = gcode.split('\\n'); const path = []; let pos = { x:0,y:0,z:0 };
-    for (const L of lines) {
-      const t = L.trim();
-      if (t.startsWith('G1') || t.startsWith('G0')) {
-        const xm = t.match(/X([\\d.-]+)/); const ym = t.match(/Y([\\d.-]+)/); const zm = t.match(/Z([\\d.-]+)/);
-        if (xm) pos.x = parseFloat(xm[1]); if (ym) pos.y = parseFloat(ym[1]); if (zm) pos.z = parseFloat(zm[1]);
-        path.push({ ...pos });
-      }
-    }
-    return path;
-  }
-
-  function initSimulation() {
-    const container = document.getElementById('threeContainer'); container.innerHTML = '';
-    const g = document.getElementById('gcodeOut').value;
-    if (!g) { document.getElementById('simulationPlaceholder').style.display='flex'; showToast('لا يوجد G-code للمحاكاة'); return; }
-    try {
-      document.getElementById('simulationPlaceholder').style.display='none';
-      scene = new THREE.Scene(); scene.background = new THREE.Color(0x081224);
-      camera = new THREE.PerspectiveCamera(60, container.clientWidth/container.clientHeight, 0.1, 10000);
-      camera.position.set(200,200,200);
-      renderer = new THREE.WebGLRenderer({ antialias:true }); renderer.setSize(container.clientWidth, container.clientHeight);
-      container.appendChild(renderer.domElement);
-      controls = new THREE.OrbitControls(camera, renderer.domElement);
-      const ambient = new THREE.AmbientLight(0x404040, 0.8); scene.add(ambient);
-      const dir = new THREE.DirectionalLight(0xffffff, 0.8); dir.position.set(50,200,100); scene.add(dir);
-      const workW = (parseFloat(document.getElementById('workWidth').value)||30)*10;
-      const workH = (parseFloat(document.getElementById('workHeight').value)||20)*10;
-      const workD = parseFloat(document.getElementById('workDepth').value)||3;
-      const geom = new THREE.BoxGeometry(workW, workD, workH); const mat = new THREE.MeshPhongMaterial({ color: 0x8B4513, transparent:true, opacity:0.95 });
-      const box = new THREE.Mesh(geom, mat); box.position.y = workD/2; scene.add(box);
-      const path = parseGcodeForSimulation(g);
-      if (path && path.length > 1) {
-        const pts = path.map(p => new THREE.Vector3(p.x, p.z + 5, p.y));
-        const geometry = new THREE.BufferGeometry().setFromPoints(pts);
-        const material = new THREE.LineBasicMaterial({ color: 0x00ff00 });
-        const line = new THREE.Line(geometry, material); scene.add(line);
-      }
-      const tool = new THREE.Mesh(new THREE.CylinderGeometry(2,2,20,12), new THREE.MeshPhongMaterial({ color:0xff4444 })); tool.position.set(0,50,0); scene.add(tool);
-      const grid = new THREE.GridHelper(Math.max(workW, workH), 10); scene.add(grid);
-      const axes = new THREE.AxesHelper(50); scene.add(axes);
-      function animate(){ requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
-      animate(); showToast('تم تهيئة المحاكاة');
-    } catch (err) { console.error(err); showToast('خطأ في المحاكاة'); }
-  }
-  document.querySelector('[data-tab="simulation"]').addEventListener('click', () => {
-    if (document.getElementById('gcodeOut').value) initSimulation();
-  });
-
-  // Cleanup on exit
-  window.addEventListener('beforeunload', () => {
-    if (grayMat) try{ grayMat.delete(); }catch(e){}
-    if (mainContour) try{ mainContour.delete(); }catch(e){}
-    extraContours.forEach(c => { try{ c.delete(); } catch(e){} });
-  });
-
+    document.getElementById("btnDownload").addEventListener("click", () => {
+      let g = document.getElementById("gcodeOut").value;
+      if (!g) return;
+      let a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([g], {type:"text/plain"}));
+      a.download = currentImageName + "_raster.gcode";
+      a.click();
+    });
   </script>
 </body>
 </html>
