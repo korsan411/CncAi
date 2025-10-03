@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CNC AI - Raster مع إعدادات متقدمة</title>
+  <script async src="https://docs.opencv.org/4.8.0/opencv.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 0; }
+    header { background: #1e293b; padding: 10px 20px; font-size: 1.2rem; color: #06b6d4; }
+    .container { display: flex; gap: 16px; padding: 16px; }
+    .panel { background: #1e293b; padding: 12px; border-radius: 8px; flex: 1; }
+    canvas { max-width: 100%; background: #000; border-radius: 6px; display: block; margin: 0 auto; }
+    label { display: block; margin-top: 8px; }
+    input, select { padding: 6px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; width: 100%; }
+    button { margin-top: 10px; padding: 10px; border: none; border-radius: 6px; cursor: pointer; }
+    button.primary { background: #06b6d4; color: #021; width: 100%; }
+    #advancedSettings { display: none; margin-top: 10px; padding: 10px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; }
+    .toggle-adv { background: #334155; color: #e2e8f0; width: 100%; }
+    textarea { width: 100%; height: 200px; margin-top: 10px; border-radius: 6px; background: #0f172a; color: #cbd5e1; border: 1px solid #334155; padding: 8px; }
+  </style>
+</head>
+<body>
+  <header>🪵 CNC AI - Raster مع إعدادات متقدمة</header>
+  <div class="container">
+    <!-- المعاينة -->
+    <div class="panel">
+      <input type="file" id="fileInput" accept="image/*">
+      <canvas id="canvasOriginal"></canvas>
+    </div>
+
+    <!-- الإعدادات -->
+    <div class="panel">
+      <h3>⚙️ الإعدادات الأساسية</h3>
+      <label>عرض العمل (سم): <input type="number" id="workWidth" value="30"></label>
+      <label>ارتفاع العمل (سم): <input type="number" id="workHeight" value="20"></label>
+      <label>عمق العمل (مم): <input type="number" id="workDepth" value="3.0"></label>
+      <label>سرعة التغذية (مم/دقيقة): <input type="number" id="feedRate" value="800"></label>
+      <label>ارتفاع الأمان Z (مم): <input type="number" id="safeZ" value="5"></label>
+      <label>خطوة المسح (مم): <input type="number" id="stepOver" value="5"></label>
+
+      <button class="toggle-adv" id="toggleAdvanced">⚙️ الإعدادات المتقدمة</button>
+      <div id="advancedSettings">
+        <label>🪄 نعومة السطح (Smoothing):
+          <select id="smoothing">
+            <option value="none">بدون</option>
+            <option value="low">منخفض</option>
+            <option value="medium">متوسط</option>
+            <option value="high">عالي</option>
+          </select>
+        </label>
+        <label>📏 مقياس العمق Z:
+          <input type="number" id="zScale" value="1.0" step="0.1">
+        </label>
+        <label><input type="checkbox" id="invertZ"> عكس العمق (Invert Z)</label>
+        <label>↔️ اتجاه المسح:
+          <select id="scanDir">
+            <option value="x">أفقي (X)</option>
+            <option value="y">عمودي (Y)</option>
+            <option value="diag">قطري</option>
+          </select>
+        </label>
+        <label><input type="checkbox" id="detailFilter"> فلترة التفاصيل الصغيرة</label>
+      </div>
+
+      <button class="primary" id="btnGen">⚡ توليد G-code (Raster)</button>
+      <button class="primary" id="btnDownload">💾 تحميل G-code</button>
+      <textarea id="gcodeOut" readonly></textarea>
+    </div>
+  </div>
+
+  <script>
+    let grayMat = null;
+    let previewCanvas = document.getElementById("canvasOriginal");
+    let ctx = previewCanvas.getContext("2d");
+    let currentImageName = "image";
+
+    // زر فتح/إغلاق الإعدادات المتقدمة
+    document.getElementById("toggleAdvanced").addEventListener("click", () => {
+      const adv = document.getElementById("advancedSettings");
+      adv.style.display = adv.style.display === "block" ? "none" : "block";
+    });
+
+    // تحميل الصورة
+    document.getElementById("fileInput").addEventListener("change", e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      currentImageName = f.name.replace(/\.[^/.]+$/, "");
+      const img = new Image();
+      img.onload = () => {
+        previewCanvas.width = img.width;
+        previewCanvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        if (grayMat) grayMat.delete();
+        let src = cv.imread(previewCanvas);
+        grayMat = new cv.Mat();
+        cv.cvtColor(src, grayMat, cv.COLOR_RGBA2GRAY);
+        src.delete();
+      };
+      img.src = URL.createObjectURL(f);
+    });
+
+    // تطبيق الفلترة حسب الاختيار
+    function applySmoothing(mat) {
+      let out = new cv.Mat();
+      let s = document.getElementById("smoothing").value;
+      if (s === "low") cv.GaussianBlur(mat, out, new cv.Size(3,3), 0);
+      else if (s === "medium") cv.GaussianBlur(mat, out, new cv.Size(5,5), 0);
+      else if (s === "high") cv.GaussianBlur(mat, out, new cv.Size(9,9), 0);
+      else { mat.copyTo(out); }
+      return out;
+    }
+
+    // توليد G-code Raster
+    function generateRasterGcode() {
+      if (!grayMat) return "";
+      let workWidth = parseFloat(document.getElementById("workWidth").value) * 10;
+      let workHeight = parseFloat(document.getElementById("workHeight").value) * 10;
+      let maxDepth = parseFloat(document.getElementById("workDepth").value);
+      let feed = parseFloat(document.getElementById("feedRate").value);
+      let safeZ = parseFloat(document.getElementById("safeZ").value);
+      let stepOver = parseFloat(document.getElementById("stepOver").value);
+      let zScale = parseFloat(document.getElementById("zScale").value) || 1.0;
+      let invertZ = document.getElementById("invertZ").checked;
+      let scanDir = document.getElementById("scanDir").value;
+      let detailFilter = document.getElementById("detailFilter").checked;
+
+      let src = applySmoothing(grayMat);
+      let w = src.cols, h = src.rows;
+
+      // فلترة التفاصيل
+      if (detailFilter) {
+        let tmp = new cv.Mat();
+        cv.resize(src, tmp, new cv.Size(Math.floor(w/2), Math.floor(h/2)), 0, 0, cv.INTER_AREA);
+        src.delete();
+        src = tmp;
+        w = src.cols; h = src.rows;
+      }
+
+      let lines = [];
+      lines.push("; Raster G-code مع إعدادات متقدمة");
+      lines.push("G21 G90 G17");
+      lines.push("G0 Z" + safeZ.toFixed(2));
+
+      let scaleX = workWidth / w;
+      let scaleY = workHeight / h;
+
+      if (scanDir === "x") {
+        for (let y = 0; y < h; y += stepOver) {
+          let row = [];
+          for (let x = 0; x < w; x++) {
+            let v = src.ucharPtr(y,x)[0];
+            let z = ((255-v)/255) * -maxDepth * zScale;
+            if (invertZ) z = -z;
+            row.push(`G1 X${(x*scaleX).toFixed(2)} Y${(y*scaleY).toFixed(2)} Z${z.toFixed(3)}`);
+          }
+          if (row.length) {
+            lines.push("G0 Z" + safeZ.toFixed(2));
+            lines.push("G1 F" + feed);
+            lines.push(...row);
+          }
+        }
+      } else if (scanDir === "y") {
+        for (let x = 0; x < w; x += stepOver) {
+          let col = [];
+          for (let y = 0; y < h; y++) {
+            let v = src.ucharPtr(y,x)[0];
+            let z = ((255-v)/255) * -maxDepth * zScale;
+            if (invertZ) z = -z;
+            col.push(`G1 X${(x*scaleX).toFixed(2)} Y${(y*scaleY).toFixed(2)} Z${z.toFixed(3)}`);
+          }
+          if (col.length) {
+            lines.push("G0 Z" + safeZ.toFixed(2));
+            lines.push("G1 F" + feed);
+            lines.push(...col);
+          }
+        }
+      } else {
+        // مسح قطري بسيط
+        let max = Math.max(w,h);
+        for (let d = 0; d < max; d += stepOver) {
+          let diag = [];
+          for (let x = 0; x <= d; x++) {
+            let y = d-x;
+            if (x<w && y<h) {
+              let v = src.ucharPtr(y,x)[0];
+              let z = ((255-v)/255) * -maxDepth * zScale;
+              if (invertZ) z = -z;
+              diag.push(`G1 X${(x*scaleX).toFixed(2)} Y${(y*scaleY).toFixed(2)} Z${z.toFixed(3)}`);
+            }
+          }
+          if (diag.length) {
+            lines.push("G0 Z" + safeZ.toFixed(2));
+            lines.push("G1 F" + feed);
+            lines.push(...diag);
+          }
+        }
+      }
+
+      lines.push("M5");
+      lines.push("M30");
+      src.delete();
+      return lines.join("\n");
+    }
+
+    // أزرار
+    document.getElementById("btnGen").addEventListener("click", () => {
+      document.getElementById("gcodeOut").value = generateRasterGcode();
+    });
+
+    document.getElementById("btnDownload").addEventListener("click", () => {
+      let g = document.getElementById("gcodeOut").value;
+      if (!g) return;
+      let a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([g], {type:"text/plain"}));
+      a.download = currentImageName + "_raster.gcode";
+      a.click();
+    });
+  </script>
+</body>
+</html>
