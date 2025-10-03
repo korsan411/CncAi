@@ -1,0 +1,246 @@
+<!DOCTYPE html><html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CNC AI - النسخة المحسنة</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: var(--bg-color);
+      color: var(--text-color);
+      transition: background 0.3s, color 0.3s;
+    }
+    :root {
+      --bg-color: #f8f8f8;
+      --text-color: #333;
+      --panel-bg: #fff;
+      --accent: #0066cc;
+    }
+    [data-theme="dark"] {
+      --bg-color: #1e1e1e;
+      --text-color: #f8f8f8;
+      --panel-bg: #2b2b2b;
+      --accent: #3399ff;
+    }
+    header {
+      background: var(--accent);
+      color: #fff;
+      padding: 10px;
+      text-align: center;
+      font-size: 1.2em;
+      font-weight: bold;
+    }
+    .container {
+      display: flex;
+      flex-direction: row;
+      height: calc(100vh - 50px);
+    }
+    .sidebar {
+      width: 250px;
+      background: var(--panel-bg);
+      overflow-y: auto;
+      padding: 10px;
+      border-left: 1px solid #ccc;
+    }
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .tabs {
+      display: flex;
+      background: var(--panel-bg);
+      border-bottom: 1px solid #ccc;
+    }
+    .tab {
+      flex: 1;
+      padding: 10px;
+      text-align: center;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: 0.3s;
+    }
+    .tab.active {
+      border-color: var(--accent);
+      font-weight: bold;
+    }
+    .canvas-container {
+      flex: 1;
+      display: none;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+    .canvas-container.active {
+      display: flex;
+    }
+    canvas {
+      max-width: 100%;
+      max-height: 100%;
+      background: #eee;
+    }
+    button {
+      margin: 5px;
+      padding: 6px 12px;
+      background: var(--accent);
+      border: none;
+      color: #fff;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    button:hover {
+      opacity: 0.85;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #ccc;
+      margin-top: 5px;
+      border-radius: 5px;
+      overflow: hidden;
+      display: none;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      width: 0;
+      background: var(--accent);
+      transition: width 0.2s;
+    }
+    .toast {
+      position: fixed;
+      bottom: 15px;
+      right: 15px;
+      background: var(--accent);
+      color: #fff;
+      padding: 10px 15px;
+      border-radius: 4px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .toast.show {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    🛠️ CNC AI - النسخة المحسنة
+    <button onclick="toggleTheme()" style="float:left;">تبديل الثيم</button>
+  </header>
+  <div class="container">
+    <div class="main">
+      <div class="tabs">
+        <div class="tab active" data-tab="original">📷 الأصلية</div>
+        <div class="tab" data-tab="heatmap">🌈 Heatmap</div>
+        <div class="tab" data-tab="contour">📐 الحواف</div>
+        <div class="tab" data-tab="sim3d">🌀 محاكاة 3D</div>
+      </div>
+      <div id="original" class="canvas-container active"><canvas id="canvasOriginal"></canvas></div>
+      <div id="heatmap" class="canvas-container"><canvas id="canvasHeatmap"></canvas></div>
+      <div id="contour" class="canvas-container"><canvas id="canvasContour"></canvas></div>
+      <div id="sim3d" class="canvas-container"><div id="threeContainer" style="width:100%;height:100%;"></div></div>
+    </div>
+    <div class="sidebar">
+      <input type="file" id="fileInput"><br>
+      <button onclick="processImage()">معالجة الصورة</button>
+      <button onclick="generateGCode()">توليد G-code</button>
+      <div class="progress-bar"><div class="progress-bar-fill"></div></div>
+      <hr>
+      <label>اختيار Colormap:</label>
+      <select id="colormap">
+        <option value="jet">Jet</option>
+        <option value="hot">Hot</option>
+        <option value="cool">Cool</option>
+        <option value="gray">Gray</option>
+      </select>
+      <br>
+      <label>ضغط الصورة:</label>
+      <input type="checkbox" id="compressImage">
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>  <script src="https://docs.opencv.org/4.x/opencv.js"></script>  <script>
+    const tabs = document.querySelectorAll('.tab');
+    const containers = document.querySelectorAll('.canvas-container');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        containers.forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.tab).classList.add('active');
+      });
+    });
+
+    function toggleTheme(){
+      let theme = document.body.getAttribute('data-theme');
+      if(theme === 'dark'){
+        document.body.setAttribute('data-theme','light');
+        localStorage.setItem('theme','light');
+      } else {
+        document.body.setAttribute('data-theme','dark');
+        localStorage.setItem('theme','dark');
+      }
+    }
+    if(localStorage.getItem('theme')){
+      document.body.setAttribute('data-theme',localStorage.getItem('theme'));
+    }
+
+    function showToast(msg){
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(()=> toast.classList.remove('show'), 3000);
+    }
+
+    // معالجة الصورة
+    function processImage(){
+      showToast('جاري معالجة الصورة...');
+      // معالجة OpenCV placeholder
+    }
+
+    // توليد G-code باستخدام Web Worker
+    function generateGCode(){
+      const progressBar = document.querySelector('.progress-bar');
+      const fill = document.querySelector('.progress-bar-fill');
+      progressBar.style.display = 'block';
+      fill.style.width = '0%';
+      showToast('بدء توليد G-code...');
+
+      if(window.Worker){
+        const worker = new Worker(URL.createObjectURL(new Blob([`
+          onmessage = function(e){
+            const {width,height} = e.data;
+            let gcode = "; G-code\n";
+            let lines = [];
+            for(let y=0;y<height;y+=5){
+              let line = `; Y=${y}`; 
+              gcode += line+"\n";
+              for(let x=0;x<width;x+=5){
+                let z = Math.sin(x/20)*Math.cos(y/20); 
+                gcode += `G1 X${x} Y${y} Z${z.toFixed(2)} F1000\n`;
+              }
+              postMessage({progress:(y/height*100).toFixed(0)});
+            }
+            postMessage({done:true,gcode});
+          }
+        `], {type:'application/javascript'})));
+
+        worker.onmessage = function(e){
+          if(e.data.progress){
+            fill.style.width = e.data.progress+'%';
+          }
+          if(e.data.done){
+            progressBar.style.display = 'none';
+            console.log(e.data.gcode);
+            showToast('تم توليد G-code');
+          }
+        }
+        worker.postMessage({width:200,height:200});
+      } else {
+        showToast('المتصفح لا يدعم Web Workers');
+      }
+    }
+  </script></body>
+</html>
