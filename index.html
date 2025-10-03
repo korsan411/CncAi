@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>CNC AI — Fixed & Improved</title>
+  <title>CNC AI — Enhanced (Segments + Contour-driven G-code)</title>
 
   <!-- Three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
@@ -16,8 +16,8 @@
       --bg:#041022; --panel:#0b1320; --muted:#9bb0c8; --accent:#06b6d4; --text:#e6eef6; --card-border:#1e293b;
     }
     body{ margin:0; font-family:Arial,Segoe UI,system-ui; background:var(--bg); color:var(--text); }
-    header{ display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--card-border); }
     .app{ max-width:1400px; margin:16px auto; padding:14px; }
+    header{ display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--card-border); }
     .grid{ display:grid; grid-template-columns:1fr 420px; gap:16px; }
     @media(max-width:1000px){ .grid{ grid-template-columns:1fr; } }
     .panel{ background:var(--panel); padding:14px; border-radius:10px; border:1px solid var(--card-border); }
@@ -32,7 +32,7 @@
     .file-input-label{ display:block; padding:10px; background:#1e293b; color:var(--text); text-align:center; border-radius:6px; cursor:pointer; border:2px dashed #334155; }
     .controls-row{ display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap;}
     label{ font-weight:bold; color:var(--text); display:block; margin-top:8px; }
-    input, select{ padding:8px 10px; border-radius:6px; border:1px solid var(--card-border); background:#0f172a; color:var(--text); margin-top:6px; }
+    input, select, textarea{ padding:8px 10px; border-radius:6px; border:1px solid var(--card-border); background:#0f172a; color:var(--text); margin-top:6px; }
     .button-group{ display:flex; flex-direction:column; gap:8px; margin-top:12px; }
     button.primary{ background:var(--accent); color:#021; border:none; padding:10px; border-radius:8px; cursor:pointer; }
     button.secondary{ background:#1e293b; color:var(--text); border:none; padding:10px; border-radius:8px; cursor:pointer; }
@@ -43,12 +43,13 @@
     #threeContainer{ width:100%; height:400px; background:#081224; border-radius:8px; overflow:hidden; position:relative; }
     .simulation-controls{ position:absolute; top:10px; left:10px; z-index:100; display:flex; gap:8px; }
     .simulation-info{ position:absolute; bottom:10px; left:10px; background:rgba(0,0,0,0.6); color:white; padding:8px 12px; border-radius:4px; font-size:0.8rem; }
+    textarea{ width:100%; height:200px; resize:vertical; }
   </style>
 </head>
 <body>
   <div class="app">
     <header>
-      <h1 style="margin:0; color:var(--accent)">CNC AI — Fixed</h1>
+      <h1 style="margin:0; color:var(--accent)">CNC AI — Enhanced</h1>
       <div style="display:flex; gap:10px; align-items:center;">
         <div id="cvState"><span style="display:inline-block;width:14px;height:14px;border:2px solid var(--accent);border-radius:50%;margin-left:8px"></span> جاري تحميل OpenCV...</div>
         <button id="themeToggle" title="تبديل الثيم">🌗</button>
@@ -65,9 +66,9 @@
         <div class="meta-line" id="imageMeta">لا توجد صورة محملة</div>
 
         <div class="tabs">
-          <button data-tab="original" class="active">🖼️ الصورة الأصلية</button>
+          <button data-tab="original" class="active">🖼️ الأصلية</button>
           <button data-tab="heatmap">🔥 Heatmap</button>
-          <button data-tab="contour">📐 كشف الحواف</button>
+          <button data-tab="contour">📐 الحواف</button>
           <button data-tab="simulation">🎬 محاكاة 3D</button>
         </div>
 
@@ -157,7 +158,7 @@
         <div id="estTime" class="meta-line"></div>
 
         <label style="margin-top:12px">📄 مخرجات G-code</label>
-        <textarea id="gcodeOut" readonly style="width:100%;height:180px;background:#021024;color:#cfeaf2;border-radius:8px;border:1px solid var(--card-border);padding:8px;"></textarea>
+        <textarea id="gcodeOut" readonly></textarea>
       </div>
     </div>
   </div>
@@ -165,32 +166,7 @@
   <div id="toast"></div>
 
   <script>
-  // ========= متغيرات عامة =========
-  let cvReady = false;
-  let grayMat = null;
-  let mainContour = null;
-  let extraContours = [];
-  let previewCanvas = null;
-
-  // ثيم
-  const themeToggle = document.getElementById('themeToggle');
-  themeToggle.addEventListener('click', () => {
-    document.body.classList.toggle('light-theme');
-    // Simple visual invert for demo:
-    if (document.body.classList.contains('light-theme')) {
-      document.documentElement.style.setProperty('--bg','#f4f7fb');
-      document.documentElement.style.setProperty('--panel','#ffffff');
-      document.documentElement.style.setProperty('--text','#042233');
-      document.documentElement.style.setProperty('--muted','#5b6b78');
-    } else {
-      document.documentElement.style.setProperty('--bg','#041022');
-      document.documentElement.style.setProperty('--panel','#0b1320');
-      document.documentElement.style.setProperty('--text','#e6eef6');
-      document.documentElement.style.setProperty('--muted','#9bb0c8');
-    }
-  });
-
-  // toast
+  // ---------- Helper UI ----------
   function showToast(msg, ms = 2500) {
     const t = document.getElementById('toast');
     t.textContent = msg;
@@ -199,139 +175,121 @@
     t._t = setTimeout(()=> t.style.display='none', ms);
   }
 
-  // wait for opencv runtime
-  function onOpenCvReady() {
-    cvReady = true;
-    document.getElementById('cvState').innerText = '✅ OpenCV جاهز';
-    showToast('OpenCV جاهز');
-  }
-  // opencv will call this (if built that way) — but ensure fallback:
-  if (typeof cv !== 'undefined') {
-    if (cv && cv.onRuntimeInitialized !== undefined) {
-      cv['onRuntimeInitialized'] = onOpenCvReady;
-    } else {
-      // if not ready yet, poll
-      const t = setInterval(() => {
-        if (typeof cv !== 'undefined' && cv.getBuildInformation) {
-          clearInterval(t);
-          onOpenCvReady();
-        }
-      },100);
-    }
-  } else {
-    // poll until script loaded
-    const t2 = setInterval(()=> {
-      if (typeof cv !== 'undefined' && cv.getBuildInformation) {
-        clearInterval(t2);
-        if (cv.onRuntimeInitialized !== undefined) cv['onRuntimeInitialized'] = onOpenCvReady;
-        else onOpenCvReady();
-      }
-    }, 200);
-  }
-
-  // Tabs
+  // Tabs wiring
   document.querySelectorAll('.tabs button').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(tc=>tc.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById(btn.dataset.tab).classList.add('active');
-      if (btn.dataset.tab === 'simulation' && document.getElementById('gcodeOut').value) {
-        initSimulation();
-      }
+      if (btn.dataset.tab === 'simulation' && document.getElementById('gcodeOut').value) initSimulation();
     });
   });
 
-  // Zoom helpers (scale transform)
-  function applyZoom(canvasId, scale) {
-    const c = document.getElementById(canvasId);
-    c.style.transform = `scale(${scale})`;
-    c._scale = scale;
-  }
-  function wireZoom(inId, outId, resetId, canvasId) {
-    let s = 1;
-    document.getElementById(inId).addEventListener('click', () => { s = Math.min(4, s+0.25); applyZoom(canvasId, s);});
-    document.getElementById(outId).addEventListener('click', () => { s = Math.max(0.25, s-0.25); applyZoom(canvasId, s);});
-    document.getElementById(resetId).addEventListener('click', () => { s = 1; applyZoom(canvasId, s);});
-  }
+  // Zoom simple
+  function applyZoom(canvasId, s) { const c = document.getElementById(canvasId); c.style.transform = "scale("+s+")"; c._scale = s; }
+  function wireZoom(inId,outId,resetId,canvasId){ let s=1; document.getElementById(inId).addEventListener('click',()=>{ s=Math.min(4,s+0.25); applyZoom(canvasId,s); }); document.getElementById(outId).addEventListener('click',()=>{ s=Math.max(0.25,s-0.25); applyZoom(canvasId,s); }); document.getElementById(resetId).addEventListener('click',()=>{ s=1; applyZoom(canvasId,s); }); }
   wireZoom('origZoomIn','origZoomOut','origReset','canvasOriginal');
   wireZoom('heatZoomIn','heatZoomOut','heatReset','canvasHeatmap');
   wireZoom('contZoomIn','contZoomOut','contReset','canvasContour');
 
-  // File input handling
-  document.getElementById('fileInput').addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (!file.type.match('image.*')) { showToast('الرجاء اختيار ملف صورة'); return; }
+  // Theme toggle (simple)
+  document.getElementById('themeToggle').addEventListener('click', ()=> {
+    if (document.body.dataset.light === '1') { document.body.dataset.light = '0'; document.documentElement.style.setProperty('--bg','#041022'); document.documentElement.style.setProperty('--panel','#0b1320'); document.documentElement.style.setProperty('--text','#e6eef6'); } else { document.body.dataset.light = '1'; document.documentElement.style.setProperty('--bg','#f4f7fb'); document.documentElement.style.setProperty('--panel','#ffffff'); document.documentElement.style.setProperty('--text','#042233'); }
+  });
+
+  // ---------- OpenCV readiness ----------
+  let cvReady = false;
+  function onOpenCvReady() {
+    cvReady = true;
+    document.getElementById('cvState').innerText = '✅ OpenCV جاهز';
+    showToast('OpenCV جاهز');
+  }
+  // set onRuntimeInitialized if available
+  (function waitCv(){
+    if (typeof cv !== 'undefined' && cv.getBuildInformation) {
+      if (cv.onRuntimeInitialized !== undefined) {
+        cv['onRuntimeInitialized'] = onOpenCvReady;
+      } else {
+        onOpenCvReady();
+      }
+    } else {
+      setTimeout(waitCv, 150);
+    }
+  })();
+
+  // ---------- Core variables ----------
+  let grayMat = null;
+  let mainContour = null;
+  let extraContours = [];
+  let previewCanvas = null;
+  let currentImageName = 'image';
+
+  // ---------- Load & draw image ----------
+  document.getElementById('fileInput').addEventListener('change', (e)=>{
+    const f = e.target.files[0];
+    if (!f) return;
+    currentImageName = (f.name || 'image').replace(/\.[^/.]+$/, "").replace(/\s+/g, '_');
     const img = new Image();
     img.onload = () => {
       previewCanvas = document.getElementById('canvasOriginal');
       const ctx = previewCanvas.getContext('2d');
-
       let w = img.width, h = img.height;
       const auto = document.getElementById('autoResize').checked;
       const maxW = auto ? 1000 : 1600;
       const maxH = auto ? 700 : 1200;
-
-      if (w > maxW) { h = Math.round((maxW / w) * h); w = maxW; }
-      if (h > maxH) { w = Math.round((maxH / h) * w); h = maxH; }
-
+      if (w > maxW) { h = Math.round((maxW/w)*h); w = maxW; }
+      if (h > maxH) { w = Math.round((maxH/h)*w); h = maxH; }
       previewCanvas.width = w; previewCanvas.height = h;
-      ctx.clearRect(0,0,w,h);
-      ctx.drawImage(img,0,0,w,h);
-      document.getElementById('originalPlaceholder').style.display = 'none';
-      previewCanvas.style.display = 'block';
-      document.getElementById('imageMeta').textContent = `حجم الصورة الأصلي: ${img.width}×${img.height} — للمعاينة: ${w}×${h}`;
-
-      // cleanup old mats
-      if (grayMat) { try { grayMat.delete(); } catch(e){} grayMat = null; }
-      mainContour = null; extraContours = [];
-
-      if (cvReady) detectContours();
+      ctx.clearRect(0,0,w,h); ctx.drawImage(img,0,0,w,h);
+      document.getElementById('originalPlaceholder').style.display = 'none'; previewCanvas.style.display='block';
+      document.getElementById('imageMeta').textContent = `الملف: ${f.name} — معاينة: ${w}×${h}`;
+      // cleanup mats
+      if (grayMat) { try{ grayMat.delete(); }catch(e){} grayMat = null; }
+      if (mainContour){ try{ mainContour.delete(); } catch(e){} mainContour = null; }
+      extraContours.forEach(c=>{ try{ c.delete(); }catch(e){} }); extraContours = [];
+      // process
+      if (cvReady) detectAndRender();
       else {
-        showToast('جاري انتظار OpenCV...');
-        const t = setInterval(()=>{ if (cvReady) { clearInterval(t); detectContours(); } },200);
+        showToast('انتظار OpenCV...'); const tid = setInterval(()=>{ if (cvReady) { clearInterval(tid); detectAndRender(); } }, 150);
       }
     };
-    img.onerror = () => showToast('فشل تحميل الصورة');
-    img.src = URL.createObjectURL(file);
+    img.onerror = ()=> showToast('فشل تحميل الصورة');
+    img.src = URL.createObjectURL(f);
   });
 
-  // detectContours: uses OpenCV to compute gray, edges, contours
-  function detectContours() {
+  // ---------- detectContours + heatmap + render ----------
+  function detectAndRender() {
     try {
-      if (!cvReady) { showToast('OpenCV غير جاهز'); return; }
       showToast('جاري معالجة الصورة...');
       const src = cv.imread(previewCanvas);
       const gray = new cv.Mat();
       cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-
       const blurred = new cv.Mat();
       cv.GaussianBlur(gray, blurred, new cv.Size(5,5), 0);
 
+      // Canny
       const edges = new cv.Mat();
       const median = cv.mean(blurred).w;
       const lower = Math.max(0, (1.0 - 0.33) * median);
       const upper = Math.min(255, (1.0 + 0.33) * median);
       cv.Canny(blurred, edges, lower, upper);
-
       const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3,3));
       cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel);
 
+      // findContours
       const contours = new cv.MatVector();
       const hierarchy = new cv.Mat();
       cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
 
-      const minArea = (gray.cols * gray.rows) * 0.005; // 0.5% tolerance
+      // filter
+      const minArea = (gray.cols * gray.rows) * 0.005;
       const valids = [];
-      for (let i=0;i<contours.size();i++) {
-        const c = contours.get(i);
-        const area = cv.contourArea(c);
-        if (area > minArea) {
-          valids.push({contour: c, area});
-        } else {
-          c.delete();
-        }
+      for (let i=0;i<contours.size();i++){
+        const cnt = contours.get(i);
+        const area = cv.contourArea(cnt);
+        if (area > minArea) valids.push({ contour: cnt, area });
+        else cnt.delete();
       }
 
       if (valids.length === 0) {
@@ -340,25 +298,26 @@
         valids.sort((a,b)=> b.area - a.area);
         mainContour = valids[0].contour;
         extraContours = valids.slice(1).map(v=>v.contour);
-        showToast(`تم العثور على ${valids.length} كونتور — استخدام الأكبر كأساس`);
+        showToast(`تم العثور على ${valids.length} كونتور — استخدام الأكبر`);
       }
 
-      if (grayMat) { try{ grayMat.delete(); } catch(e){} }
+      // store grayMat copy
+      if (grayMat) { try{ grayMat.delete(); }catch(e){} }
       grayMat = gray.clone();
 
+      // render heatmap & contours
       renderHeatmap(grayMat);
       renderContours(grayMat, mainContour);
 
       // cleanup
       src.delete(); blurred.delete(); edges.delete(); hierarchy.delete(); contours.delete(); kernel.delete();
-      // Note: mainContour kept for later (do not delete)
+      // note: mainContour and extraContours kept (do not delete)
     } catch (err) {
-      console.error(err);
-      showToast('خطأ في المعالجة: ' + (err.message || err));
+      console.error(err); showToast('خطأ في المعالجة: ' + (err.message || err));
     }
   }
 
-  // renderHeatmap with simple colormaps
+  // ---------- Heatmap ----------
   function renderHeatmap(gray) {
     const c = document.getElementById('canvasHeatmap');
     const ctx = c.getContext('2d');
@@ -366,13 +325,11 @@
     const img = ctx.createImageData(c.width, c.height);
     const data = gray.data;
     const cmap = document.getElementById('colormapSelect').value;
-
-    for (let i=0;i<data.length;i++) {
+    for (let i=0;i<data.length;i++){
       const v = data[i];
       const idx = i*4;
       let r=0,g=0,b=0;
       if (cmap === 'jet') {
-        // rough jet
         r = Math.max(0, Math.min(255, (v-128)*2 ));
         g = Math.max(0, Math.min(255, 255 - Math.abs(v-128)*2 ));
         b = Math.max(0, Math.min(255, (128-v)*2 ));
@@ -383,240 +340,215 @@
       } else {
         r=g=b=v;
       }
-      img.data[idx] = r; img.data[idx+1] = g; img.data[idx+2] = b; img.data[idx+3] = 255;
+      img.data[idx]=r; img.data[idx+1]=g; img.data[idx+2]=b; img.data[idx+3]=255;
     }
     ctx.putImageData(img, 0, 0);
-    document.getElementById('heatmapPlaceholder').style.display = 'none';
-    c.style.display = 'block';
+    document.getElementById('heatmapPlaceholder').style.display='none';
+    c.style.display='block';
   }
 
-  // renderContours: draw heatmap then overlay contour lines
-  function renderContours(gray, mainCnt) {
+  // ---------- Contour rendering ----------
+  function renderContours(gray, mainCnt){
     const c = document.getElementById('canvasContour');
     const ctx = c.getContext('2d');
     c.width = gray.cols; c.height = gray.rows;
-    // draw heatmap as background
+    // background heatmap
     const heat = document.getElementById('canvasHeatmap');
-    if (heat.width !== c.width || heat.height !== c.height) {
-      // regenerate heatmap if needed
-      renderHeatmap(gray);
-    }
+    if (heat.width !== c.width || heat.height !== c.height) renderHeatmap(gray);
     ctx.clearRect(0,0,c.width,c.height);
-    ctx.drawImage(heat, 0, 0);
-
+    ctx.drawImage(heat,0,0);
     if (mainCnt) {
-      ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 2;
-      ctx.beginPath();
-      const data = mainCnt.data32S;
-      for (let i=0;i<data.length;i+=2) {
-        const x = data[i], y = data[i+1];
+      ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 2; ctx.beginPath();
+      const d = mainCnt.data32S;
+      for (let i=0;i<d.length;i+=2){
+        const x=d[i], y=d[i+1];
         if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
       }
       ctx.closePath(); ctx.stroke();
     }
     if (document.getElementById('showAllContours').checked) {
-      ctx.strokeStyle = '#ffff00'; ctx.lineWidth = 1;
-      extraContours.forEach(cnt => {
+      ctx.strokeStyle='#ffff00'; ctx.lineWidth=1;
+      extraContours.forEach(cnt=>{
         ctx.beginPath();
         const d = cnt.data32S;
-        for (let i=0;i<d.length;i+=2) {
-          const x = d[i], y = d[i+1];
+        for (let i=0;i<d.length;i+=2){
+          const x=d[i], y=d[i+1];
           if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
         }
         ctx.closePath(); ctx.stroke();
       });
     }
-    document.getElementById('contourPlaceholder').style.display = 'none';
-    c.style.display = 'block';
+    document.getElementById('contourPlaceholder').style.display='none';
+    c.style.display='block';
   }
 
-  // helper: extract polygon points from contour (convert to simple array)
-  function contourToArray(cnt) {
-    if (!cnt) return [];
-    const pts = [];
-    const data = cnt.data32S;
-    for (let i=0;i<data.length;i+=2) pts.push([data[i], data[i+1]]);
-    return pts;
-  }
-
-  // point in polygon (ray-casting) used in worker too (but worker has its own copy)
-  function pointInPoly(x,y,poly) {
-    let inside = false;
-    for (let i=0,j=poly.length-1;i<poly.length;j=i++) {
-      const xi=poly[i][0], yi=poly[i][1];
-      const xj=poly[j][0], yj=poly[j][1];
-      const intersect = ((yi>y)!==(yj>y)) && (x < (xj - xi)*(y - yi)/(yj - yi) + xi);
-      if (intersect) inside = !inside;
+  // ---------- Build segments from mainContour using cv.pointPolygonTest ----------
+  // Returns array of { y: <int>, segments: [{x0, x1}, ...] }
+  function buildScanlineSegments(stepPx = 1) {
+    if (!mainContour || !grayMat) return [];
+    const w = grayMat.cols, h = grayMat.rows;
+    // compute bounding rect
+    const rect = cv.boundingRect(mainContour);
+    const minX = Math.max(0, rect.x), maxX = Math.min(w-1, rect.x + rect.width - 1);
+    const minY = Math.max(0, rect.y), maxY = Math.min(h-1, rect.y + rect.height - 1);
+    const segments = [];
+    // For each scanline y within bounding box (stepPx)
+    for (let y = minY; y <= maxY; y += stepPx) {
+      let inside = false;
+      let segStart = -1;
+      const segsForY = [];
+      for (let x = minX; x <= maxX; x++) {
+        // use pointPolygonTest for accuracy
+        const pt = new cv.Point(x, y);
+        const res = cv.pointPolygonTest(mainContour, pt, false);
+        pt.delete();
+        if (res >= 0) {
+          if (!inside) { inside = true; segStart = x; }
+        } else {
+          if (inside) { inside = false; segsForY.push({ x0: segStart, x1: x-1 }); segStart = -1; }
+        }
+      }
+      if (inside && segStart >= 0) segsForY.push({ x0: segStart, x1: maxX });
+      if (segsForY.length > 0) segments.push({ y: y, segments: segsForY });
     }
-    return inside;
+    return segments;
   }
 
-  // Create worker for G-code generation — worker will receive gray buffer, contour polygon, settings
+  // ---------- Create worker (Blob) to generate G-code from segments + gray buffer ----------
   function createGcodeWorker() {
     const code = `
-      // simple ray-casting point-in-polygon
-      function pointInPoly(x,y,poly) {
-        let inside=false;
-        for(let i=0,j=poly.length-1;i<poly.length;j=i++){
-          const xi=poly[i][0], yi=poly[i][1];
-          const xj=poly[j][0], yj=poly[j][1];
-          const intersect = ((yi>y)!==(yj>y)) && (x < (xj - xi)*(y - yi)/(yj - yi) + xi);
-          if (intersect) inside = !inside;
-        }
-        return inside;
-      }
-
       onmessage = function(e) {
         try {
-          const { buf, width, height, poly, params } = e.data;
-          const step = Math.max(1, Math.round(params.stepOver)); // pixels per step
+          const { buf, width, height, segments, params } = e.data;
           const feed = params.feed;
           const safeZ = params.safeZ;
-          const maxDepth = params.maxDepth;
           const includeComments = params.includeComments;
-          const originX = params.originX;
-          const originY = params.originY;
+          const maxDepth = params.maxDepth;
           const invertZ = params.invertZ;
-
           const lines = [];
-          lines.push('; G21 G90 G17');
+          lines.push('; Generated by CNC AI (segments)');
+          lines.push('G21 G90 G17');
           lines.push('G0 Z' + safeZ.toFixed(2));
-
-          // bounding box of polygon to reduce scanning
-          let minX = width, minY = height, maxX = 0, maxY = 0;
-          for (const p of poly) { if (p[0]<minX) minX=p[0]; if(p[0]>maxX) maxX=p[0]; if(p[1]<minY) minY=p[1]; if(p[1]>maxY) maxY=p[1]; }
-
-          let total = 0;
-          const estTotalRows = Math.ceil((maxY - minY)/step) || 1;
-          for (let ry=minY, rIdx=0; ry<=maxY; ry += step, rIdx++) {
-            const points = [];
-            for (let x=minX; x<=maxX; x++) {
-              if (((x - minX) % 1) !== 0) {} // no-op: iterate integer x
-              const px = x, py = ry;
-              if (pointInPoly(px,py,poly)) {
-                // sample gray at integer coords: buf[py*width + px]
-                const pv = buf[py*width + px];
-                let z = -((255 - pv)/255.0) * maxDepth;
+          const totalSegments = segments.length;
+          for (let si = 0; si < segments.length; si++) {
+            const row = segments[si];
+            const y = row.y;
+            for (let s = 0; s < row.segments.length; s++) {
+              const seg = row.segments[s];
+              // construct segment points from x0..x1 with step = 1 px
+              const points = [];
+              for (let x = seg.x0; x <= seg.x1; x++) {
+                const pv = buf[y * width + x];
+                let z = -((255 - pv) / 255.0) * maxDepth;
                 if (invertZ) z = -z;
-                // scale X/Y to machine space will be applied in main thread (we can pack pixel coords)
-                points.push({x:px, y:py, z:z});
+                points.push({ x: x, y: y, z: z });
               }
-            }
-            if (points.length>0) {
-              // create passes
-              // go to first point at safeZ
-              lines.push(includeComments ? ('; Row Y=' + ry) : '');
-              lines.push('G0 X' + (points[0].x).toFixed(2) + ' Y' + (points[0].y).toFixed(2) + ' Z' + safeZ.toFixed(2));
-              lines.push('G1 F' + feed);
-              for (const p of points) {
-                lines.push('G1 X' + p.x.toFixed(2) + ' Y' + p.y.toFixed(2) + ' Z' + p.z.toFixed(3));
-              }
+              if (points.length === 0) continue;
+              if (includeComments) lines.push('; Row Y=' + y + ' seg=' + s);
+              // rapid to start
+              lines.push('G0 X' + points[0].x.toFixed(2) + ' Y' + points[0].y.toFixed(2) + ' Z' + safeZ.toFixed(2));
+              lines.push('G1 F' + feed.toFixed(0));
+              // follow segment
+              for (let p of points) lines.push('G1 X' + p.x.toFixed(2) + ' Y' + p.y.toFixed(2) + ' Z' + p.z.toFixed(3));
               lines.push('G0 Z' + safeZ.toFixed(2));
             }
-            total += points.length;
-            if (rIdx % Math.max(1,Math.floor(estTotalRows/20)) === 0) {
-              const prog = Math.round(( (ry - minY) / Math.max(1, (maxY-minY)) ) * 100);
-              postMessage({ type:'progress', progress: Math.min(100, Math.max(0, prog)) });
-            }
+            // progress update
+            const prog = Math.round((si / Math.max(1, totalSegments)) * 100);
+            postMessage({ type: 'progress', progress: prog });
           }
-
           lines.push('M5');
           lines.push('M30');
-          postMessage({ type:'done', gcode: lines.join('\\n'), stats:{ totalPoints: total } });
+          postMessage({ type: 'done', gcode: lines.join('\\n'), stats: { segments: totalSegments } });
         } catch (err) {
-          postMessage({ type:'error', message: err.message || err });
+          postMessage({ type: 'error', message: err.message || err });
         }
       };
     `;
-    const blob = new Blob([code], { type:'application/javascript' });
+    const blob = new Blob([code], { type: 'application/javascript' });
     return new Worker(URL.createObjectURL(blob));
   }
 
-  // generateRasterGcodeAsync: prepare data and call worker
-  async function generateRasterGcodeAsync() {
-    if (!grayMat || !mainContour) { showToast('لا توجد بيانات كافية (حَمّل صورة واكشف الحواف)'); return ''; }
+  // ---------- Generate G-code (main) ----------
+  async function generateGcodeFromSegments() {
+    if (!grayMat || !mainContour) { showToast('حَمِّل صورة و اكشف الحواف أولاً'); return ''; }
     const w = grayMat.cols, h = grayMat.rows;
-    // copy grayscale to buffer
+    // prepare buffer
     const buf = new Uint8ClampedArray(w*h);
     for (let i=0;i<w*h;i++) buf[i] = grayMat.data[i];
 
-    // contour poly array
-    const poly = contourToArray(mainContour);
-    if (poly.length < 3) { showToast('الكونتور غير كافٍ'); return ''; }
+    // build segments (pixel units) — step equal to 1 px or stepOver scaled
+    const stepPx = 1; // fine grain; can be increased for performance
+    showToast('بناء مقاطع المسح (Segments) — الرجاء الانتظار...');
+    const segments = buildScanlineSegments(stepPx);
+    if (!segments || segments.length === 0) { showToast('لا توجد مقاطع ضمن الكونتور'); return ''; }
 
-    // params
+    // prepare params to worker
     const feed = parseFloat(document.getElementById('feedRate').value) || 800;
     const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
-    const stepOver = parseFloat(document.getElementById('stepOver').value) || 5;
     const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3;
     const includeComments = true;
-    const invertZ = false;
+    const invertZ = (document.getElementById('invertZ') && document.getElementById('invertZ').value === 'yes') || false;
 
-    // show progress
-    const procFill = document.getElementById('procFill');
-    procFill.style.width = '0%';
+    document.getElementById('procFill').style.width = '0%';
 
+    const worker = createGcodeWorker();
     return new Promise((resolve) => {
-      const worker = createGcodeWorker();
       worker.onmessage = function(ev) {
         const d = ev.data;
         if (d.type === 'progress') {
-          procFill.style.width = d.progress + '%';
+          document.getElementById('procFill').style.width = d.progress + '%';
         } else if (d.type === 'done') {
-          procFill.style.width = '100%';
-          // Now translate pixel X/Y to machine coordinates scale
-          const workWidth = (parseFloat(document.getElementById('workWidth').value) || 30) * 10; // mm
-          const workHeight = (parseFloat(document.getElementById('workHeight').value) || 20) * 10; // mm
-          const originX = 0; const originY = 0; // for now
-          const scaleX = workWidth / w;
-          const scaleY = workHeight / h;
-          // replace X Y numeric values in G-code lines which are in pixel units to machine mm using regex
+          document.getElementById('procFill').style.width = '100%';
+          // convert pixel coordinates in G-code to machine mm coordinates (X,Y)
+          const workW = (parseFloat(document.getElementById('workWidth').value) || 30) * 10;
+          const workH = (parseFloat(document.getElementById('workHeight').value) || 20) * 10;
+          const originX = 0, originY = 0;
+          const scaleX = workW / w;
+          const scaleY = workH / h;
           let g = d.gcode.split('\\n').map(line => {
-            // convert lines like G1 X123.00 Y45.00 Z...
             const xm = line.match(/X([\\d.-]+)/); const ym = line.match(/Y([\\d.-]+)/);
             if (xm && ym) {
-              const px = parseFloat(xm[1]); const py = parseFloat(ym[1]);
+              const px = parseFloat(xm[1]), py = parseFloat(ym[1]);
               const mx = (px * scaleX) + originX; const my = (py * scaleY) + originY;
               line = line.replace(/X[\\d.-]+/, 'X' + mx.toFixed(2));
               line = line.replace(/Y[\\d.-]+/, 'Y' + my.toFixed(2));
             }
             return line;
           }).join('\\n');
-          // Estimate time simple (count movement lines / feed)
-          document.getElementById('estTime').textContent = `⏱️ مخرجات تقريبية — نقاط: ${d.stats.totalPoints}`;
+          document.getElementById('estTime').textContent = `⏱️ نقاط (تقريبي): ${d.stats.segments}`;
           worker.terminate();
           resolve(g);
         } else if (d.type === 'error') {
-          showToast('خطأ في الـ Worker: ' + d.message);
+          showToast('خطأ في Worker: ' + d.message);
           worker.terminate();
           resolve('');
         }
       };
-
-      worker.postMessage({ buf: buf, width: w, height: h, poly: poly, params: { feed, safeZ, stepOver, maxDepth, includeComments, invertZ, originX:0, originY:0 } });
+      // post data
+      worker.postMessage({ buf, width: w, height: h, segments, params: { feed, safeZ, maxDepth, includeComments, invertZ } });
     });
   }
 
-  // Buttons
+  // ---------- Buttons ----------
   document.getElementById('btnGen').addEventListener('click', async () => {
     document.getElementById('gcodeOut').value = '';
-    const g = await generateRasterGcodeAsync();
+    const g = await generateGcodeFromSegments();
     if (g) {
       document.getElementById('gcodeOut').value = g;
       showToast('تم توليد G-code');
-      // switch to simulation tab automatically
+      // switch to simulation
       document.querySelector('[data-tab="simulation"]').click();
     } else {
-      showToast('فشل توليد G-code');
+      showToast('فشل التوليد');
     }
   });
 
   document.getElementById('btnQuick').addEventListener('click', async () => {
-    document.getElementById('gcodeOut').value = '';
-    const prevStep = document.getElementById('stepOver').value;
-    document.getElementById('stepOver').value = Math.max(1, parseFloat(prevStep)*2);
-    const g = await generateRasterGcodeAsync();
-    document.getElementById('stepOver').value = prevStep;
+    // faster: increase stepPx by factor (we simply increase stepOver temporarily by doubling)
+    const prev = document.getElementById('stepOver').value;
+    document.getElementById('stepOver').value = Math.max(1, parseFloat(prev) * 2);
+    const g = await generateGcodeFromSegments();
+    document.getElementById('stepOver').value = prev;
     if (g) {
       document.getElementById('gcodeOut').value = g;
       showToast('تم توليد G-code سريع');
@@ -624,19 +556,22 @@
     }
   });
 
+  // Download with smart filename
   document.getElementById('btnDownload').addEventListener('click', () => {
-    const text = document.getElementById('gcodeOut').value;
-    if (!text) { showToast('لا يوجد G-code لتحميل'); return; }
-    const blob = new Blob([text], { type: 'text/plain' });
+    const g = document.getElementById('gcodeOut').value;
+    if (!g) { showToast('لا يوجد G-code لتحميل'); return; }
+    const now = new Date();
+    const pad = n => n.toString().padStart(2,'0');
+    const stamp = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}`;
+    const name = `cnc_${currentImageName}_${stamp}.gcode`;
+    const blob = new Blob([g], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'cnc_output.gcode';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast('تم تحميل الملف');
+    showToast('تم تحميل: ' + name);
   });
 
-  // Basic 3D simulation (reads G-code text)
+  // ---------- 3D Simulation (basic) ----------
   let scene, camera, renderer, controls;
   function parseGcodeForSimulation(gcode) {
     const lines = gcode.split('\\n');
@@ -654,36 +589,13 @@
     }
     return path;
   }
-
-  function createToolPathVisualization(pathPoints) {
-    if (!pathPoints || pathPoints.length < 2) return;
-    const points = pathPoints.map(p => new THREE.Vector3(p.x, p.z + 5, p.y));
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineBasicMaterial({ color: 0x00ff00 });
-    const line = new THREE.Line(geometry, material);
-    scene.add(line);
-  }
-
-  function createToolModel() {
-    const g = new THREE.Group();
-    const geom = new THREE.CylinderGeometry(2,2,20,12);
-    const mat = new THREE.MeshPhongMaterial({ color: 0xff4444 });
-    const mesh = new THREE.Mesh(geom, mat);
-    g.add(mesh);
-    const tipGeom = new THREE.ConeGeometry(3,8,12);
-    const tip = new THREE.Mesh(tipGeom, new THREE.MeshPhongMaterial({ color: 0xffff00 }));
-    tip.position.y = -14;
-    g.add(tip);
-    return g;
-  }
-
   function initSimulation() {
     const container = document.getElementById('threeContainer');
     container.innerHTML = '';
-    const gcode = document.getElementById('gcodeOut').value;
-    if (!gcode) { document.getElementById('simulationPlaceholder').style.display = 'flex'; showToast('لا يوجد G-code للمحاكاة'); return; }
+    const g = document.getElementById('gcodeOut').value;
+    if (!g) { document.getElementById('simulationPlaceholder').style.display='flex'; showToast('لا يوجد G-code للمحاكاة'); return; }
     try {
-      document.getElementById('simulationPlaceholder').style.display = 'none';
+      document.getElementById('simulationPlaceholder').style.display='none';
       scene = new THREE.Scene(); scene.background = new THREE.Color(0x081224);
       camera = new THREE.PerspectiveCamera(60, container.clientWidth/container.clientHeight, 0.1, 10000);
       camera.position.set(200,200,200);
@@ -691,47 +603,39 @@
       renderer.setSize(container.clientWidth, container.clientHeight);
       container.appendChild(renderer.domElement);
       controls = new THREE.OrbitControls(camera, renderer.domElement);
-
       const ambient = new THREE.AmbientLight(0x404040, 0.8); scene.add(ambient);
       const dir = new THREE.DirectionalLight(0xffffff, 0.8); dir.position.set(50,200,100); scene.add(dir);
-
-      // workpiece box
       const workW = (parseFloat(document.getElementById('workWidth').value)||30)*10;
       const workH = (parseFloat(document.getElementById('workHeight').value)||20)*10;
       const workD = parseFloat(document.getElementById('workDepth').value)||3;
       const geom = new THREE.BoxGeometry(workW, workD, workH);
       const mat = new THREE.MeshPhongMaterial({ color: 0x8B4513, transparent:true, opacity:0.95 });
       const box = new THREE.Mesh(geom, mat); box.position.y = workD/2; scene.add(box);
-
-      const path = parseGcodeForSimulation(gcode);
-      createToolPathVisualization(path);
-      const tool = createToolModel(); scene.add(tool);
-
+      const path = parseGcodeForSimulation(g);
+      if (path && path.length > 1) {
+        const pts = path.map(p=> new THREE.Vector3(p.x, p.z + 5, p.y));
+        const geometry = new THREE.BufferGeometry().setFromPoints(pts);
+        const material = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+        const line = new THREE.Line(geometry, material); scene.add(line);
+      }
+      const tool = new THREE.Mesh(new THREE.CylinderGeometry(2,2,20,12), new THREE.MeshPhongMaterial({ color:0xff4444 }));
+      tool.position.set(0,50,0); scene.add(tool);
       const grid = new THREE.GridHelper(Math.max(workW, workH), 10); scene.add(grid);
       const axes = new THREE.AxesHelper(50); scene.add(axes);
-
-      function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+      function animate(){ requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
       animate();
       showToast('تم تهيئة المحاكاة');
-    } catch (err) {
-      console.error(err); showToast('خطأ في تهيئة المحاكاة');
-    }
+    } catch (err) { console.error(err); showToast('خطأ في المحاكاة'); }
   }
-
-  // on show simulation tab, init if gcode present
   document.querySelector('[data-tab="simulation"]').addEventListener('click', () => {
     if (document.getElementById('gcodeOut').value) initSimulation();
   });
 
-  // initial small helper: update machine desc on change
-  document.getElementById('machineType').addEventListener('change', (e) => {
-    const map = {
-      router: 'Router CNC - مناسب للخشب',
-      laser: 'Laser Engraver - مناسب للنقش',
-      plasma: 'Plasma Cutter - مناسب للقطع',
-      '3dprinter': '3D Printer - مناسب للطباعة'
-    };
-    document.getElementById('machineDescription').textContent = map[e.target.value] || '';
+  // ---------- final notes: ensure cleanup on unload ----------
+  window.addEventListener('beforeunload', ()=> {
+    if (grayMat) try{ grayMat.delete(); }catch(e){}
+    if (mainContour) try{ mainContour.delete(); }catch(e){}
+    extraContours.forEach(c=>{ try{ c.delete(); }catch(e){} });
   });
 
   </script>
