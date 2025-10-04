@@ -483,6 +483,14 @@
             color: #10b981;
             margin-left: 8px;
         }
+
+        .simulation-tool {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
     </style>
 </head>
 <body>
@@ -720,7 +728,9 @@
             speed: 1,
             currentLine: 0,
             totalLines: 0,
-            animationId: null
+            animationId: null,
+            tool: null,
+            toolPath: null
         };
 
         // إعدادات الماكينات الافتراضية
@@ -902,7 +912,8 @@
                 'detectContours': 'فشل في تحليل الصورة',
                 'generateGcode': 'فشل في توليد G-code',
                 'simulation': 'فشل في المحاكاة',
-                'imageLoad': 'فشل في تحميل الصورة'
+                'imageLoad': 'فشل في تحميل الصورة',
+                'fileDownload': 'فشل في تحميل الملف'
             };
             
             showToast(`${errorMessages[context]}: ${error.message}`);
@@ -1478,16 +1489,25 @@
                 return;
             }
             
-            const blob = new Blob([text], { type: "text/plain" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = "cnc_output.gcode";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            showToast("تم تحميل الملف بنجاح");
+            try {
+                // استخدام اسم ملف أفضل مع التاريخ
+                const now = new Date();
+                const dateStr = now.toISOString().slice(0, 19).replace(/[:.]/g, '-');
+                const filename = `cnc_output_${dateStr}.gcode`;
+                
+                const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast(`تم تحميل الملف: ${filename}`);
+            } catch (error) {
+                handleError(error, 'fileDownload');
+            }
         });
 
         document.getElementById('btnCenterOrigin').addEventListener('click', () => {
@@ -1582,13 +1602,15 @@
             if (pathPoints.length < 2) return null;
             
             const points = pathPoints.map(p => 
-                new THREE.Vector3(p.x, p.z + 5, p.y) // تعديل المحاور لتناسب المشهد
+                new THREE.Vector3(p.x / 10, -p.z, p.y / 10) // تعديل المحاور والمقياس
             );
             
             const pathGeometry = new THREE.BufferGeometry().setFromPoints(points);
-            const pathMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+            const pathMaterial = new THREE.LineBasicMaterial({ 
+                color: 0x00ff00,
+                linewidth: 2
+            });
             const pathLine = new THREE.Line(pathGeometry, pathMaterial);
-            scene.add(pathLine);
             
             return pathLine;
         }
@@ -1599,28 +1621,35 @@
         function createToolModel() {
             const toolGroup = new THREE.Group();
             
-            // جسم الأداة
-            const toolGeometry = new THREE.CylinderGeometry(2, 2, 20, 16);
+            // جسم الأداة (أسطوانة)
+            const toolGeometry = new THREE.CylinderGeometry(1, 1, 20, 16);
             const toolMaterial = new THREE.MeshPhongMaterial({ color: 0xff4444 });
             const toolBody = new THREE.Mesh(toolGeometry, toolMaterial);
+            toolBody.rotation.x = Math.PI / 2; // تدوير ليصبح أفقي
             toolGroup.add(toolBody);
             
-            // رأس الأداة
-            const tipGeometry = new THREE.ConeGeometry(3, 8, 16);
+            // رأس الأداة (مخروط)
+            const tipGeometry = new THREE.ConeGeometry(1.5, 6, 16);
             const tipMaterial = new THREE.MeshPhongMaterial({ color: 0xffff00 });
             const toolTip = new THREE.Mesh(tipGeometry, tipMaterial);
-            toolTip.position.y = -14;
+            toolTip.rotation.x = Math.PI / 2; // تدوير ليصبح أفقي
+            toolTip.position.z = 13; // وضع الرأس في نهاية الأداة
             toolGroup.add(toolTip);
             
-            toolGroup.position.set(0, 25, 0);
             return toolGroup;
         }
 
         /**
          * إضافة عناصر تحكم المحاكاة
          */
-        function addSimulationControls(tool, toolPath) {
+        function addSimulationControls() {
             const container = document.getElementById('threeContainer');
+            
+            // إزالة عناصر التحكم القديمة إن وجدت
+            const oldControls = container.querySelector('.simulation-controls');
+            const oldInfo = container.querySelector('.simulation-info');
+            if (oldControls) oldControls.remove();
+            if (oldInfo) oldInfo.remove();
             
             const controlsDiv = document.createElement('div');
             controlsDiv.className = 'simulation-controls';
@@ -1638,23 +1667,69 @@
                 <div>التقدم: <span id="simProgress">0%</span></div>
             `;
             container.appendChild(infoDiv);
+        }
+
+        /**
+         * محاكاة حركة الأداة
+         */
+        function simulateToolMovement() {
+            if (!simulation.toolPath || !simulation.tool) return;
             
-            // إضافة مستمعي الأحداث
-            document.getElementById('btnPlay').addEventListener('click', () => {
-                document.getElementById('simStatus').textContent = 'جاري التشغيل';
-                showToast('بدأت المحاكاة');
-            });
+            const points = simulation.toolPath.geometry.attributes.position.array;
+            const totalPoints = points.length / 3;
+            let currentPoint = 0;
             
-            document.getElementById('btnPause').addEventListener('click', () => {
-                document.getElementById('simStatus').textContent = 'متوقف';
-                showToast('تم إيقاف المحاكاة');
-            });
+            function animate() {
+                if (currentPoint < totalPoints - 3) {
+                    const x = points[currentPoint * 3];
+                    const y = points[currentPoint * 3 + 1];
+                    const z = points[currentPoint * 3 + 2];
+                    
+                    simulation.tool.position.set(x, y, z);
+                    
+                    currentPoint++;
+                    const progress = ((currentPoint / totalPoints) * 100).toFixed(1);
+                    document.getElementById('simProgress').textContent = `${progress}%`;
+                    
+                    simulation.animationId = requestAnimationFrame(animate);
+                } else {
+                    document.getElementById('simStatus').textContent = 'مكتمل';
+                    showToast('اكتملت المحاكاة');
+                }
+            }
             
-            document.getElementById('btnReset').addEventListener('click', () => {
-                document.getElementById('simStatus').textContent = 'جاهز';
-                document.getElementById('simProgress').textContent = '0%';
-                showToast('تم إعادة تعيين المحاكاة');
-            });
+            // إضافة مستمعي الأحداث بعد إنشاء العناصر
+            setTimeout(() => {
+                document.getElementById('btnPlay').addEventListener('click', () => {
+                    document.getElementById('simStatus').textContent = 'جاري التشغيل';
+                    if (!simulation.animationId) {
+                        animate();
+                    }
+                    showToast('بدأت المحاكاة');
+                });
+                
+                document.getElementById('btnPause').addEventListener('click', () => {
+                    document.getElementById('simStatus').textContent = 'متوقف';
+                    if (simulation.animationId) {
+                        cancelAnimationFrame(simulation.animationId);
+                        simulation.animationId = null;
+                    }
+                    showToast('تم إيقاف المحاكاة');
+                });
+                
+                document.getElementById('btnReset').addEventListener('click', () => {
+                    document.getElementById('simStatus').textContent = 'جاهز';
+                    document.getElementById('simProgress').textContent = '0%';
+                    if (simulation.animationId) {
+                        cancelAnimationFrame(simulation.animationId);
+                        simulation.animationId = null;
+                    }
+                    if (simulation.tool) {
+                        simulation.tool.position.set(0, 0, 0);
+                    }
+                    showToast('تم إعادة تعيين المحاكاة');
+                });
+            }, 100);
         }
 
         /**
@@ -1662,7 +1737,23 @@
          */
         function initSimulation() {
             const container = document.getElementById('threeContainer');
-            container.innerHTML = '';
+            
+            // تنظيف المحاكاة السابقة
+            if (renderer) {
+                container.removeChild(renderer.domElement);
+                renderer.dispose();
+            }
+            
+            // إعادة تعيين simulation object
+            simulation = {
+                isPlaying: false,
+                speed: 1,
+                currentLine: 0,
+                totalLines: 0,
+                animationId: null,
+                tool: null,
+                toolPath: null
+            };
             
             try {
                 document.getElementById('simulationPlaceholder').style.display = 'none';
@@ -1677,13 +1768,20 @@
                 scene.background = new THREE.Color(0x081224);
                 
                 camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
-                camera.position.set(100, 100, 100);
+                camera.position.set(50, 50, 50);
+                camera.lookAt(0, 0, 0);
                 
-                renderer = new THREE.WebGLRenderer({ antialias: true });
+                renderer = new THREE.WebGLRenderer({ 
+                    antialias: true,
+                    alpha: true
+                });
                 renderer.setSize(container.clientWidth, container.clientHeight);
+                renderer.setClearColor(0x000000, 0);
                 container.appendChild(renderer.domElement);
                 
                 controls = new THREE.OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.05;
                 
                 // إضاءة محسنة
                 const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
@@ -1694,34 +1792,43 @@
                 scene.add(directionalLight);
                 
                 // إنشاء مادة العمل بناءً على الإعدادات
-                const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30);
-                const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20);
-                const workDepth = parseFloat(document.getElementById('workDepth').value) || 3;
+                const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30) / 10;
+                const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20) / 10;
+                const workDepth = (parseFloat(document.getElementById('workDepth').value) || 3) / 10;
                 
                 const materialGeometry = new THREE.BoxGeometry(workWidth, workDepth, workHeight);
                 const materialMaterial = new THREE.MeshPhongMaterial({ 
                     color: 0x8B4513,
                     transparent: true,
-                    opacity: 0.8
+                    opacity: 0.8,
+                    side: THREE.DoubleSide
                 });
                 const material = new THREE.Mesh(materialGeometry, materialMaterial);
-                material.position.y = workDepth / 2;
+                material.position.set(workWidth / 2, -workDepth / 2, workHeight / 2);
                 scene.add(material);
                 
                 // إنشاء مسار المحاكاة من G-code الفعلي
-                const toolPath = parseGcodeForSimulation(gcode);
-                createToolPathVisualization(toolPath);
+                const pathPoints = parseGcodeForSimulation(gcode);
+                simulation.toolPath = createToolPathVisualization(pathPoints);
+                if (simulation.toolPath) {
+                    scene.add(simulation.toolPath);
+                }
                 
                 // إنشاء أداة محسنة
-                const tool = createToolModel();
-                scene.add(tool);
+                simulation.tool = createToolModel();
+                scene.add(simulation.tool);
                 
                 // إضافة شبكة المساعدة والمحاور
-                const gridHelper = new THREE.GridHelper(Math.max(workWidth, workHeight), 10);
+                const gridSize = Math.max(workWidth, workHeight) * 1.2;
+                const gridHelper = new THREE.GridHelper(gridSize, 10);
+                gridHelper.position.set(gridSize / 2, 0, gridSize / 2);
                 scene.add(gridHelper);
                 
-                const axesHelper = new THREE.AxesHelper(20);
+                const axesHelper = new THREE.AxesHelper(10);
                 scene.add(axesHelper);
+                
+                // إضافة عناصر التحكم
+                addSimulationControls();
                 
                 // التصيير
                 function animate() {
@@ -1731,11 +1838,13 @@
                 }
                 animate();
                 
-                addSimulationControls(tool, toolPath);
+                // تهيئة محاكاة الحركة
+                simulateToolMovement();
                 
                 showToast('تم تهيئة المحاكاة بنجاح');
                 
             } catch (error) {
+                console.error('Error in simulation:', error);
                 handleError(error, 'simulation');
                 document.getElementById('simulationPlaceholder').style.display = 'flex';
             }
@@ -1756,6 +1865,16 @@
                 Ctrl+R: اختبار سريع
                 Ctrl+D: تحميل الملف
             `);
+        });
+
+        // إعادة حجم المحاكاة عند تغيير حجم النافذة
+        window.addEventListener('resize', function() {
+            if (camera && renderer) {
+                const container = document.getElementById('threeContainer');
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            }
         });
     </script>
 </body>
