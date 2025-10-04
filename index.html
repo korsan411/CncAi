@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>CNC AI — Final (Debug+, Contour, TopView, Simulation Controls)</title>
+  <title>CNC AI — Final (Edge Live, FixedZ, InvertZ, Wood Color)</title>
 
   <!-- مكتبات -->
   <script src="https://docs.opencv.org/4.8.0/opencv.js" async></script>
@@ -18,9 +18,10 @@
     .grid { display:grid; grid-template-columns:1fr 520px; gap:16px }
     @media (max-width:1100px){ .grid{ grid-template-columns:1fr } }
     .panel { background:#0b1320; padding:16px; border-radius:10px; border:1px solid #1e293b }
-    .tabs { display:flex; margin-top:12px; border-bottom:1px solid #1e293b }
-    .tabs button { margin-left:6px; padding:8px 14px; border:none; border-radius:6px 6px 0 0; cursor:pointer; background:transparent; color:#9bb0c8; font-size:0.9rem }
-    .tabs button.active { background:#06b6d4; color:#021 }
+    /* tabs improved */
+    .tab-buttons { display:flex; gap:8px; margin-top:12px; background: rgba(14,23,33,0.6); padding:6px; border-radius:8px }
+    .tab-buttons button { flex:1; border:none; padding:8px 10px; border-radius:6px; background:transparent; color:#9bb0c8; cursor:pointer }
+    .tab-buttons button.active { background:#0f172a; color:#e6eef6; box-shadow: inset 0 -3px 0 #06b6d4; }
     .tab-content { display:none; margin-top:12px }
     .tab-content.active { display:block }
     canvas { max-width:100%; border-radius:6px; background:#000; display:block; margin:0 auto; border:1px solid #334155 }
@@ -87,7 +88,7 @@
 <body>
   <div class="app">
     <header>
-      <h1>CNC AI — Multi Machine Raster Engraving (Final)</h1>
+      <h1>CNC AI — Multi Machine Raster Engraving</h1>
       <div id="cvState">
         <span class="loading" style="display:inline-block;width:16px;height:16px;border:3px solid #f3f3f3;border-top:3px solid #06b6d4;border-radius:50%;animation:spin 1s linear infinite;margin-left:8px;"></span>
         جاري تحميل OpenCV...
@@ -95,12 +96,13 @@
     </header>
 
     <div class="grid">
-      <!-- LEFt panel -->
+      <!-- LEFT panel -->
       <div class="panel">
         <div style="display:flex;gap:8px;align-items:center;">
           <input id="fileInput" type="file" accept="image/*"/>
           <label class="file-input-label" for="fileInput" style="display:inline-block;padding:8px 12px;background:#1e293b;border-radius:6px;color:#e6eef6;cursor:pointer;border:1px dashed #334155">📁 اختر صورة</label>
           <div style="flex:1"></div>
+
           <label for="edgeMode" style="font-weight:normal;color:#9bb0c8">Edge Mode:</label>
           <select id="edgeMode" style="width:140px">
             <option value="auto">Canny (عادي)</option>
@@ -109,10 +111,10 @@
           </select>
         </div>
 
-        <div class="tabs">
+        <div class="tab-buttons" role="tablist">
           <button data-tab="original" class="active">🖼️ الأصلية</button>
           <button data-tab="heatmap">🔥 Heatmap</button>
-          <button data-tab="contour">📐 Canny/Contours</button>
+          <button data-tab="contour">📐 Contours</button>
           <button data-tab="topview">🔝 Top View</button>
           <button data-tab="simulation">🎬 المحاكاة</button>
         </div>
@@ -130,7 +132,7 @@
         <div id="contour" class="tab-content">
           <div class="canvas-placeholder" id="contourPlaceholder">Contours ستظهر هنا</div>
           <canvas id="canvasContour" style="display:none;"></canvas>
-          <div class="small-meta">يمكن تغيير وضع كشف الحواف من أعلى (Canny / Sobel / Laplace)</div>
+          <div class="small-meta">تبديل وضع كشف الحواف يحدث إعادة معالجة تلقائية</div>
         </div>
 
         <div id="topview" class="tab-content">
@@ -193,15 +195,34 @@
         <input id="feedRate" type="number" value="800" min="10" max="5000"/>
         <label for="safeZ">ارتفاع الأمان (مم)</label>
         <input id="safeZ" type="number" value="5" step="0.1" min="0" max="100"/>
+
         <label for="scanDir">اتجاه المسارات (Raster)</label>
         <select id="scanDir">
           <option value="x">أفقي (X)</option>
           <option value="y">رأسي (Y)</option>
         </select>
+
         <label for="stepOver">خطوة المسح (مم)</label>
         <input id="stepOver" type="number" value="5" step="0.1" min="0.1" max="50"/>
         <label for="maxDepth">أقصى عمق (مم)</label>
         <input id="maxDepth" type="number" value="3.0" step="0.1" min="0.1" max="50"/>
+
+        <!-- NEW: Fixed Z + Invert Z -->
+        <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+          <label style="font-weight:normal;"><input id="fixedZ" type="checkbox" /> استخدام Z ثابت</label>
+          <input id="fixedZValue" type="number" value="-1.0" step="0.1" style="width:120px" />
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+          <label style="font-weight:normal;"><input id="invertZ" type="checkbox" /> عكس Z</label>
+          <div style="flex:1"></div>
+          <label style="font-weight:normal;color:#9bb0c8">لون الخشب:</label>
+          <select id="woodColor" style="width:140px">
+            <option value="#deb887">خشب فاتح</option>
+            <option value="#a0522d" selected>خشب متوسط</option>
+            <option value="#d2b48c">بيج</option>
+            <option value="#8b5a2b">ماهوجني</option>
+          </select>
+        </div>
 
         <div class="button-group">
           <div class="button-row">
@@ -264,7 +285,6 @@
     // Simulation / Three
     let scene, camera, renderer, controls;
     let simulation = { isPlaying: false, animationFrame: null, tool: null, toolPath: null, pathPoints: [], index: 0, speed: 1 };
-    let autoOrbit = false; // we will support both auto orbit and manual controls (kept non-destructive)
 
     // ================= Debug overlay system =================
     (function initDebugOverlay(){
@@ -325,7 +345,7 @@
         dbgToggleSize.textContent = debugOverlay.classList.contains('minimized') ? '🔼' : '🔽';
       });
 
-      // Click on minimized overlay to restore
+      // Click restore when minimized
       debugOverlay.addEventListener('click', (ev) => {
         if (debugOverlay.classList.contains('minimized')) {
           debugOverlay.classList.remove('minimized');
@@ -421,9 +441,9 @@
     }
 
     // ================= Tabs behavior =================
-    document.querySelectorAll('.tabs button').forEach(btn => {
+    document.querySelectorAll('.tab-buttons button').forEach(btn => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-buttons button').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
         btn.classList.add('active');
         document.getElementById(btn.dataset.tab).classList.add('active');
@@ -478,7 +498,7 @@
       }
     });
 
-    // ================= Edge detection & contours =================
+    // ================= Edge detection & contours (live) =================
     async function detectContours() {
       if (!cvReady) {
         showToast('OpenCV غير جاهز بعد');
@@ -561,6 +581,15 @@
       }
     }
 
+    // live update when edge mode changed
+    document.getElementById('edgeMode').addEventListener('change', () => {
+      if (!previewCanvas) return;
+      if (cvReady && previewCanvas && previewCanvas.width > 0) {
+        // re-run detectContours using cached previewCanvas (no need to reload file)
+        detectContours();
+      }
+    });
+
     // ================= Rendering heatmap & contour =================
     function renderHeatmap(gray) {
       const heatCanvas = document.getElementById('canvasHeatmap');
@@ -637,10 +666,15 @@
     }
 
     // ================= Raster helpers =================
-    function addSegmentPoints(rowPoints, startX, endX, y, scaleX, scaleY, originX, originY, maxDepth, invertZ) {
+    function addSegmentPoints(rowPoints, startX, endX, y, scaleX, scaleY, originX, originY, maxDepth, invertZ, useFixedZ, fixedZValue) {
       for (let x = startX; x <= endX; x += 2) {
         const pv = sampleGrayAt(x, y);
-        let z = -((255 - pv) / 255.0) * maxDepth;
+        let z;
+        if (useFixedZ) {
+          z = fixedZValue;
+        } else {
+          z = -((255 - pv) / 255.0) * maxDepth;
+        }
         if (invertZ) z = -z;
         const scaledX = (x * scaleX) + originX;
         const scaledY = (y * scaleY) + originY;
@@ -680,7 +714,10 @@
         const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3;
         const feed = parseFloat(document.getElementById('feedRate').value) || 800;
         const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
-        const invertZ = false;
+
+        const useFixedZ = document.getElementById('fixedZ').checked;
+        const fixedZValue = parseFloat(document.getElementById('fixedZValue').value) || -1.0;
+        const invertZ = document.getElementById('invertZ').checked;
 
         const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30);
         const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20);
@@ -706,11 +743,11 @@
               const inside = cv.pointPolygonTest(contour, pt, false) >= 0;
               if (inside && !inContour) { segmentStart = x; inContour = true; }
               else if (!inside && inContour) {
-                addSegmentPoints(rowPoints, segmentStart, x - 1, y, scaleX, scaleY, originX, originY, maxDepth, invertZ);
+                addSegmentPoints(rowPoints, segmentStart, x - 1, y, scaleX, scaleY, originX, originY, maxDepth, invertZ, useFixedZ, fixedZValue);
                 inContour = false;
               }
             }
-            if (inContour) addSegmentPoints(rowPoints, segmentStart, previewCanvas.width - 1, y, scaleX, scaleY, originX, originY, maxDepth, invertZ);
+            if (inContour) addSegmentPoints(rowPoints, segmentStart, previewCanvas.width - 1, y, scaleX, scaleY, originX, originY, maxDepth, invertZ, useFixedZ, fixedZValue);
             if (rowPoints.length > 1) {
               processRowPoints(rowPoints, lines, feed, safeZ, (y / step) % 2 !== 0);
               totalLen += calculateRowLength(rowPoints);
@@ -726,11 +763,11 @@
               const inside = cv.pointPolygonTest(contour, pt, false) >= 0;
               if (inside && !inContour) { segmentStart = y; inContour = true; }
               else if (!inside && inContour) {
-                addSegmentPoints(colPoints, x, x, segmentStart, scaleX, scaleY, originX, originY, maxDepth, invertZ);
+                addSegmentPoints(colPoints, x, x, segmentStart, scaleX, scaleY, originX, originY, maxDepth, invertZ, useFixedZ, fixedZValue);
                 inContour = false;
               }
             }
-            if (inContour) addSegmentPoints(colPoints, x, x, previewCanvas.height - 1, scaleX, scaleY, originX, originY, maxDepth, invertZ);
+            if (inContour) addSegmentPoints(colPoints, x, x, previewCanvas.height - 1, scaleX, scaleY, originX, originY, maxDepth, invertZ, useFixedZ, fixedZValue);
             if (colPoints.length > 1) {
               processRowPoints(colPoints, lines, feed, safeZ, (x / step) % 2 !== 0);
               totalLen += calculateRowLength(colPoints);
@@ -766,6 +803,10 @@
         const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
         const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3;
 
+        const useFixedZ = document.getElementById('fixedZ').checked;
+        const fixedZValue = parseFloat(document.getElementById('fixedZValue').value) || -1.0;
+        const invertZ = document.getElementById('invertZ').checked;
+
         const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30);
         const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20);
         const originX = cmToMm(parseFloat(document.getElementById('originX').value) || 0);
@@ -788,7 +829,11 @@
           const startX = (x0 * scaleX + originX).toFixed(2);
           const startY = (y0 * scaleY + originY).toFixed(2);
           const startGray = sampleGrayAt(x0, y0);
-          let zStart = -((255 - startGray) / 255.0) * maxDepth;
+
+          let zStart;
+          if (useFixedZ) zStart = fixedZValue;
+          else zStart = -((255 - startGray) / 255.0) * maxDepth;
+          if (invertZ) zStart = -zStart;
 
           lines.push(`G0 X${startX} Y${startY} Z${safeZ.toFixed(2)}`);
           lines.push(`G1 F${feed.toFixed(0)}`);
@@ -799,7 +844,10 @@
             const px = (x * scaleX + originX).toFixed(2);
             const py = (y * scaleY + originY).toFixed(2);
             const pv = sampleGrayAt(x, y);
-            const zVal = -((255 - pv) / 255.0) * maxDepth;
+            let zVal;
+            if (useFixedZ) zVal = fixedZValue;
+            else zVal = -((255 - pv) / 255.0) * maxDepth;
+            if (invertZ) zVal = -zVal;
             lines.push(`G1 X${px} Y${py} Z${zVal.toFixed(3)}`);
             totalLen += Math.hypot(x - x0, y - y0);
             x0 = x; y0 = y;
@@ -831,7 +879,7 @@
       if (gcode) {
         showToast("تم توليد G-code (Raster)");
         renderTopViewFromGcode(gcode);
-        document.querySelector('[data-tab="simulation"]').click();
+        document.querySelector('.tab-buttons button[data-tab="simulation"]').click();
       }
     });
 
@@ -841,7 +889,7 @@
       if (gcode) {
         showToast("تم توليد G-code سريع (Raster)");
         renderTopViewFromGcode(gcode);
-        document.querySelector('[data-tab="simulation"]').click();
+        document.querySelector('.tab-buttons button[data-tab="simulation"]').click();
       }
     });
 
@@ -851,7 +899,7 @@
       if (gcode) {
         showToast("تم توليد G-code (Contour)");
         renderTopViewFromGcode(gcode);
-        document.querySelector('[data-tab="simulation"]').click();
+        document.querySelector('.tab-buttons button[data-tab="simulation"]').click();
       }
     });
 
@@ -889,6 +937,7 @@
           case 'g': e.preventDefault(); document.getElementById('btnGen').click(); break;
           case 'r': e.preventDefault(); document.getElementById('btnQuick').click(); break;
           case 'd': e.preventDefault(); document.getElementById('btnDownload').click(); break;
+          case '`': e.preventDefault(); document.getElementById('dbgToggleSize').click(); break;
         }
       }
     });
@@ -946,7 +995,6 @@
 
     // Simulation controls UI will be created inside the three container
     function addSimulationControls(container) {
-      // Remove old ones
       const old = container.querySelector('.sim-controls');
       if (old) old.remove();
       const oldInfo = container.querySelector('.sim-progress');
@@ -972,7 +1020,6 @@
         if (!simulation.pathPoints || simulation.pathPoints.length === 0) return;
         if (!simulation.isPlaying) {
           simulation.isPlaying = true;
-          simulation.startTime = performance.now() - (simulation.elapsedTime || 0);
           animateSimPath();
           document.getElementById('simStatus').textContent = 'جاري التشغيل';
           showToast('بدأت المحاكاة');
@@ -982,7 +1029,6 @@
         if (simulation.isPlaying) {
           simulation.isPlaying = false;
           cancelAnimationFrame(simulation.animationFrame);
-          simulation.elapsedTime = performance.now() - (simulation.startTime || performance.now());
           document.getElementById('simStatus').textContent = 'متوقف';
           showToast('أقفلت المحاكاة مؤقتاً');
         }
@@ -1006,15 +1052,12 @@
       });
     }
 
-    // animateSimPath handles speed by stepping indices per frame
     function animateSimPath() {
       if (!simulation.pathPoints || simulation.pathPoints.length === 0) return;
       const total = simulation.pathPoints.length;
       function step() {
         if (!simulation.isPlaying) return;
-        // compute step increment based on speed and delta time
-        // simpler approach: increment by speed factor
-        simulation.index += simulation.speed; // speed acts as "points per frame" multiplier
+        simulation.index += simulation.speed;
         if (simulation.index >= total) {
           simulation.index = total - 1;
           updateToolPosition(simulation.index);
@@ -1038,13 +1081,11 @@
       const i = Math.floor(index);
       const p = simulation.pathPoints[i];
       if (!p) return;
-      // Three scene expects scaled coords (we used x/10, -z, y/10 earlier)
       simulation.tool.position.set(p.x / 10, -p.z, p.y / 10);
     }
 
     function initSimulation() {
       const container = document.getElementById('threeContainer');
-      // cleanup previous
       if (renderer) {
         try { container.removeChild(renderer.domElement); renderer.dispose(); } catch(e){}
         renderer = null; scene = null; camera = null; controls = null;
@@ -1070,7 +1111,7 @@
         renderer.setClearColor(0x000000, 0);
         container.appendChild(renderer.domElement);
 
-        // keep OrbitControls optional — user can still drag if desired
+        // OrbitControls for inspection
         controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
@@ -1081,12 +1122,13 @@
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
         dirLight.position.set(50,120,50); scene.add(dirLight);
 
-        // material block
+        // material block with selected wood color
+        const woodHex = document.getElementById('woodColor').value || '#a0522d';
         const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30) / 10;
         const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20) / 10;
         const workDepth = (parseFloat(document.getElementById('workDepth').value) || 3) / 10;
         const materialGeometry = new THREE.BoxGeometry(workWidth, workDepth, workHeight);
-        const materialMaterial = new THREE.MeshPhongMaterial({ color:0x8B4513, transparent:true, opacity:0.9 });
+        const materialMaterial = new THREE.MeshPhongMaterial({ color: new THREE.Color(woodHex), transparent:true, opacity:0.95 });
         const materialMesh = new THREE.Mesh(materialGeometry, materialMaterial);
         materialMesh.position.set(workWidth/2, -workDepth/2, workHeight/2);
         scene.add(materialMesh);
@@ -1116,10 +1158,9 @@
         // prepare sim state
         simulation.index = 0;
         simulation.isPlaying = false;
-        simulation.elapsedTime = 0;
         simulation.animationFrame = null;
 
-        // render loop (keeps controls working)
+        // render loop
         (function renderLoop() {
           requestAnimationFrame(renderLoop);
           if (controls) controls.update();
@@ -1136,7 +1177,6 @@
     }
 
     // ================= Top View rendering =================
-    // Creates a depth map from generated G-code path (approximate) and renders to topView canvas
     function renderTopViewFromGcode(gcode) {
       try {
         if (!previewCanvas) return;
@@ -1145,20 +1185,17 @@
         topCanvas.width = tw; topCanvas.height = th;
         const ctx = topCanvas.getContext('2d');
 
-        // initialize depth map (in mm) 2D array
-        const depthMap = new Float32Array(tw * th); // single buffer
+        const depthMap = new Float32Array(tw * th);
         const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3.0;
 
-        // parse gcode to points in mm
         const points = parseGcodeForSimulation(gcode);
         if (!points || points.length === 0) {
-          // fallback: visualize grayscale as depth
           const imgData = ctx.createImageData(tw, th);
           for (let y=0;y<th;y++){
             for (let x=0;x<tw;x++){
               const v = sampleGrayAt(x,y);
               const depth = ((255 - v)/255.0)*maxDepth;
-              const shade = 255 - Math.round((depth/maxDepth)*200); // darker for deeper
+              const shade = 255 - Math.round((depth/maxDepth)*200);
               const idx = (y*tw + x)*4;
               imgData.data[idx]=shade; imgData.data[idx+1]=shade; imgData.data[idx+2]=shade; imgData.data[idx+3]=255;
             }
@@ -1167,13 +1204,11 @@
           return;
         }
 
-        // read work dims and origin to map mm to pixels
         const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30);
         const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20);
         const originX = cmToMm(parseFloat(document.getElementById('originX').value) || 0);
         const originY = cmToMm(parseFloat(document.getElementById('originY').value) || 0);
 
-        // helper: mm coords -> pixel coords on previewCanvas
         function mmToPixel(px_mm_x, px_mm_y) {
           const xRatio = (px_mm_x - originX) / workWidth;
           const yRatio = (px_mm_y - originY) / workHeight;
@@ -1182,19 +1217,16 @@
           return { x: xPix, y: yPix };
         }
 
-        // fill depthMap with 0
         for (let i=0;i<depthMap.length;i++) depthMap[i]=0;
 
-        // For every point in path, mark depth (use absolute z)
         for (let i=0;i<points.length;i++) {
           const p = points[i];
           if (typeof p.x === 'undefined') continue;
           const coords = mmToPixel(p.x, p.y);
           if (coords.x < 0 || coords.x >= tw || coords.y < 0 || coords.y >= th) continue;
-          const depth = Math.abs(p.z); // z is negative depth
+          const depth = Math.abs(p.z);
           const idx = coords.y * tw + coords.x;
           depthMap[idx] = Math.max(depthMap[idx], depth);
-          // optionally, spread to neighbors for visibility
           const spread = 2;
           for (let oy=-spread; oy<=spread; oy++) {
             for (let ox=-spread; ox<=spread; ox++) {
@@ -1206,13 +1238,12 @@
           }
         }
 
-        // Compose image from depthMap
         const imgData = ctx.createImageData(tw, th);
         for (let y=0;y<th;y++) {
           for (let x=0;x<tw;x++) {
             const idx = y*tw + x;
             const d = Math.min(depthMap[idx], maxDepth);
-            const shade = 255 - Math.round((d / maxDepth) * 230); // deeper -> darker
+            const shade = 255 - Math.round((d / maxDepth) * 230);
             const di = (y*tw + x)*4;
             imgData.data[di] = shade;
             imgData.data[di+1] = shade;
@@ -1260,7 +1291,6 @@
         camera.updateProjectionMatrix();
         renderer.setSize(container.clientWidth, container.clientHeight);
       }
-      // also resize topView to previewCanvas dims if exists
       try {
         const top = document.getElementById('topView');
         if (previewCanvas && top) {
