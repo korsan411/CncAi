@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CNC AI - Raster مع إعدادات متقدمة</title>
+  <script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="onOpenCvReady();"></script>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      background: #0f172a; 
+      color: #e2e8f0; 
+      margin: 0; 
+      padding: 0; 
+    }
+    header { 
+      background: #1e293b; 
+      padding: 10px 20px; 
+      font-size: 1.2rem; 
+      color: #06b6d4; 
+      text-align: center;
+    }
+    .container { 
+      display: flex; 
+      gap: 16px; 
+      padding: 16px; 
+      flex-wrap: wrap;
+    }
+    .panel { 
+      background: #1e293b; 
+      padding: 12px; 
+      border-radius: 8px; 
+      flex: 1; 
+      min-width: 300px;
+    }
+    canvas { 
+      max-width: 100%; 
+      background: #000; 
+      border-radius: 6px; 
+      display: block; 
+      margin: 10px auto; 
+      border: 1px solid #334155;
+    }
+    label { 
+      display: block; 
+      margin-top: 8px; 
+      font-weight: bold;
+    }
+    input, select { 
+      padding: 6px; 
+      border-radius: 6px; 
+      border: 1px solid #334155; 
+      background: #0f172a; 
+      color: #e2e8f0; 
+      width: 100%; 
+      box-sizing: border-box;
+      margin-top: 4px;
+    }
+    button { 
+      margin-top: 10px; 
+      padding: 10px; 
+      border: none; 
+      border-radius: 6px; 
+      cursor: pointer; 
+      font-weight: bold;
+    }
+    button.primary { 
+      background: #06b6d4; 
+      color: #021; 
+      width: 100%; 
+    }
+    button.primary:hover {
+      background: #0891b2;
+    }
+    button.primary:disabled {
+      background: #64748b;
+      cursor: not-allowed;
+    }
+    #advancedSettings { 
+      display: none; 
+      margin-top: 10px; 
+      padding: 10px; 
+      background: #0f172a; 
+      border: 1px solid #334155; 
+      border-radius: 8px; 
+    }
+    .toggle-adv { 
+      background: #334155; 
+      color: #e2e8f0; 
+      width: 100%; 
+    }
+    .toggle-adv:hover {
+      background: #475569;
+    }
+    textarea { 
+      width: 100%; 
+      height: 200px; 
+      margin-top: 10px; 
+      border-radius: 6px; 
+      background: #0f172a; 
+      color: #cbd5e1; 
+      border: 1px solid #334155; 
+      padding: 8px; 
+      box-sizing: border-box;
+      font-family: monospace;
+      resize: vertical;
+    }
+    .status {
+      padding: 8px;
+      border-radius: 4px;
+      margin: 10px 0;
+      text-align: center;
+    }
+    .status.loading {
+      background: #f59e0b;
+      color: #000;
+    }
+    .status.success {
+      background: #10b981;
+      color: #fff;
+    }
+    .status.error {
+      background: #ef4444;
+      color: #fff;
+    }
+    .file-input-container {
+      position: relative;
+      overflow: hidden;
+      display: inline-block;
+      width: 100%;
+    }
+    .file-input-container input[type=file] {
+      position: absolute;
+      left: 0;
+      top: 0;
+      opacity: 0;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+    }
+    .file-input-label {
+      display: block;
+      padding: 10px;
+      background: #334155;
+      color: #e2e8f0;
+      text-align: center;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px dashed #64748b;
+    }
+    .file-input-label:hover {
+      background: #475569;
+    }
+    h3 {
+      color: #06b6d4;
+      margin-top: 0;
+    }
+    @media (max-width: 768px) {
+      .container {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>🪵 CNC AI - Raster مع إعدادات متقدمة</header>
+  <div class="container">
+    <!-- المعاينة -->
+    <div class="panel">
+      <h3>🖼️ معاينة الصورة</h3>
+      <div class="file-input-container">
+        <div class="file-input-label">📁 اختر صورة للتحميل</div>
+        <input type="file" id="fileInput" accept="image/*">
+      </div>
+      <div id="imageStatus" class="status"></div>
+      <canvas id="canvasOriginal"></canvas>
+    </div>
+
+    <!-- الإعدادات -->
+    <div class="panel">
+      <h3>⚙️ الإعدادات الأساسية</h3>
+      <label>عرض العمل (سم): <input type="number" id="workWidth" value="30" min="1" step="0.1"></label>
+      <label>ارتفاع العمل (سم): <input type="number" id="workHeight" value="20" min="1" step="0.1"></label>
+      <label>عمق العمل (مم): <input type="number" id="workDepth" value="3.0" min="0.1" step="0.1"></label>
+      <label>سرعة التغذية (مم/دقيقة): <input type="number" id="feedRate" value="800" min="1"></label>
+      <label>ارتفاع الأمان Z (مم): <input type="number" id="safeZ" value="5" min="0.1" step="0.1"></label>
+      <label>خطوة المسح (مم): <input type="number" id="stepOver" value="5" min="0.1" step="0.1"></label>
+
+      <button class="toggle-adv" id="toggleAdvanced">⚙️ الإعدادات المتقدمة</button>
+      <div id="advancedSettings">
+        <label>🪄 نعومة السطح (Smoothing):
+          <select id="smoothing">
+            <option value="none">بدون</option>
+            <option value="low">منخفض</option>
+            <option value="medium">متوسط</option>
+            <option value="high">عالي</option>
+          </select>
+        </label>
+        <label>📏 مقياس العمق Z:
+          <input type="number" id="zScale" value="1.0" min="0.1" step="0.1">
+        </label>
+        <label><input type="checkbox" id="invertZ"> عكس العمق (Invert Z)</label>
+        <label>↔️ اتجاه المسح:
+          <select id="scanDir">
+            <option value="x">أفقي (X)</option>
+            <option value="y">عمودي (Y)</option>
+            <option value="diag">قطري</option>
+          </select>
+        </label>
+        <label><input type="checkbox" id="detailFilter"> فلترة التفاصيل الصغيرة</label>
+      </div>
+
+      <button class="primary" id="btnGen" disabled>⚡ توليد G-code (Raster)</button>
+      <button class="primary" id="btnDownload" disabled>💾 تحميل G-code</button>
+      <div id="gcodeStatus" class="status"></div>
+      <textarea id="gcodeOut" readonly placeholder="سيظهر G-code هنا بعد التوليد"></textarea>
+    </div>
+  </div>
+
+  <script>
+    let grayMat = null;
+    let previewCanvas = document.getElementById("canvasOriginal");
+    let ctx = previewCanvas.getContext("2d");
+    let currentImageName = "image";
+    let openCvReady = false;
+
+    // دالة للتحقق من جاهزية OpenCV
+    function onOpenCvReady() {
+      openCvReady = true;
+      updateStatus("imageStatus", "OpenCV جاهز للاستخدام", "success");
+      console.log("OpenCV loaded successfully");
+    }
+
+    // دالة لتحديث حالة العناصر
+    function updateStatus(elementId, message, type = "") {
+      const element = document.getElementById(elementId);
+      element.textContent = message;
+      element.className = "status " + type;
+    }
+
+    // دالة لتفعيل/تعطيل الأزرار
+    function updateButtons() {
+      const hasImage = grayMat !== null;
+      document.getElementById("btnGen").disabled = !hasImage || !openCvReady;
+      document.getElementById("btnDownload").disabled = document.getElementById("gcodeOut").value === "";
+    }
+
+    // زر فتح/إغلاق الإعدادات المتقدمة
+    document.getElementById("toggleAdvanced").addEventListener("click", () => {
+      const adv = document.getElementById("advancedSettings");
+      adv.style.display = adv.style.display === "block" ? "none" : "block";
+    });
+
+    // تحميل الصورة
+    document.getElementById("fileInput").addEventListener("change", e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      
+      if (!openCvReady) {
+        updateStatus("imageStatus", "OpenCV لم يتم تحميله بعد. يرجى الانتظار...", "error");
+        return;
+      }
+      
+      currentImageName = f.name.replace(/\.[^/.]+$/, "");
+      const img = new Image();
+      
+      img.onload = () => {
+        try {
+          // تعيين حجم الكانفاس بناءً على الصورة مع الحفاظ على نسبة العرض إلى الارتفاع
+          const maxWidth = 500;
+          const maxHeight = 400;
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > maxWidth) {
+            height = (maxWidth / width) * height;
+            width = maxWidth;
+          }
+          
+          if (height > maxHeight) {
+            width = (maxHeight / height) * width;
+            height = maxHeight;
+          }
+          
+          previewCanvas.width = width;
+          previewCanvas.height = height;
+          
+          // رسم الصورة على الكانفاس
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // تحويل الصورة إلى تدرج الرمادي باستخدام OpenCV
+          if (grayMat) grayMat.delete();
+          
+          let src = cv.imread(previewCanvas);
+          grayMat = new cv.Mat();
+          cv.cvtColor(src, grayMat, cv.COLOR_RGBA2GRAY);
+          src.delete();
+          
+          updateStatus("imageStatus", "تم تحميل الصورة بنجاح", "success");
+          updateButtons();
+        } catch (error) {
+          console.error("Error processing image:", error);
+          updateStatus("imageStatus", "خطأ في معالجة الصورة: " + error.message, "error");
+        }
+      };
+      
+      img.onerror = () => {
+        updateStatus("imageStatus", "خطأ في تحميل الصورة", "error");
+      };
+      
+      updateStatus("imageStatus", "جاري تحميل الصورة...", "loading");
+      img.src = URL.createObjectURL(f);
+    });
+
+    // تطبيق الفلترة حسب الاختيار
+    function applySmoothing(mat) {
+      let out = new cv.Mat();
+      let s = document.getElementById("smoothing").value;
+      
+      try {
+        if (s === "low") {
+          cv.GaussianBlur(mat, out, new cv.Size(3, 3), 0);
+        } else if (s === "medium") {
+          cv.GaussianBlur(mat, out, new cv.Size(5, 5), 0);
+        } else if (s === "high") {
+          cv.GaussianBlur(mat, out, new cv.Size(9, 9), 0);
+        } else {
+          mat.copyTo(out);
+        }
+      } catch (error) {
+        console.error("Error applying smoothing:", error);
+        mat.copyTo(out);
+      }
+      
+      return out;
+    }
+
+    // توليد G-code Raster
+    function generateRasterGcode() {
+      if (!grayMat) {
+        updateStatus("gcodeStatus", "لم يتم تحميل صورة بعد", "error");
+        return "";
+      }
+      
+      try {
+        updateStatus("gcodeStatus", "جاري توليد G-code...", "loading");
+        
+        let workWidth = parseFloat(document.getElementById("workWidth").value) * 10; // تحويل إلى مم
+        let workHeight = parseFloat(document.getElementById("workHeight").value) * 10; // تحويل إلى مم
+        let maxDepth = parseFloat(document.getElementById("workDepth").value);
+        let feed = parseFloat(document.getElementById("feedRate").value);
+        let safeZ = parseFloat(document.getElementById("safeZ").value);
+        let stepOver = parseFloat(document.getElementById("stepOver").value);
+        let zScale = parseFloat(document.getElementById("zScale").value) || 1.0;
+        let invertZ = document.getElementById("invertZ").checked;
+        let scanDir = document.getElementById("scanDir").value;
+        let detailFilter = document.getElementById("detailFilter").checked;
+
+        let src = applySmoothing(grayMat);
+        let w = src.cols, h = src.rows;
+
+        // فلترة التفاصيل
+        if (detailFilter) {
+          let tmp = new cv.Mat();
+          cv.resize(src, tmp, new cv.Size(Math.floor(w/2), Math.floor(h/2)), 0, 0, cv.INTER_AREA);
+          src.delete();
+          src = tmp;
+          w = src.cols; 
+          h = src.rows;
+        }
+
+        let lines = [];
+        lines.push("; Raster G-code مع إعدادات متقدمة");
+        lines.push("; تم التوليد بواسطة CNC AI Raster");
+        lines.push(`; الصورة: ${currentImageName}`);
+        lines.push(`; الأبعاد: ${workWidth/10} سم × ${workHeight/10} سم`);
+        lines.push(`; العمق الأقصى: ${maxDepth} مم`);
+        lines.push("G21 G90 G17 ; استخدام المليمتر، الإحداثيات المطلقة، مستوى XY");
+        lines.push("G0 Z" + safeZ.toFixed(2) + " ; الانتقال إلى ارتفاع الأمان");
+
+        let scaleX = workWidth / w;
+        let scaleY = workHeight / h;
+
+        if (scanDir === "x") {
+          for (let y = 0; y < h; y += stepOver) {
+            let row = [];
+            let firstPoint = true;
+            
+            for (let x = 0; x < w; x++) {
+              let v = src.ucharPtr(y, x)[0];
+              let z = ((255 - v) / 255) * maxDepth * zScale;
+              if (invertZ) z = maxDepth - z;
+              
+              if (firstPoint) {
+                row.push(`G0 X${(x * scaleX).toFixed(2)} Y${(y * scaleY).toFixed(2)} ; الانتقال إلى نقطة البداية`);
+                row.push(`G1 Z${z.toFixed(3)} F${feed/2} ; الهبوط إلى مستوى Z`);
+                firstPoint = false;
+              } else {
+                row.push(`G1 X${(x * scaleX).toFixed(2)} Y${(y * scaleY).toFixed(2)} Z${z.toFixed(3)} F${feed}`);
+              }
+            }
+            
+            if (row.length) {
+              lines.push(...row);
+              lines.push("G0 Z" + safeZ.toFixed(2) + " ; الارتفاع إلى مستوى الأمان");
+            }
+          }
+        } else if (scanDir === "y") {
+          for (let x = 0; x < w; x += stepOver) {
+            let col = [];
+            let firstPoint = true;
+            
+            for (let y = 0; y < h; y++) {
+              let v = src.ucharPtr(y, x)[0];
+              let z = ((255 - v) / 255) * maxDepth * zScale;
+              if (invertZ) z = maxDepth - z;
+              
+              if (firstPoint) {
+                col.push(`G0 X${(x * scaleX).toFixed(2)} Y${(y * scaleY).toFixed(2)} ; الانتقال إلى نقطة البداية`);
+                col.push(`G1 Z${z.toFixed(3)} F${feed/2} ; الهبوط إلى مستوى Z`);
+                firstPoint = false;
+              } else {
+                col.push(`G1 X${(x * scaleX).toFixed(2)} Y${(y * scaleY).toFixed(2)} Z${z.toFixed(3)} F${feed}`);
+              }
+            }
+            
+            if (col.length) {
+              lines.push(...col);
+              lines.push("G0 Z" + safeZ.toFixed(2) + " ; الارتفاع إلى مستوى الأمان");
+            }
+          }
+        } else {
+          // مسح قطري بسيط
+          let max = Math.max(w, h);
+          for (let d = 0; d < max; d += stepOver) {
+            let diag = [];
+            let firstPoint = true;
+            
+            for (let x = 0; x <= d; x++) {
+              let y = d - x;
+              if (x < w && y < h) {
+                let v = src.ucharPtr(y, x)[0];
+                let z = ((255 - v) / 255) * maxDepth * zScale;
+                if (invertZ) z = maxDepth - z;
+                
+                if (firstPoint) {
+                  diag.push(`G0 X${(x * scaleX).toFixed(2)} Y${(y * scaleY).toFixed(2)} ; الانتقال إلى نقطة البداية`);
+                  diag.push(`G1 Z${z.toFixed(3)} F${feed/2} ; الهبوط إلى مستوى Z`);
+                  firstPoint = false;
+                } else {
+                  diag.push(`G1 X${(x * scaleX).toFixed(2)} Y${(y * scaleY).toFixed(2)} Z${z.toFixed(3)} F${feed}`);
+                }
+              }
+            }
+            
+            if (diag.length) {
+              lines.push(...diag);
+              lines.push("G0 Z" + safeZ.toFixed(2) + " ; الارتفاع إلى مستوى الأمان");
+            }
+          }
+        }
+
+        lines.push("G0 Z" + safeZ.toFixed(2) + " ; العودة إلى ارتفاع الأمان");
+        lines.push("G0 X0 Y0 ; العودة إلى نقطة الصفر");
+        lines.push("M30 ; نهاية البرنامج");
+
+        src.delete();
+        
+        updateStatus("gcodeStatus", "تم توليد G-code بنجاح", "success");
+        return lines.join("\n");
+      } catch (error) {
+        console.error("Error generating G-code:", error);
+        updateStatus("gcodeStatus", "خطأ في توليد G-code: " + error.message, "error");
+        return "";
+      }
+    }
+
+    // أزرار
+    document.getElementById("btnGen").addEventListener("click", () => {
+      const gcode = generateRasterGcode();
+      document.getElementById("gcodeOut").value = gcode;
+      updateButtons();
+    });
+
+    document.getElementById("btnDownload").addEventListener("click", () => {
+      let g = document.getElementById("gcodeOut").value;
+      if (!g) {
+        updateStatus("gcodeStatus", "لا يوجد G-code لتحميله", "error");
+        return;
+      }
+      
+      try {
+        let a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([g], {type: "text/plain"}));
+        a.download = currentImageName + "_raster.gcode";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        updateStatus("gcodeStatus", "تم تحميل الملف بنجاح", "success");
+      } catch (error) {
+        console.error("Error downloading file:", error);
+        updateStatus("gcodeStatus", "خطأ في تحميل الملف", "error");
+      }
+    });
+
+    // تحديث حالة الأزرار عند التحميل
+    document.addEventListener("DOMContentLoaded", () => {
+      updateButtons();
+      updateStatus("imageStatus", "قم بتحميل صورة لبدء العمل", "");
+      updateStatus("gcodeStatus", "", "");
+    });
+  </script>
+</body>
+</html>
