@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>CNC AI — Edge Sensitivity + TopView Colors</title>
+  <title>CNC AI — Heatmap Colormaps + Edge Sensitivity + Colored TopView</title>
 
   <!-- مكتبات -->
   <script src="https://docs.opencv.org/4.8.0/opencv.js" async></script>
@@ -83,13 +83,18 @@
     #topView { width:100%; height:200px; background:#0d1722; border-radius:6px; border:1px solid #334155; display:block }
     #topLegend { width:100%; height:18px; border-radius:6px; border:1px solid #2b3844; background:linear-gradient(90deg,#ddd,#333); }
 
+    /* colormap buttons under heatmap */
+    .colormap-buttons { display:flex; gap:6px; justify-content:center; margin-top:8px; }
+    .colormap-buttons button { background:#141b22; color:#cfeaf2; border:1px solid #26343f; padding:6px 8px; border-radius:6px; cursor:pointer; font-size:12px }
+    .colormap-buttons button.active { background:#06b6d4; color:#021; border-color:#06b6d4; }
+
     @keyframes spin { 0%{transform:rotate(0)}100%{transform:rotate(360deg)} }
   </style>
 </head>
 <body>
   <div class="app">
     <header>
-      <h1>CNC AI — Edge Sensitivity & Colored Top View</h1>
+      <h1>CNC AI — Heatmap Colormaps + Edge Sensitivity</h1>
       <div id="cvState">
         <span class="loading" style="display:inline-block;width:16px;height:16px;border:3px solid #f3f3f3;border-top:3px solid #06b6d4;border-radius:50%;animation:spin 1s linear infinite;margin-left:8px;"></span>
         جاري تحميل OpenCV...
@@ -135,6 +140,16 @@
         <div id="heatmap" class="tab-content">
           <div class="canvas-placeholder" id="heatmapPlaceholder">Heatmap ستظهر هنا</div>
           <canvas id="canvasHeatmap" style="display:none;"></canvas>
+
+          <!-- colormap buttons under heatmap -->
+          <div class="colormap-buttons" id="colormapButtons">
+            <button data-map="jet" class="active">Jet</button>
+            <button data-map="hot">Hot</button>
+            <button data-map="cool">Cool</button>
+            <button data-map="gray">Gray</button>
+          </div>
+
+          <div class="small-meta">اختَر نموذج الـ colormap. التغيير يحدث لحظياً ويؤثر على Heatmap وTop View.</div>
         </div>
 
         <div id="contour" class="tab-content">
@@ -148,7 +163,7 @@
             <canvas id="topView"></canvas>
             <div id="topLegend" title="عمق النقش — الألوان فقط"></div>
           </div>
-          <div class="small-meta">معاينة من الأعلى للعمق المتوقع بعد تنفيذ G-code (ألوان فقط)</div>
+          <div class="small-meta">معاينة من الأعلى للعمق المتوقع بعد تنفيذ G-code (الألوان تتبع اختيار Colormap)</div>
         </div>
 
         <div id="simulation" class="tab-content">
@@ -290,6 +305,10 @@
     let previewCanvas = null;
     let additionalContours = []; // {contour, area}
     let lastScanDir = 'x';
+    let lastGeneratedGcode = '';
+
+    // colormap current
+    let currentColormap = 'jet';
 
     // Simulation / Three
     let scene, camera, renderer, controls;
@@ -580,7 +599,7 @@
         if (grayMat) { try { grayMat.delete(); } catch(e){} }
         grayMat = gray.clone();
 
-        renderHeatmap(gray);
+        renderHeatmap(); // uses currentColormap
         renderContour(gray, contour);
 
         // cleanup temporaries
@@ -604,24 +623,81 @@
       if (cvReady && previewCanvas && previewCanvas.width > 0) detectContours();
     });
 
-    // ================= Rendering heatmap & contour =================
-    function renderHeatmap(gray) {
+    // ================= Colormap utilities =================
+    function clamp(v, a=0, b=1){ return Math.max(a, Math.min(b, v)); }
+    function getColormapColor(t, map) {
+      // t in [0,1]
+      t = clamp(t);
+      if (map === 'hot') {
+        // hot: black->red->yellow->white
+        if (t < 0.33) return { r: Math.round(t/0.33*128), g: 0, b: 0 };
+        if (t < 0.66) return { r: Math.round(128 + (t-0.33)/0.33*127), g: Math.round((t-0.33)/0.33*128), b: 0 };
+        return { r: 255, g: Math.round(128 + (t-0.66)/0.34*127), b: Math.round((t-0.66)/0.34*127) };
+      } else if (map === 'cool') {
+        // cool: cyan -> magenta-ish
+        return { r: Math.round(255 * t), g: Math.round(255 * (1 - t)), b: 255 };
+      } else if (map === 'gray') {
+        const v = Math.round(255 * t);
+        return { r: v, g: v, b: v };
+      } else {
+        // jet-like approximation: blue->cyan->yellow->red
+        const r = Math.round(255 * clamp(1.5 - Math.abs(1.0 - 4.0*(t-0.5)), 0, 1));
+        const g = Math.round(255 * clamp(1.5 - Math.abs(0.5 - 4.0*(t-0.25)), 0, 1));
+        const b = Math.round(255 * clamp(1.5 - Math.abs(0.5 - 4.0*(t)), 0, 1));
+        // fallback simpler jet:
+        if (!r && !g && !b) {
+          const jr = Math.round(255 * clamp(1.5 - Math.abs(1 - 4*(t-0.5))));
+          const jg = Math.round(255 * clamp(1.5 - Math.abs(0.5 - 4*(t-0.25))));
+          const jb = Math.round(255 * clamp(1.5 - Math.abs(0.5 - 4*t)));
+          return { r: jr, g: jg, b: jb };
+        }
+        return { r, g, b };
+      }
+    }
+
+    function hexToRgb(hex) {
+      if (!hex) return { r:160, g:82, b:45 };
+      const h = hex.replace('#','');
+      const hh = (h.length===3) ? h.split('').map(c=>c+c).join('') : h;
+      const bigint = parseInt(hh, 16);
+      return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
+    }
+    function mixColors(c1, c2, t) {
+      return {
+        r: Math.round(c1.r * (1 - t) + c2.r * t),
+        g: Math.round(c1.g * (1 - t) + c2.g * t),
+        b: Math.round(c1.b * (1 - t) + c2.b * t)
+      };
+    }
+
+    // ================= Rendering heatmap & contour (colormaps) =================
+    function renderHeatmap() {
+      if (!grayMat || !previewCanvas) return;
       const heatCanvas = document.getElementById('canvasHeatmap');
       const ctx = heatCanvas.getContext('2d');
-      heatCanvas.width = gray.cols;
-      heatCanvas.height = gray.rows;
+      heatCanvas.width = grayMat.cols;
+      heatCanvas.height = grayMat.rows;
       const imgData = ctx.createImageData(heatCanvas.width, heatCanvas.height);
-      const data = gray.data;
+      const data = grayMat.data;
       for (let i = 0; i < data.length; i++) {
-        const value = data[i];
+        const value = data[i]; // 0..255
+        const t = value / 255.0; // normalized
+        const col = getColormapColor(t, currentColormap);
         const idx = i * 4;
-        imgData.data[idx] = value;
-        imgData.data[idx + 1] = 0;
-        imgData.data[idx + 2] = 255 - value;
+        imgData.data[idx] = col.r;
+        imgData.data[idx + 1] = col.g;
+        imgData.data[idx + 2] = col.b;
         imgData.data[idx + 3] = 255;
       }
       ctx.putImageData(imgData, 0, 0);
       showElement('canvasHeatmap', 'heatmapPlaceholder');
+
+      // also update contour view (overlay)
+      try {
+        if (contour) renderContour(grayMat, contour);
+      } catch(e){}
+      // update top view if G-code exists
+      if (lastGeneratedGcode) renderTopViewFromGcode(lastGeneratedGcode);
     }
 
     function renderContour(gray, mainContour) {
@@ -630,7 +706,14 @@
       contourCanvas.width = gray.cols;
       contourCanvas.height = gray.rows;
       const heatCanvas = document.getElementById('canvasHeatmap');
-      ctx.drawImage(heatCanvas, 0, 0);
+      // draw heatmap first (so contours overlay on top)
+      try {
+        ctx.drawImage(heatCanvas, 0, 0);
+      } catch(e) {
+        // fallback: fill with gray
+        ctx.fillStyle = '#222';
+        ctx.fillRect(0,0,contourCanvas.width, contourCanvas.height);
+      }
       if (mainContour) {
         ctx.strokeStyle = '#00ff00';
         ctx.lineWidth = 2;
@@ -890,6 +973,7 @@
     document.getElementById('btnGen').addEventListener('click', () => {
       const gcode = generateRasterGcode(false);
       document.getElementById('gcodeOut').value = gcode;
+      lastGeneratedGcode = gcode;
       if (gcode) {
         showToast("تم توليد G-code (Raster)");
         renderTopViewFromGcode(gcode);
@@ -900,6 +984,7 @@
     document.getElementById('btnQuick').addEventListener('click', () => {
       const gcode = generateRasterGcode(true);
       document.getElementById('gcodeOut').value = gcode;
+      lastGeneratedGcode = gcode;
       if (gcode) {
         showToast("تم توليد G-code سريع (Raster)");
         renderTopViewFromGcode(gcode);
@@ -910,6 +995,7 @@
     document.getElementById('btnContour').addEventListener('click', () => {
       const gcode = generateContourGcode();
       document.getElementById('gcodeOut').value = gcode;
+      lastGeneratedGcode = gcode;
       if (gcode) {
         showToast("تم توليد G-code (Contour)");
         renderTopViewFromGcode(gcode);
@@ -1190,23 +1276,7 @@
       }
     }
 
-    // ================= Top View rendering (colored + inverted Y + legend) =================
-
-    // helpers: color conversions
-    function hexToRgb(hex) {
-      if (!hex) return { r:160, g:82, b:45 };
-      const h = hex.replace('#','');
-      const bigint = parseInt(h.length===3 ? h.split('').map(c=>c+c).join('') : h, 16);
-      return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
-    }
-    function mixColors(c1, c2, t) {
-      return {
-        r: Math.round(c1.r * (1 - t) + c2.r * t),
-        g: Math.round(c1.g * (1 - t) + c2.g * t),
-        b: Math.round(c1.b * (1 - t) + c2.b * t)
-      };
-    }
-
+    // ================= Top View rendering (colored + inverted Y + legend + colormap blending) =================
     function renderTopViewFromGcode(gcode) {
       try {
         if (!previewCanvas) return;
@@ -1252,14 +1322,17 @@
               const v = sampleGrayAt(x,y);
               const depth = ((255 - v)/255.0)*maxDepth;
               const t = depth / maxDepth; // 0..1
-              const col = mixColors(woodRgb, blackRgb, t);
+              // colormap color
+              const cmapCol = getColormapColor(t, currentColormap);
+              // blend: wood base mixed with cmap color to preserve wood feel
+              const mixed1 = mixColors(woodRgb, blackRgb, t*0.6);
+              const finalCol = mixColors(mixed1, cmapCol, 0.35);
               const idx = (y*tw + x)*4;
-              imgData.data[idx]=col.r; imgData.data[idx+1]=col.g; imgData.data[idx+2]=col.b; imgData.data[idx+3]=255;
+              imgData.data[idx]=finalCol.r; imgData.data[idx+1]=finalCol.g; imgData.data[idx+2]=finalCol.b; imgData.data[idx+3]=255;
             }
           }
           ctx.putImageData(imgData,0,0);
-          // draw legend gradient
-          drawTopLegend(woodRgb, blackRgb);
+          drawTopLegend(currentColormap);
           return;
         }
 
@@ -1289,32 +1362,39 @@
           for (let x=0;x<tw;x++) {
             const idx = y*tw + x;
             const d = Math.min(depthMap[idx], maxDepth);
-            const t = d / maxDepth; // 0..1
-            const col = mixColors(woodRgb, blackRgb, t);
+            const t = (maxDepth === 0) ? 0 : (d / maxDepth); // 0..1
+            const cmapCol = getColormapColor(t, currentColormap);
+            const mixed1 = mixColors(woodRgb, blackRgb, t*0.6);
+            const finalCol = mixColors(mixed1, cmapCol, 0.35);
             const di = (y*tw + x)*4;
-            imgData.data[di] = col.r;
-            imgData.data[di+1] = col.g;
-            imgData.data[di+2] = col.b;
+            imgData.data[di] = finalCol.r;
+            imgData.data[di+1] = finalCol.g;
+            imgData.data[di+2] = finalCol.b;
             imgData.data[di+3] = 255;
           }
         }
         ctx.putImageData(imgData, 0, 0);
 
-        // draw legend gradient
-        drawTopLegend(woodRgb, blackRgb);
+        // draw legend gradient for current colormap
+        drawTopLegend(currentColormap);
 
       } catch (e) {
         console.error('renderTopViewFromGcode error', e);
       }
     }
 
-    function drawTopLegend(woodRgb, blackRgb) {
+    function drawTopLegend(map) {
       try {
         const legend = document.getElementById('topLegend');
-        // use CSS gradient for legend element using computed colors
-        const start = `rgb(${woodRgb.r},${woodRgb.g},${woodRgb.b})`;
-        const end = `rgb(${blackRgb.r},${blackRgb.g},${blackRgb.b})`;
-        legend.style.background = `linear-gradient(90deg, ${start} 0%, ${end} 100%)`;
+        // create simple gradient css from colormap: sample t=0..1
+        const steps = 6;
+        const stops = [];
+        for (let i=0;i<=steps;i++){
+          const t = i / steps;
+          const c = getColormapColor(t, map);
+          stops.push(`rgb(${c.r},${c.g},${c.b}) ${Math.round((i/steps)*100)}%`);
+        }
+        legend.style.background = `linear-gradient(90deg, ${stops.join(',')})`;
       } catch(e){}
     }
 
@@ -1340,6 +1420,19 @@
           document.getElementById('stepOver').value = def.stepOver;
           showToast(`تم تحميل إعدادات ${e.target.value}`);
         }
+      });
+
+      // colormap buttons binding
+      document.querySelectorAll('#colormapButtons button').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          document.querySelectorAll('#colormapButtons button').forEach(b=>b.classList.remove('active'));
+          btn.classList.add('active');
+          currentColormap = btn.dataset.map;
+          // update heatmap & topview
+          renderHeatmap();
+          if (lastGeneratedGcode) renderTopViewFromGcode(lastGeneratedGcode);
+          showToast('تم تغيير نموذج الألوان إلى ' + currentColormap);
+        });
       });
     });
 
