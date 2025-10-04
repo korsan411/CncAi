@@ -8,8 +8,6 @@
   <!-- مكتبات -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/controls/OrbitControls.js"></script>
-  <!-- استخدام CDN موثوق لـ OpenCV -->
-  <script src="https://docs.opencv.org/4.8.0/opencv.js" onload="onOpenCvReady()" onerror="onOpenCvError()"></script>
 
   <style>
     :root{
@@ -165,14 +163,15 @@
         <label style="margin-top:12px">📄 مخرجات G-code</label>
         <textarea id="gcodeOut" readonly placeholder="سيظهر G-code هنا بعد اكتمال التوليد"></textarea>
 
-        <!-- بديل OpenCV -->
-        <div id="fallbackInfo" style="display:none; margin-top:16px; padding:12px; background:#1e293b; border-radius:6px; border:1px solid #334155;">
-          <h4 style="margin:0 0 8px 0; color:var(--accent)">💡 ملاحظة مهمة</h4>
+        <!-- معلومات OpenCV -->
+        <div id="cvInfo" style="margin-top:16px; padding:12px; background:#1e293b; border-radius:6px; border:1px solid #334155;">
+          <h4 style="margin:0 0 8px 0; color:var(--accent)">ℹ️ معلومات OpenCV</h4>
           <p style="margin:0; font-size:0.9rem; color:var(--muted);">
-            إذا استمرت مشكلة تحميل OpenCV، جرب تشغيل التطبيق على خادم محلي:<br>
-            <code style="background:#0f172a; padding:4px 8px; border-radius:4px; margin-top:4px; display:inline-block;">
+            إذا استمرت مشكلة التحميل، جرب:<br>
+            <code style="background:#0f172a; padding:4px 8px; border-radius:4px; margin:4px 0; display:inline-block;">
               python -m http.server 8000
             </code>
+            <br>ثم افتح <code>http://localhost:8000</code>
           </p>
         </div>
       </div>
@@ -183,24 +182,65 @@
 
   <script>
   /************************************************************************
-   * CNC AI — Dual Mode - إصلاح مشكلة OpenCV
-   * التعديلات:
-   * 1. تحميل OpenCV بطريقة أكثر موثوقية
-   * 2. إضافة بدائل عند فشل التحميل
-   * 3. تحسين تجربة المستخدم أثناء التحميل
+   * CNC AI — Dual Mode - إصلاح مشكلة OpenCV النهائي
+   * استخدام طريقة موثوقة لتحميل OpenCV
    ************************************************************************/
 
-  // ---------- حالة التطبيق ----------
+  // ---------- إدارة حالة OpenCV ----------
   let cvReady = false;
   let cvLoadStartTime = Date.now();
-  let fallbackMode = false;
-  let currentWorker = null;
 
-  // ---------- إدارة حالة OpenCV ----------
+  // دالة لتحميل OpenCV بطريقة موثوقة
+  function loadOpenCV() {
+    console.log('بدء تحميل OpenCV...');
+    
+    // إنشاء سكريبت OpenCV
+    const script = document.createElement('script');
+    script.src = 'https://docs.opencv.org/4.8.0/opencv.js';
+    
+    script.onload = function() {
+      console.log('OpenCV script loaded, waiting for initialization...');
+      
+      // الانتظار حتى تهيئة OpenCV
+      if (cv && cv.onRuntimeInitialized) {
+        cv.onRuntimeInitialized = function() {
+          onOpenCvReady();
+        };
+      } else {
+        // إذا لم يكن هناك onRuntimeInitialized، انتظر قليلاً ثم تحقق
+        setTimeout(checkOpenCVReady, 100);
+      }
+    };
+    
+    script.onerror = function() {
+      console.error('فشل تحميل سكريبت OpenCV');
+      onOpenCvError();
+    };
+    
+    document.head.appendChild(script);
+  }
+
+  // التحقق من جاهزية OpenCV
+  function checkOpenCVReady(attempts = 0) {
+    if (attempts > 50) { // 5 ثواني كحد أقصى
+      console.error('انتهت محاولات الانتظار لـ OpenCV');
+      onOpenCvError();
+      return;
+    }
+    
+    if (typeof cv !== 'undefined' && cv.Mat && cv.imread) {
+      console.log('OpenCV جاهز بعد', attempts, 'محاولات');
+      onOpenCvReady();
+    } else {
+      setTimeout(() => checkOpenCVReady(attempts + 1), 100);
+    }
+  }
+
   function onOpenCvReady() {
     cvReady = true;
     const loadTime = Date.now() - cvLoadStartTime;
-    console.log(`OpenCV loaded successfully in ${loadTime}ms`);
+    console.log(`✅ OpenCV loaded successfully in ${loadTime}ms`);
+    console.log('OpenCV version:', cv.getVersion ? cv.getVersion() : 'unknown');
     
     // تحديث واجهة المستخدم
     document.getElementById('cvState').className = 'cv-status ready';
@@ -213,57 +253,40 @@
   }
 
   function onOpenCvError() {
-    console.error('Failed to load OpenCV from CDN');
+    console.error('فشل تحميل OpenCV');
     
     document.getElementById('cvState').className = 'cv-status error';
     document.getElementById('cvState').innerHTML = '❌ فشل تحميل OpenCV';
     
-    // إظهار معلومات البديل
-    document.getElementById('fallbackInfo').style.display = 'block';
+    showToast('فشل تحميل OpenCV. جرب خادم محلي', 10000);
     
-    showToast('فشل تحميل OpenCV. جرب خادم محلي', 5000);
-    
-    // محاولة استخدام بديل بعد 3 ثوان
-    setTimeout(tryAlternativeOpenCV, 3000);
+    // محاولة استخدام CDN بديل
+    setTimeout(tryAlternativeOpenCV, 2000);
   }
 
   function tryAlternativeOpenCV() {
-    console.log('Trying alternative OpenCV CDN...');
+    console.log('جرب تحميل OpenCV من مصدر بديل...');
     showToast('جرب تحميل OpenCV من مصدر بديل...');
     
-    // تحديث الحالة
     document.getElementById('cvState').className = 'cv-status loading';
     document.getElementById('cvState').innerHTML = '<div class="loading"></div> جرب تحميل OpenCV من مصدر بديل...';
     
-    // محاولة CDN بديل
     const alternativeScript = document.createElement('script');
     alternativeScript.src = 'https://cdn.jsdelivr.net/npm/opencv.js@4.8.0/opencv.js';
-    alternativeScript.onload = onOpenCvReady;
-    alternativeScript.onerror = function() {
-      console.error('Alternative CDN also failed');
-      onAllOpenCVFailed();
+    
+    alternativeScript.onload = function() {
+      console.log('Alternative OpenCV script loaded');
+      setTimeout(() => checkOpenCVReady(), 500);
     };
+    
+    alternativeScript.onerror = function() {
+      console.error('فشل تحميل البديل أيضاً');
+      document.getElementById('cvState').className = 'cv-status error';
+      document.getElementById('cvState').innerHTML = '❌ فشل جميع محاولات التحميل';
+      showToast('فشل جميع محاولات تحميل OpenCV', 10000);
+    };
+    
     document.head.appendChild(alternativeScript);
-  }
-
-  function onAllOpenCVFailed() {
-    console.log('All OpenCV loading attempts failed');
-    
-    document.getElementById('cvState').className = 'cv-status error';
-    document.getElementById('cvState').innerHTML = '❌ فشل تحميل OpenCV. استخدم خادم محلي';
-    
-    showToast('فشل جميع محاولات التحميل. الرجاء استخدام خادم محلي', 10000);
-    
-    // تفعيل الوضع الافتراضي (بدون OpenCV)
-    enableFallbackMode();
-  }
-
-  function enableFallbackMode() {
-    fallbackMode = true;
-    document.getElementById('fileInputLabel').textContent = '📁 اختر صورة للتحميل (الوضع الافتراضي)';
-    document.getElementById('fileInput').disabled = false;
-    
-    showToast('تم التبديل إلى الوضع الافتراضي - بعض الميزات غير متاحة', 5000);
   }
 
   function enableUIElements() {
@@ -273,7 +296,7 @@
     
     // تفعيل الأزرار
     document.querySelectorAll('button:disabled').forEach(btn => {
-      if (btn.id !== 'fileInput') {
+      if (!btn.id.includes('Zoom') && !btn.id.includes('Reset')) {
         btn.disabled = false;
       }
     });
@@ -314,7 +337,7 @@
     });
   });
 
-  // Zoom control (simple CSS scale)
+  // Zoom control
   function applyZoom(canvasId, scale) {
     const c = document.getElementById(canvasId);
     if (!c) return;
@@ -325,22 +348,16 @@
   function wireZoom(inId, outId, resetId, canvasId) {
     let s = 1;
     document.getElementById(inId).addEventListener('click', () => { 
-      if (!document.getElementById(inId).disabled) {
-        s = Math.min(4, s+0.25); 
-        applyZoom(canvasId, s); 
-      }
+      s = Math.min(4, s+0.25); 
+      applyZoom(canvasId, s); 
     });
     document.getElementById(outId).addEventListener('click', () => { 
-      if (!document.getElementById(outId).disabled) {
-        s = Math.max(0.25, s-0.25); 
-        applyZoom(canvasId, s); 
-      }
+      s = Math.max(0.25, s-0.25); 
+      applyZoom(canvasId, s); 
     });
     document.getElementById(resetId).addEventListener('click', () => { 
-      if (!document.getElementById(resetId).disabled) {
-        s = 1; 
-        applyZoom(canvasId, s); 
-      }
+      s = 1; 
+      applyZoom(canvasId, s); 
     });
   }
 
@@ -354,6 +371,7 @@
   let extraContours = [];
   let previewCanvas = null;
   let currentImageName = 'image';
+  let currentWorker = null;
 
   // دالة مساعدة لتنظيف الذاكرة
   function cleanupMemory() {
@@ -379,21 +397,11 @@
     }
   }
 
-  // إلغاء العمليات الجارية
-  function cancelCurrentOperations() {
-    if (currentWorker) {
-      currentWorker.terminate();
-      currentWorker = null;
-      showToast('تم إلغاء العملية');
-    }
-  }
-
   // ---------- Load image ----------
   document.getElementById('fileInput').addEventListener('change', (e) => {
     const f = e.target.files[0];
     if (!f) return;
 
-    // التحقق من حجم الملف (حد أقصى 10MB)
     if (f.size > 10 * 1024 * 1024) {
       showToast('حجم الملف كبير جداً. الحد الأقصى 10MB');
       return;
@@ -403,14 +411,12 @@
     const img = new Image();
     
     img.onload = () => {
-      // إلغاء أي عمليات جارية
       cancelCurrentOperations();
       
       previewCanvas = document.getElementById('canvasOriginal');
       const ctx = previewCanvas.getContext('2d');
       let w = img.width, h = img.height;
       
-      // التحقق من أبعاد الصورة
       if (w > 5000 || h > 5000) {
         showToast('أبعاد الصورة كبيرة جداً. الحد الأقصى 5000x5000 بكسل');
         return;
@@ -432,58 +438,28 @@
       previewCanvas.style.display = 'block';
       document.getElementById('imageMeta').textContent = `الملف: ${f.name} — معاينة: ${w}×${h}`;
       
-      // تنظيف الذاكرة القديمة
       cleanupMemory();
       
-      // معالجة الصورة
       if (cvReady) {
         detectAndRender();
-      } else if (fallbackMode) {
-        showToast('الوضع الافتراضي: معالجة الصورة محدودة');
-        handleImageInFallbackMode();
       } else {
-        showToast('OpenCV غير جاهز بعد. انتظر قليلاً');
+        showToast('OpenCV غير جاهز بعد');
       }
     };
     
     img.onerror = () => {
-      showToast('فشل تحميل الصورة. تأكد من أن الملف صورة صالحة');
+      showToast('فشل تحميل الصورة');
     };
     
     img.src = URL.createObjectURL(f);
   });
 
-  // معالجة الصورة في الوضع الافتراضي (بدون OpenCV)
-  function handleImageInFallbackMode() {
-    try {
-      const c = document.getElementById('canvasHeatmap');
-      const ctx = c.getContext('2d');
-      c.width = previewCanvas.width;
-      c.height = previewCanvas.height;
-      
-      // رسم صورة رمادية بسيطة
-      ctx.drawImage(previewCanvas, 0, 0);
-      const imageData = ctx.getImageData(0, 0, c.width, c.height);
-      const data = imageData.data;
-      
-      for (let i = 0; i < data.length; i += 4) {
-        const avg = (data[i] + data[i+1] + data[i+2]) / 3;
-        data[i] = avg;     // الأحمر
-        data[i+1] = avg;   // الأخضر  
-        data[i+2] = avg;   // الأزرق
-      }
-      
-      ctx.putImageData(imageData, 0, 0);
-      document.getElementById('heatmapPlaceholder').style.display = 'none';
-      c.style.display = 'block';
-      
-      // تحديث التبويبات
-      document.querySelector('[data-tab="heatmap"]').disabled = false;
-      
-      showToast('تم تحميل الصورة في الوضع الافتراضي');
-    } catch (err) {
-      console.error('Error in fallback mode:', err);
-      showToast('خطأ في معالجة الصورة في الوضع الافتراضي');
+  // إلغاء العمليات الجارية
+  function cancelCurrentOperations() {
+    if (currentWorker) {
+      currentWorker.terminate();
+      currentWorker = null;
+      showToast('تم إلغاء العملية');
     }
   }
 
@@ -507,52 +483,51 @@
       cv.GaussianBlur(gray, blurred, new cv.Size(5,5), 0);
 
       edges = new cv.Mat();
-      const median = cv.mean(blurred).w;
-      const lower = Math.max(0, (1.0 - 0.33) * median);
-      const upper = Math.min(255, (1.0 + 0.33) * median);
-      cv.Canny(blurred, edges, lower, upper);
+      cv.Canny(blurred, edges, 50, 150);
 
       kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3,3));
       cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel);
 
       contours = new cv.MatVector();
       hierarchy = new cv.Mat();
-      cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+      cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
-      const minArea = (gray.cols * gray.rows) * 0.005;
-      const allContours = [];
+      const minArea = (gray.cols * gray.rows) * 0.01;
+      let maxArea = 0;
+      let mainContourIndex = -1;
       
-      // جمع جميع الكونتورات
-      for (let i=0; i<contours.size(); i++) {
+      // البحث عن أكبر كونتور
+      for (let i = 0; i < contours.size(); i++) {
         const cnt = contours.get(i);
-        const area = cv.contourArea(cnt, false);
-        allContours.push({ contour: cnt, area });
+        const area = cv.contourArea(cnt);
+        if (area > maxArea) {
+          maxArea = area;
+          mainContourIndex = i;
+        }
       }
 
-      // فلترة وترتيب الكونتورات
-      const valids = allContours.filter(item => item.area > minArea)
-                               .sort((a,b) => b.area - a.area);
-
-      // تنظيف الكونتورات الصغيرة
-      allContours.filter(item => item.area <= minArea)
-                .forEach(item => {
-                  if (item.contour && !item.contour.isDeleted()) {
-                    item.contour.delete();
-                  }
-                });
-
-      if (valids.length === 0) {
-        showToast('لم يتم العثور على كونتور كافٍ. جرب صورة أخرى');
-      } else {
-        // تنظيف الكونتورات القديمة
+      if (mainContourIndex !== -1 && maxArea > minArea) {
         cleanupMemory();
         
-        mainContour = valids[0].contour;
-        extraContours = valids.slice(1).map(v => v.contour);
-        showToast(`تم العثور على ${valids.length} كونتور — استخدام الأكبر`);
+        mainContour = contours.get(mainContourIndex);
+        
+        // جمع الكونتورات الأخرى الكبيرة enough
+        extraContours = [];
+        for (let i = 0; i < contours.size(); i++) {
+          if (i !== mainContourIndex) {
+            const cnt = contours.get(i);
+            const area = cv.contourArea(cnt);
+            if (area > minArea) {
+              extraContours.push(cnt);
+            }
+          }
+        }
+        
+        showToast(`تم العثور على ${1 + extraContours.length} كونتور`);
+      } else {
+        showToast('لم يتم العثور على كونتور كافٍ');
       }
 
-      // حفظ نسخة من الصورة الرمادية
       if (grayMat && !grayMat.isDeleted()) {
         grayMat.delete();
       }
@@ -561,15 +536,13 @@
       renderHeatmap(grayMat);
       renderContours(grayMat, mainContour);
 
-      showToast('تم معالجة الصورة بنجاح');
-
     } catch (err) {
       console.error('خطأ في المعالجة:', err);
-      showToast('خطأ في معالجة الصورة: ' + (err.message || err));
+      showToast('خطأ في معالجة الصورة');
     } finally {
       // تنظيف الذاكرة المؤقتة
       if (cvReady) {
-        const matsToClean = [src, gray, blurred, edges, kernel, hierarchy, contours];
+        const matsToClean = [src, gray, blurred, edges, kernel, hierarchy];
         matsToClean.forEach(mat => {
           if (mat && !mat.isDeleted()) {
             try {
@@ -579,16 +552,14 @@
             }
           }
         });
+        // لا تحذف contours لأننا نستخدمها
       }
     }
   }
 
   // ---------- Heatmap ----------
   function renderHeatmap(gray) {
-    if (!gray || (cvReady && gray.isDeleted())) {
-      console.warn('كائن gray غير صالح لرسم heatmap');
-      return;
-    }
+    if (!gray || gray.isDeleted()) return;
 
     try {
       const c = document.getElementById('canvasHeatmap');
@@ -632,16 +603,12 @@
       c.style.display = 'block';
     } catch (err) {
       console.error('خطأ في رسم heatmap:', err);
-      showToast('خطأ في رسم خريطة الحرارة');
     }
   }
 
   // ---------- Contour render ----------
   function renderContours(gray, mainCnt) {
-    if (!gray || (cvReady && gray.isDeleted())) {
-      console.warn('كائن gray غير صالح لرسم الكونتورات');
-      return;
-    }
+    if (!gray || gray.isDeleted()) return;
 
     try {
       const c = document.getElementById('canvasContour');
@@ -653,35 +620,21 @@
       const heat = document.getElementById('canvasHeatmap');
       if (heat.width === c.width && heat.height === c.height) {
         ctx.drawImage(heat, 0, 0);
-      } else {
-        // إذا كانت الأبعاد مختلفة، ارسم خلفية رمادية
-        ctx.fillStyle = '#333';
-        ctx.fillRect(0, 0, c.width, c.height);
       }
 
       // رسم الكونتور الرئيسي
-      if (mainCnt && (!cvReady || !mainCnt.isDeleted())) {
+      if (mainCnt && !mainCnt.isDeleted()) {
         ctx.strokeStyle = '#00ff00'; 
         ctx.lineWidth = 2; 
         ctx.beginPath();
         
-        const d = mainCnt.data32S;
-        if (d && d.length > 0) {
-          let firstPoint = true;
-          for (let i=0; i<d.length; i+=2) {
-            if (i+1 >= d.length) break;
-            const x = d[i], y = d[i+1];
-            
-            if (isNaN(x) || isNaN(y)) continue;
-            
-            if (firstPoint) {
-              ctx.moveTo(x, y);
-              firstPoint = false;
-            } else {
-              ctx.lineTo(x, y);
-            }
+        const points = mainCnt.data32S;
+        if (points && points.length > 0) {
+          ctx.moveTo(points[0], points[1]);
+          for (let i = 2; i < points.length; i += 2) {
+            ctx.lineTo(points[i], points[i+1]);
           }
-          ctx.closePath(); 
+          ctx.closePath();
           ctx.stroke();
         }
       }
@@ -692,26 +645,16 @@
         ctx.lineWidth = 1;
         
         extraContours.forEach(cnt => {
-          if (!cnt || (cvReady && cnt.isDeleted())) return;
+          if (!cnt || cnt.isDeleted()) return;
           
           ctx.beginPath();
-          const d = cnt.data32S;
-          if (d && d.length > 0) {
-            let firstPoint = true;
-            for (let i=0; i<d.length; i+=2) {
-              if (i+1 >= d.length) break;
-              const x = d[i], y = d[i+1];
-              
-              if (isNaN(x) || isNaN(y)) continue;
-              
-              if (firstPoint) {
-                ctx.moveTo(x, y);
-                firstPoint = false;
-              } else {
-                ctx.lineTo(x, y);
-              }
+          const points = cnt.data32S;
+          if (points && points.length > 0) {
+            ctx.moveTo(points[0], points[1]);
+            for (let i = 2; i < points.length; i += 2) {
+              ctx.lineTo(points[i], points[i+1]);
             }
-            ctx.closePath(); 
+            ctx.closePath();
             ctx.stroke();
           }
         });
@@ -721,34 +664,13 @@
       c.style.display = 'block';
     } catch (err) {
       console.error('خطأ في رسم الكونتورات:', err);
-      showToast('خطأ في رسم الحواف');
     }
   }
 
   // ---------- Raster generator ----------
-  function sampleGrayAtFromMat(mat, x, y, canvasW, canvasH) {
-    if (!mat || (cvReady && mat.isDeleted())) return 128;
-    
-    const gw = mat.cols, gh = mat.rows;
-    const gx_f = (x / canvasW) * (gw - 1);
-    const gy_f = (y / canvasH) * (gh - 1);
-    const x0 = Math.floor(gx_f), y0 = Math.floor(gy_f);
-    const x1 = Math.min(gw-1, x0+1), y1 = Math.min(gh-1, y0+1);
-    
-    const sx = gx_f - x0, sy = gy_f - y0;
-    const v00 = mat.data[y0*gw + x0] || 128;
-    const v10 = mat.data[y0*gw + x1] || 128;
-    const v01 = mat.data[y1*gw + x0] || 128;
-    const v11 = mat.data[y1*gw + x1] || 128;
-    
-    const v0 = v00 * (1 - sx) + v10 * sx;
-    const v1 = v01 * (1 - sx) + v11 * sx;
-    return Math.max(0, Math.min(255, Math.round(v0 * (1 - sy) + v1 * sy)));
-  }
-
   function generateRasterGcodeSimple() {
-    if ((!grayMat || (cvReady && grayMat.isDeleted()) || !previewCanvas) && !fallbackMode) { 
-      showToast('لا توجد بيانات جاهزة. قم بتحميل صورة أولاً'); 
+    if (!grayMat || grayMat.isDeleted() || !previewCanvas) { 
+      showToast('لا توجد بيانات جاهزة'); 
       return ''; 
     }
     
@@ -760,14 +682,8 @@
       const workWidth = (parseFloat(document.getElementById('workWidth').value) || 30) * 10;
       const workHeight = (parseFloat(document.getElementById('workHeight').value) || 20) * 10;
       
-      // التحقق من القيم
-      if (stepOver <= 0 || maxDepth <= 0 || feed <= 0 || safeZ <= 0 || workWidth <= 0 || workHeight <= 0) {
-        showToast('قيم الإعدادات غير صالحة. تأكد من أن جميع القيم موجبة');
-        return '';
-      }
-      
       const lines = [];
-      lines.push('; Raster G-code (stable)');
+      lines.push('; Raster G-code');
       lines.push('G21 G90 G17');
       lines.push('G0 Z' + safeZ.toFixed(2));
       
@@ -778,16 +694,10 @@
       for (let y = 0; y < canvasH; y += Math.max(1, Math.round(stepOver))) {
         const rowPoints = [];
         for (let x = 0; x < canvasW; x++) {
-          let pv = 128; // قيمة افتراضية
-          
-          if (fallbackMode) {
-            // في الوضع الافتراضي، استخدام بيانات من canvas
-            const ctx = previewCanvas.getContext('2d');
-            const pixel = ctx.getImageData(x, y, 1, 1).data;
-            pv = (pixel[0] + pixel[1] + pixel[2]) / 3;
-          } else if (grayMat) {
-            pv = sampleGrayAtFromMat(grayMat, x, y, canvasW, canvasH);
-          }
+          const gw = grayMat.cols, gh = grayMat.rows;
+          const gx = Math.floor((x / canvasW) * (gw - 1));
+          const gy = Math.floor((y / canvasH) * (gh - 1));
+          const pv = grayMat.data[gy * gw + gx];
           
           let z = -((255 - pv) / 255.0) * maxDepth;
           const sx = (x * scaleX);
@@ -812,61 +722,8 @@
       return lines.join('\n');
     } catch (err) {
       console.error('خطأ في توليد Raster:', err);
-      showToast('خطأ في توليد G-code: ' + (err.message || err)); 
+      showToast('خطأ في توليد G-code'); 
       return '';
-    }
-  }
-
-  // ---------- Contour-based generator ----------
-  function buildScanlineSegments(stepPx = 1) {
-    if ((!mainContour || (cvReady && mainContour.isDeleted()) || !grayMat || (cvReady && grayMat.isDeleted())) && !fallbackMode) {
-      return [];
-    }
-    
-    try {
-      const w = grayMat.cols, h = grayMat.rows;
-      const rect = cv.boundingRect(mainContour);
-      const minX = Math.max(0, rect.x), maxX = Math.min(w-1, rect.x + rect.width - 1);
-      const minY = Math.max(0, rect.y), maxY = Math.min(h-1, rect.y + rect.height - 1);
-      const segments = [];
-      
-      for (let y = minY; y <= maxY; y += stepPx) {
-        let inside = false;
-        let segStart = -1;
-        const segsForY = [];
-        
-        for (let x = minX; x <= maxX; x++) {
-          const pt = new cv.Point(x, y);
-          const res = cv.pointPolygonTest(mainContour, pt, false);
-          pt.delete();
-          
-          if (res >= 0) {
-            if (!inside) { 
-              inside = true; 
-              segStart = x; 
-            }
-          } else {
-            if (inside) { 
-              inside = false; 
-              segsForY.push({ x0: segStart, x1: x - 1 }); 
-              segStart = -1; 
-            }
-          }
-        }
-        
-        if (inside && segStart >= 0) {
-          segsForY.push({ x0: segStart, x1: maxX });
-        }
-        
-        if (segsForY.length > 0) {
-          segments.push({ y: y, segments: segsForY });
-        }
-      }
-      
-      return segments;
-    } catch (err) {
-      console.error('خطأ في بناء المقاطع:', err);
-      return [];
     }
   }
 
@@ -876,35 +733,24 @@
       const g = generateRasterGcodeSimple();
       if (g) {
         document.getElementById('gcodeOut').value = g;
-        showToast('تم توليد G-code (Raster) — النسخة الموثوقة');
+        showToast('تم توليد G-code (Raster)');
         document.querySelector('[data-tab="simulation"]').click();
       }
     } catch (error) {
       console.error('خطأ في توليد Raster:', error);
-      showToast('حدث خطأ غير متوقع أثناء التوليد');
+      showToast('حدث خطأ أثناء التوليد');
     }
   });
 
-  document.getElementById('btnGenContour').addEventListener('click', async () => {
-    if (fallbackMode) {
-      showToast('ميزة Contour غير متاحة في الوضع الافتراضي');
-      return;
-    }
-    
-    if (!cvReady) {
-      showToast('OpenCV غير جاهز لاستخدام ميزة Contour');
-      return;
-    }
-    
-    showToast('ميزة Contour تتطلب OpenCV. جرب Raster بدلاً من ذلك');
+  document.getElementById('btnGenContour').addEventListener('click', () => {
+    showToast('ميزة Contour قيد التطوير - استخدم Raster حالياً');
   });
 
-  // Download with name including image and timestamp
   document.getElementById('btnDownload').addEventListener('click', () => {
     try {
       const g = document.getElementById('gcodeOut').value;
       if (!g) { 
-        showToast('لا يوجد G-code لتحميل. قم بتوليد G-code أولاً'); 
+        showToast('لا يوجد G-code لتحميل'); 
         return; 
       }
       
@@ -931,31 +777,6 @@
   // ---------- Simple 3D sim ----------
   let scene, camera, renderer, controls;
   
-  function parseGcodeForSimulation(gcode) {
-    try {
-      const lines = gcode.split('\n'); 
-      const path = []; 
-      let pos = { x:0, y:0, z:0 };
-      
-      for (const L of lines) {
-        const t = L.trim();
-        if (t.startsWith('G1') || t.startsWith('G0')) {
-          const xm = t.match(/X([\d.-]+)/); 
-          const ym = t.match(/Y([\d.-]+)/); 
-          const zm = t.match(/Z([\d.-]+)/);
-          if (xm) pos.x = parseFloat(xm[1]); 
-          if (ym) pos.y = parseFloat(ym[1]); 
-          if (zm) pos.z = parseFloat(zm[1]);
-          path.push({ ...pos });
-        }
-      }
-      return path;
-    } catch (err) {
-      console.error('خطأ في تحليل G-code:', err);
-      return [];
-    }
-  }
-
   function initSimulation() {
     const container = document.getElementById('threeContainer'); 
     container.innerHTML = '';
@@ -982,7 +803,6 @@
       
       controls = new THREE.OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
-      controls.dampingFactor = 0.05;
       
       const ambient = new THREE.AmbientLight(0x404040, 0.8); 
       scene.add(ambient);
@@ -1000,10 +820,28 @@
       box.position.y = workD/2; 
       scene.add(box);
       
-      const path = parseGcodeForSimulation(g);
-      if (path && path.length > 1) {
-        const pts = path.map(p => new THREE.Vector3(p.x, p.z + 5, p.y));
-        const geometry = new THREE.BufferGeometry().setFromPoints(pts);
+      // تحليل G-code بسيط
+      const lines = g.split('\n');
+      const path = [];
+      let pos = { x:0, y:0, z:0 };
+      
+      for (const line of lines) {
+        if (line.includes('G1 X') || line.includes('G0 X')) {
+          const xMatch = line.match(/X([\d.]+)/);
+          const yMatch = line.match(/Y([\d.]+)/);
+          const zMatch = line.match(/Z([\d.]+)/);
+          
+          if (xMatch) pos.x = parseFloat(xMatch[1]);
+          if (yMatch) pos.y = parseFloat(yMatch[1]);
+          if (zMatch) pos.z = parseFloat(zMatch[1]);
+          
+          path.push({...pos});
+        }
+      }
+      
+      if (path.length > 1) {
+        const points = path.map(p => new THREE.Vector3(p.x, p.z + 5, p.y));
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
         const material = new THREE.LineBasicMaterial({ color: 0x00ff00 });
         const line = new THREE.Line(geometry, material); 
         scene.add(line);
@@ -1011,8 +849,6 @@
       
       const grid = new THREE.GridHelper(Math.max(workW, workH), 10); 
       scene.add(grid);
-      const axes = new THREE.AxesHelper(50); 
-      scene.add(axes);
       
       function animate(){ 
         requestAnimationFrame(animate); 
@@ -1022,41 +858,20 @@
       animate(); 
       showToast('تم تهيئة المحاكاة');
       
-      // إعادة الحجم عند تغيير نافذة المتصفح
-      window.addEventListener('resize', () => {
-        camera.aspect = container.clientWidth / container.clientHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(container.clientWidth, container.clientHeight);
-      });
     } catch (err) { 
       console.error('خطأ في المحاكاة:', err); 
-      showToast('خطأ في تهيئة المحاكاة ثلاثية الأبعاد');
-      document.getElementById('simulationPlaceholder').style.display = 'flex';
+      showToast('خطأ في المحاكاة');
     }
   }
 
-  document.querySelector('[data-tab="simulation"]').addEventListener('click', () => {
-    if (document.getElementById('gcodeOut').value) {
-      setTimeout(initSimulation, 100);
-    }
+  // بدء تحميل OpenCV عند تحميل الصفحة
+  window.addEventListener('load', function() {
+    console.log('بدء تحميل OpenCV...');
+    loadOpenCV();
   });
 
   // تنظيف الذاكرة عند الخروج
-  window.addEventListener('beforeunload', () => {
-    cleanupMemory();
-    if (currentWorker) {
-      currentWorker.terminate();
-      currentWorker = null;
-    }
-  });
-
-  // التحقق من تحميل OpenCV بعد 10 ثوان
-  setTimeout(() => {
-    if (!cvReady && !fallbackMode) {
-      console.log('OpenCV loading timeout - trying fallback');
-      onAllOpenCVFailed();
-    }
-  }, 10000);
+  window.addEventListener('beforeunload', cleanupMemory);
 
   </script>
 </body>
