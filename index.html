@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>CNC AI — Final (Edge Live, FixedZ, InvertZ, Wood Color)</title>
+  <title>CNC AI — Edge Sensitivity + TopView Colors</title>
 
   <!-- مكتبات -->
   <script src="https://docs.opencv.org/4.8.0/opencv.js" async></script>
@@ -78,9 +78,10 @@
     .sim-controls button { background:rgba(0,0,0,0.55); color:white; border:1px solid #06b6d4; border-radius:4px; padding:6px 8px; cursor:pointer; font-size:0.9rem }
     .sim-progress { position:absolute; bottom:10px; left:10px; z-index:120; background:rgba(0,0,0,0.35); padding:6px 8px;border-radius:6px; color:#cfeaf2; font-size:12px }
 
-    /* Top view */
-    #topViewContainer { margin-top:12px; display:flex; gap:8px; align-items:center; }
+    /* Top view + legend */
+    #topViewContainer { margin-top:12px; display:flex; flex-direction:column; gap:6px; align-items:center; }
     #topView { width:100%; height:200px; background:#0d1722; border-radius:6px; border:1px solid #334155; display:block }
+    #topLegend { width:100%; height:18px; border-radius:6px; border:1px solid #2b3844; background:linear-gradient(90deg,#ddd,#333); }
 
     @keyframes spin { 0%{transform:rotate(0)}100%{transform:rotate(360deg)} }
   </style>
@@ -88,7 +89,7 @@
 <body>
   <div class="app">
     <header>
-      <h1>CNC AI — Multi Machine Raster Engraving</h1>
+      <h1>CNC AI — Edge Sensitivity & Colored Top View</h1>
       <div id="cvState">
         <span class="loading" style="display:inline-block;width:16px;height:16px;border:3px solid #f3f3f3;border-top:3px solid #06b6d4;border-radius:50%;animation:spin 1s linear infinite;margin-left:8px;"></span>
         جاري تحميل OpenCV...
@@ -109,6 +110,13 @@
             <option value="sobel">Sobel (دقيق)</option>
             <option value="laplace">Laplacian (ناعـم)</option>
           </select>
+        </div>
+
+        <!-- Edge sensitivity slider -->
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+          <label style="margin:0;color:#9bb0c8">حساسية الحواف:</label>
+          <input id="edgeSensitivity" type="range" min="0.1" max="1.0" step="0.05" value="0.33" style="flex:1">
+          <div id="edgeValue" style="min-width:44px;text-align:center;color:#cfeaf2">0.33</div>
         </div>
 
         <div class="tab-buttons" role="tablist">
@@ -132,14 +140,15 @@
         <div id="contour" class="tab-content">
           <div class="canvas-placeholder" id="contourPlaceholder">Contours ستظهر هنا</div>
           <canvas id="canvasContour" style="display:none;"></canvas>
-          <div class="small-meta">تبديل وضع كشف الحواف يحدث إعادة معالجة تلقائية</div>
+          <div class="small-meta">تبديل وضع كشف الحواف أو تحريك حساسية الحواف يحدث إعادة معالجة تلقائية</div>
         </div>
 
         <div id="topview" class="tab-content">
           <div id="topViewContainer">
             <canvas id="topView"></canvas>
+            <div id="topLegend" title="عمق النقش — الألوان فقط"></div>
           </div>
-          <div class="small-meta">معاينة من الأعلى للعمق المتوقع بعد تنفيذ G-code</div>
+          <div class="small-meta">معاينة من الأعلى للعمق المتوقع بعد تنفيذ G-code (ألوان فقط)</div>
         </div>
 
         <div id="simulation" class="tab-content">
@@ -498,7 +507,7 @@
       }
     });
 
-    // ================= Edge detection & contours (live) =================
+    // ================= Edge detection & contours (live + sensitivity) =================
     async function detectContours() {
       if (!cvReady) {
         showToast('OpenCV غير جاهز بعد');
@@ -513,9 +522,12 @@
 
         // pick edge mode
         const mode = document.getElementById('edgeMode').value || 'auto';
+        // sensitivity
+        const sens = parseFloat(document.getElementById('edgeSensitivity').value) || 0.33;
+
         const median = cv.mean(blurred)[0];
-        const lowerThreshold = Math.max(0, (1.0 - 0.33) * median);
-        const upperThreshold = Math.min(255, (1.0 + 0.33) * median);
+        const lowerThreshold = Math.max(0, (1.0 - sens) * median);
+        const upperThreshold = Math.min(255, (1.0 + sens) * median);
 
         let edges = new cv.Mat();
         if (mode === 'sobel') {
@@ -581,13 +593,15 @@
       }
     }
 
-    // live update when edge mode changed
+    // live update when edge mode or sensitivity changed
     document.getElementById('edgeMode').addEventListener('change', () => {
       if (!previewCanvas) return;
-      if (cvReady && previewCanvas && previewCanvas.width > 0) {
-        // re-run detectContours using cached previewCanvas (no need to reload file)
-        detectContours();
-      }
+      if (cvReady && previewCanvas && previewCanvas.width > 0) detectContours();
+    });
+    document.getElementById('edgeSensitivity').addEventListener('input', (e) => {
+      document.getElementById('edgeValue').textContent = parseFloat(e.target.value).toFixed(2);
+      if (!previewCanvas) return;
+      if (cvReady && previewCanvas && previewCanvas.width > 0) detectContours();
     });
 
     // ================= Rendering heatmap & contour =================
@@ -1176,11 +1190,28 @@
       }
     }
 
-    // ================= Top View rendering =================
+    // ================= Top View rendering (colored + inverted Y + legend) =================
+
+    // helpers: color conversions
+    function hexToRgb(hex) {
+      if (!hex) return { r:160, g:82, b:45 };
+      const h = hex.replace('#','');
+      const bigint = parseInt(h.length===3 ? h.split('').map(c=>c+c).join('') : h, 16);
+      return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
+    }
+    function mixColors(c1, c2, t) {
+      return {
+        r: Math.round(c1.r * (1 - t) + c2.r * t),
+        g: Math.round(c1.g * (1 - t) + c2.g * t),
+        b: Math.round(c1.b * (1 - t) + c2.b * t)
+      };
+    }
+
     function renderTopViewFromGcode(gcode) {
       try {
         if (!previewCanvas) return;
         const topCanvas = document.getElementById('topView');
+        const legendDiv = document.getElementById('topLegend');
         const tw = previewCanvas.width, th = previewCanvas.height;
         topCanvas.width = tw; topCanvas.height = th;
         const ctx = topCanvas.getContext('2d');
@@ -1189,21 +1220,13 @@
         const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3.0;
 
         const points = parseGcodeForSimulation(gcode);
-        if (!points || points.length === 0) {
-          const imgData = ctx.createImageData(tw, th);
-          for (let y=0;y<th;y++){
-            for (let x=0;x<tw;x++){
-              const v = sampleGrayAt(x,y);
-              const depth = ((255 - v)/255.0)*maxDepth;
-              const shade = 255 - Math.round((depth/maxDepth)*200);
-              const idx = (y*tw + x)*4;
-              imgData.data[idx]=shade; imgData.data[idx+1]=shade; imgData.data[idx+2]=shade; imgData.data[idx+3]=255;
-            }
-          }
-          ctx.putImageData(imgData,0,0);
-          return;
-        }
 
+        // wood color base
+        const woodHex = document.getElementById('woodColor').value || '#a0522d';
+        const woodRgb = hexToRgb(woodHex);
+        const blackRgb = { r: 10, g: 6, b: 3 };
+
+        // mm -> pixel mapping
         const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30);
         const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20);
         const originX = cmToMm(parseFloat(document.getElementById('originX').value) || 0);
@@ -1213,18 +1236,40 @@
           const xRatio = (px_mm_x - originX) / workWidth;
           const yRatio = (px_mm_y - originY) / workHeight;
           const xPix = Math.round(xRatio * (tw - 1));
-          const yPix = Math.round(yRatio * (th - 1));
+          // invert Y to match visual orientation
+          const yPix = th - 1 - Math.round(yRatio * (th - 1));
           return { x: xPix, y: yPix };
         }
 
+        // init depth map
         for (let i=0;i<depthMap.length;i++) depthMap[i]=0;
 
+        // If no points, fallback to grayscale->depth using image
+        if (!points || points.length === 0) {
+          const imgData = ctx.createImageData(tw, th);
+          for (let y=0;y<th;y++){
+            for (let x=0;x<tw;x++){
+              const v = sampleGrayAt(x,y);
+              const depth = ((255 - v)/255.0)*maxDepth;
+              const t = depth / maxDepth; // 0..1
+              const col = mixColors(woodRgb, blackRgb, t);
+              const idx = (y*tw + x)*4;
+              imgData.data[idx]=col.r; imgData.data[idx+1]=col.g; imgData.data[idx+2]=col.b; imgData.data[idx+3]=255;
+            }
+          }
+          ctx.putImageData(imgData,0,0);
+          // draw legend gradient
+          drawTopLegend(woodRgb, blackRgb);
+          return;
+        }
+
+        // accumulate depths from gcode points
         for (let i=0;i<points.length;i++) {
           const p = points[i];
           if (typeof p.x === 'undefined') continue;
           const coords = mmToPixel(p.x, p.y);
           if (coords.x < 0 || coords.x >= tw || coords.y < 0 || coords.y >= th) continue;
-          const depth = Math.abs(p.z);
+          const depth = Math.min(Math.abs(p.z), maxDepth);
           const idx = coords.y * tw + coords.x;
           depthMap[idx] = Math.max(depthMap[idx], depth);
           const spread = 2;
@@ -1233,7 +1278,8 @@
               const nx = coords.x + ox, ny = coords.y + oy;
               if (nx<0||nx>=tw||ny<0||ny>=th) continue;
               const nIdx = ny*tw + nx;
-              depthMap[nIdx] = Math.max(depthMap[nIdx], depth * Math.max(0, 1 - (Math.hypot(ox,oy)/ (spread+0.1))));
+              const weight = Math.max(0, 1 - (Math.hypot(ox,oy) / (spread + 0.1)));
+              depthMap[nIdx] = Math.max(depthMap[nIdx], depth * weight);
             }
           }
         }
@@ -1243,19 +1289,33 @@
           for (let x=0;x<tw;x++) {
             const idx = y*tw + x;
             const d = Math.min(depthMap[idx], maxDepth);
-            const shade = 255 - Math.round((d / maxDepth) * 230);
+            const t = d / maxDepth; // 0..1
+            const col = mixColors(woodRgb, blackRgb, t);
             const di = (y*tw + x)*4;
-            imgData.data[di] = shade;
-            imgData.data[di+1] = shade;
-            imgData.data[di+2] = shade;
+            imgData.data[di] = col.r;
+            imgData.data[di+1] = col.g;
+            imgData.data[di+2] = col.b;
             imgData.data[di+3] = 255;
           }
         }
         ctx.putImageData(imgData, 0, 0);
 
+        // draw legend gradient
+        drawTopLegend(woodRgb, blackRgb);
+
       } catch (e) {
         console.error('renderTopViewFromGcode error', e);
       }
+    }
+
+    function drawTopLegend(woodRgb, blackRgb) {
+      try {
+        const legend = document.getElementById('topLegend');
+        // use CSS gradient for legend element using computed colors
+        const start = `rgb(${woodRgb.r},${woodRgb.g},${woodRgb.b})`;
+        const end = `rgb(${blackRgb.r},${blackRgb.g},${blackRgb.b})`;
+        legend.style.background = `linear-gradient(90deg, ${start} 0%, ${end} 100%)`;
+      } catch(e){}
     }
 
     // ================= Init UI and bindings =================
@@ -1283,7 +1343,7 @@
       });
     });
 
-    // resize three renderer on window resize
+    // resize three renderer & topView on window resize
     window.addEventListener('resize', () => {
       const container = document.getElementById('threeContainer');
       if (camera && renderer && container) {
