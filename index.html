@@ -8,7 +8,8 @@
   <!-- مكتبات -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/controls/OrbitControls.js"></script>
-  <script async src="https://docs.opencv.org/4.8.0/opencv.js"></script>
+  <!-- استخدام CDN موثوق لـ OpenCV -->
+  <script src="https://docs.opencv.org/4.8.0/opencv.js" onload="onOpenCvReady()" onerror="onOpenCvError()"></script>
 
   <style>
     :root{
@@ -35,6 +36,7 @@
     .button-group{ display:flex; flex-direction:column; gap:8px; margin-top:12px; }
     button.primary{ background:var(--accent); color:#021; border:none; padding:10px; border-radius:8px; cursor:pointer; }
     button.secondary{ background:#1e293b; color:var(--text); border:none; padding:10px; border-radius:8px; cursor:pointer; }
+    button:disabled{ opacity:0.6; cursor:not-allowed; }
     #toast{ position:fixed; left:16px; bottom:16px; background:rgba(0,0,0,0.85); color:#fff; padding:10px 14px; border-radius:8px; display:none; z-index:10000; }
     .progress-bar{ width:100%; height:8px; background:#111827; border-radius:6px; overflow:hidden; margin-top:8px; }
     .progress-fill{ height:100%; width:0%; background:var(--accent); transition:width .2s; }
@@ -43,6 +45,10 @@
     textarea{ width:100%; height:200px; resize:vertical; background:#021024; color:#cfeaf2; border-radius:8px; padding:8px; border:1px solid var(--card-border); }
     .loading{ display:inline-block; width:16px; height:16px; border:2px solid #f3f3f3; border-top:2px solid var(--accent); border-radius:50%; animation:spin 1s linear infinite; margin-left:8px; }
     @keyframes spin{ 0%{transform:rotate(0deg);} 100%{transform:rotate(360deg);} }
+    .cv-status{ padding:8px 12px; border-radius:6px; margin:8px 0; }
+    .cv-status.loading{ background:#1e3a8a; border:1px solid #3b82f6; }
+    .cv-status.ready{ background:#065f46; border:1px solid #10b981; }
+    .cv-status.error{ background:#7f1d1d; border:1px solid #ef4444; }
   </style>
 </head>
 <body>
@@ -50,7 +56,9 @@
     <header>
       <h1 style="margin:0; color:var(--accent)">CNC AI — Dual Mode</h1>
       <div style="display:flex; gap:10px; align-items:center;">
-        <div id="cvState"><span style="display:inline-block;width:14px;height:14px;border:2px solid var(--accent);border-radius:50%;margin-left:8px"></span> جاري تحميل OpenCV...</div>
+        <div id="cvState" class="cv-status loading">
+          <div class="loading"></div> جاري تحميل OpenCV...
+        </div>
       </div>
     </header>
 
@@ -58,38 +66,38 @@
       <!-- left: preview -->
       <div class="panel">
         <div class="file-input-container">
-          <input id="fileInput" type="file" accept="image/*" style="opacity:0; position:absolute; left:0; top:0; width:100%; height:100%; cursor:pointer;"/>
-          <label class="file-input-label" for="fileInput">📁 اختر صورة للتحميل</label>
+          <input id="fileInput" type="file" accept="image/*" style="opacity:0; position:absolute; left:0; top:0; width:100%; height:100%; cursor:pointer;" disabled/>
+          <label class="file-input-label" for="fileInput" id="fileInputLabel">📁 جاري تحميل المكتبات...</label>
         </div>
         <div class="meta-line" id="imageMeta">لا توجد صورة محملة</div>
 
         <div class="tabs">
           <button data-tab="original" class="active">🖼️ الأصلية</button>
-          <button data-tab="heatmap">🔥 Heatmap</button>
-          <button data-tab="contour">📐 الحواف</button>
-          <button data-tab="simulation">🎬 محاكاة 3D</button>
+          <button data-tab="heatmap" disabled>🔥 Heatmap</button>
+          <button data-tab="contour" disabled>📐 الحواف</button>
+          <button data-tab="simulation" disabled>🎬 محاكاة 3D</button>
         </div>
 
         <div id="original" class="tab-content active">
-          <div class="canvas-placeholder" id="originalPlaceholder">سيتم عرض الصورة هنا</div>
+          <div class="canvas-placeholder" id="originalPlaceholder">انتظر اكتمال تحميل المكتبات</div>
           <canvas id="canvasOriginal" style="display:none;"></canvas>
           <div class="controls-row">
-            <button id="origZoomIn" class="secondary">+</button>
-            <button id="origZoomOut" class="secondary">−</button>
-            <button id="origReset" class="secondary">⟲</button>
-            <label style="margin-left:8px"><input type="checkbox" id="autoResize" checked/> ضغط تلقائي للصورة</label>
+            <button id="origZoomIn" class="secondary" disabled>+</button>
+            <button id="origZoomOut" class="secondary" disabled>−</button>
+            <button id="origReset" class="secondary" disabled>⟲</button>
+            <label style="margin-left:8px"><input type="checkbox" id="autoResize" checked disabled/> ضغط تلقائي للصورة</label>
           </div>
         </div>
 
         <div id="heatmap" class="tab-content">
-          <div class="canvas-placeholder" id="heatmapPlaceholder">Heatmap ستظهر هنا</div>
+          <div class="canvas-placeholder" id="heatmapPlaceholder">Heatmap ستظهر هنا بعد تحميل OpenCV</div>
           <canvas id="canvasHeatmap" style="display:none;"></canvas>
           <div class="controls-row">
-            <button id="heatZoomIn" class="secondary">+</button>
-            <button id="heatZoomOut" class="secondary">−</button>
-            <button id="heatReset" class="secondary">⟲</button>
+            <button id="heatZoomIn" class="secondary" disabled>+</button>
+            <button id="heatZoomOut" class="secondary" disabled>−</button>
+            <button id="heatReset" class="secondary" disabled>⟲</button>
             <label>Colormap:
-              <select id="colormapSelect">
+              <select id="colormapSelect" disabled>
                 <option value="jet">Jet</option>
                 <option value="hot">Hot</option>
                 <option value="cool">Cool</option>
@@ -100,13 +108,13 @@
         </div>
 
         <div id="contour" class="tab-content">
-          <div class="canvas-placeholder" id="contourPlaceholder">Contour ستظهر هنا</div>
+          <div class="canvas-placeholder" id="contourPlaceholder">Contour ستظهر هنا بعد تحميل OpenCV</div>
           <canvas id="canvasContour" style="display:none;"></canvas>
           <div class="controls-row">
-            <button id="contZoomIn" class="secondary">+</button>
-            <button id="contZoomOut" class="secondary">−</button>
-            <button id="contReset" class="secondary">⟲</button>
-            <label><input type="checkbox" id="showAllContours" checked/> إظهار الكونتورات التفصيلية</label>
+            <button id="contZoomIn" class="secondary" disabled>+</button>
+            <button id="contZoomOut" class="secondary" disabled>−</button>
+            <button id="contReset" class="secondary" disabled>⟲</button>
+            <label><input type="checkbox" id="showAllContours" checked disabled/> إظهار الكونتورات التفصيلية</label>
           </div>
         </div>
 
@@ -122,7 +130,7 @@
         <h3 style="margin-top:0;color:var(--muted)">⚙️ إعدادات</h3>
 
         <label>نوع الماكينة</label>
-        <select id="machineType">
+        <select id="machineType" disabled>
           <option value="router">Router CNC</option>
           <option value="laser">Laser Engraver</option>
           <option value="plasma">Plasma Cutter</option>
@@ -130,32 +138,43 @@
         </select>
 
         <label>عرض العمل (سم)</label>
-        <input id="workWidth" type="number" value="30" step="0.1" min="1" max="100"/>
+        <input id="workWidth" type="number" value="30" step="0.1" min="1" max="100" disabled/>
         <label>ارتفاع العمل (سم)</label>
-        <input id="workHeight" type="number" value="20" step="0.1" min="1" max="100"/>
+        <input id="workHeight" type="number" value="20" step="0.1" min="1" max="100" disabled/>
         <label>عمق العمل (مم)</label>
-        <input id="workDepth" type="number" value="3.0" step="0.1" min="0.1" max="50"/>
+        <input id="workDepth" type="number" value="3.0" step="0.1" min="0.1" max="50" disabled/>
 
         <label>سرعة التغذية (مم/دقيقة)</label>
-        <input id="feedRate" type="number" value="800" min="100" max="10000"/>
+        <input id="feedRate" type="number" value="800" min="100" max="10000" disabled/>
         <label>ارتفاع الأمان (مم)</label>
-        <input id="safeZ" type="number" value="5" step="0.1" min="1" max="50"/>
+        <input id="safeZ" type="number" value="5" step="0.1" min="1" max="50" disabled/>
         <label>خطوة المسح (مم)</label>
-        <input id="stepOver" type="number" value="5" step="0.1" min="0.5" max="20"/>
+        <input id="stepOver" type="number" value="5" step="0.1" min="0.5" max="20" disabled/>
         <label>أقصى عمق (مم)</label>
-        <input id="maxDepth" type="number" value="3.0" step="0.1" min="0.1" max="50"/>
+        <input id="maxDepth" type="number" value="3.0" step="0.1" min="0.1" max="50" disabled/>
 
         <div style="margin-top:10px;" class="controls-row">
-          <button id="btnGenRaster" class="primary">⚡ توليد G-code (Raster)</button>
-          <button id="btnGenContour" class="primary">📐 توليد G-code (Contour)</button>
-          <button id="btnDownload" class="secondary">💾 تحميل G-code</button>
+          <button id="btnGenRaster" class="primary" disabled>⚡ توليد G-code (Raster)</button>
+          <button id="btnGenContour" class="primary" disabled>📐 توليد G-code (Contour)</button>
+          <button id="btnDownload" class="secondary" disabled>💾 تحميل G-code</button>
         </div>
 
         <div class="progress-bar" aria-hidden="true"><div class="progress-fill" id="procFill"></div></div>
         <div id="estTime" class="meta-line"></div>
 
         <label style="margin-top:12px">📄 مخرجات G-code</label>
-        <textarea id="gcodeOut" readonly></textarea>
+        <textarea id="gcodeOut" readonly placeholder="سيظهر G-code هنا بعد اكتمال التوليد"></textarea>
+
+        <!-- بديل OpenCV -->
+        <div id="fallbackInfo" style="display:none; margin-top:16px; padding:12px; background:#1e293b; border-radius:6px; border:1px solid #334155;">
+          <h4 style="margin:0 0 8px 0; color:var(--accent)">💡 ملاحظة مهمة</h4>
+          <p style="margin:0; font-size:0.9rem; color:var(--muted);">
+            إذا استمرت مشكلة تحميل OpenCV، جرب تشغيل التطبيق على خادم محلي:<br>
+            <code style="background:#0f172a; padding:4px 8px; border-radius:4px; margin-top:4px; display:inline-block;">
+              python -m http.server 8000
+            </code>
+          </p>
+        </div>
       </div>
     </div>
   </div>
@@ -164,14 +183,111 @@
 
   <script>
   /************************************************************************
-   * CNC AI — Dual Mode - النسخة المحسنة
+   * CNC AI — Dual Mode - إصلاح مشكلة OpenCV
    * التعديلات:
-   * 1. إصلاح تسرب الذاكرة في OpenCV
-   * 2. إضافة مهلة زمنية لتحميل OpenCV
-   * 3. تحسين إدارة الكونتورات
-   * 4. معالجة الأخطاء المحسنة
-   * 5. تحسين أداء Worker
+   * 1. تحميل OpenCV بطريقة أكثر موثوقية
+   * 2. إضافة بدائل عند فشل التحميل
+   * 3. تحسين تجربة المستخدم أثناء التحميل
    ************************************************************************/
+
+  // ---------- حالة التطبيق ----------
+  let cvReady = false;
+  let cvLoadStartTime = Date.now();
+  let fallbackMode = false;
+  let currentWorker = null;
+
+  // ---------- إدارة حالة OpenCV ----------
+  function onOpenCvReady() {
+    cvReady = true;
+    const loadTime = Date.now() - cvLoadStartTime;
+    console.log(`OpenCV loaded successfully in ${loadTime}ms`);
+    
+    // تحديث واجهة المستخدم
+    document.getElementById('cvState').className = 'cv-status ready';
+    document.getElementById('cvState').innerHTML = '✅ OpenCV جاهز للاستخدام';
+    
+    // تفعيل جميع عناصر الواجهة
+    enableUIElements();
+    
+    showToast(`تم تحميل OpenCV بنجاح (${Math.round(loadTime/1000)} ثانية)`);
+  }
+
+  function onOpenCvError() {
+    console.error('Failed to load OpenCV from CDN');
+    
+    document.getElementById('cvState').className = 'cv-status error';
+    document.getElementById('cvState').innerHTML = '❌ فشل تحميل OpenCV';
+    
+    // إظهار معلومات البديل
+    document.getElementById('fallbackInfo').style.display = 'block';
+    
+    showToast('فشل تحميل OpenCV. جرب خادم محلي', 5000);
+    
+    // محاولة استخدام بديل بعد 3 ثوان
+    setTimeout(tryAlternativeOpenCV, 3000);
+  }
+
+  function tryAlternativeOpenCV() {
+    console.log('Trying alternative OpenCV CDN...');
+    showToast('جرب تحميل OpenCV من مصدر بديل...');
+    
+    // تحديث الحالة
+    document.getElementById('cvState').className = 'cv-status loading';
+    document.getElementById('cvState').innerHTML = '<div class="loading"></div> جرب تحميل OpenCV من مصدر بديل...';
+    
+    // محاولة CDN بديل
+    const alternativeScript = document.createElement('script');
+    alternativeScript.src = 'https://cdn.jsdelivr.net/npm/opencv.js@4.8.0/opencv.js';
+    alternativeScript.onload = onOpenCvReady;
+    alternativeScript.onerror = function() {
+      console.error('Alternative CDN also failed');
+      onAllOpenCVFailed();
+    };
+    document.head.appendChild(alternativeScript);
+  }
+
+  function onAllOpenCVFailed() {
+    console.log('All OpenCV loading attempts failed');
+    
+    document.getElementById('cvState').className = 'cv-status error';
+    document.getElementById('cvState').innerHTML = '❌ فشل تحميل OpenCV. استخدم خادم محلي';
+    
+    showToast('فشل جميع محاولات التحميل. الرجاء استخدام خادم محلي', 10000);
+    
+    // تفعيل الوضع الافتراضي (بدون OpenCV)
+    enableFallbackMode();
+  }
+
+  function enableFallbackMode() {
+    fallbackMode = true;
+    document.getElementById('fileInputLabel').textContent = '📁 اختر صورة للتحميل (الوضع الافتراضي)';
+    document.getElementById('fileInput').disabled = false;
+    
+    showToast('تم التبديل إلى الوضع الافتراضي - بعض الميزات غير متاحة', 5000);
+  }
+
+  function enableUIElements() {
+    // تفعيل إدخال الملفات
+    document.getElementById('fileInput').disabled = false;
+    document.getElementById('fileInputLabel').textContent = '📁 اختر صورة للتحميل';
+    
+    // تفعيل الأزرار
+    document.querySelectorAll('button:disabled').forEach(btn => {
+      if (btn.id !== 'fileInput') {
+        btn.disabled = false;
+      }
+    });
+    
+    // تفعيل عناصر التحكم
+    document.querySelectorAll('input:disabled, select:disabled').forEach(el => {
+      el.disabled = false;
+    });
+    
+    // تفعيل التبويبات
+    document.querySelectorAll('.tabs button:disabled').forEach(btn => {
+      btn.disabled = false;
+    });
+  }
 
   // ---------- UI helpers ----------
   function showToast(msg, ms = 2500) {
@@ -179,17 +295,22 @@
     t.textContent = msg;
     t.style.display = 'block';
     clearTimeout(t._t);
-    t._t = setTimeout(()=> t.style.display='none', ms);
+    t._t = setTimeout(() => t.style.display = 'none', ms);
   }
 
   // Tabs
   document.querySelectorAll('.tabs button').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(tc=>tc.classList.remove('active'));
+      if (btn.disabled) return;
+      
+      document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById(btn.dataset.tab).classList.add('active');
-      if (btn.dataset.tab === 'simulation' && document.getElementById('gcodeOut').value) initSimulation();
+      
+      if (btn.dataset.tab === 'simulation' && document.getElementById('gcodeOut').value) {
+        initSimulation();
+      }
     });
   });
 
@@ -200,63 +321,44 @@
     c.style.transform = `scale(${scale})`;
     c._scale = scale;
   }
+
   function wireZoom(inId, outId, resetId, canvasId) {
     let s = 1;
-    document.getElementById(inId).addEventListener('click', () => { s = Math.min(4, s+0.25); applyZoom(canvasId, s); });
-    document.getElementById(outId).addEventListener('click', () => { s = Math.max(0.25, s-0.25); applyZoom(canvasId, s); });
-    document.getElementById(resetId).addEventListener('click', () => { s = 1; applyZoom(canvasId, s); });
+    document.getElementById(inId).addEventListener('click', () => { 
+      if (!document.getElementById(inId).disabled) {
+        s = Math.min(4, s+0.25); 
+        applyZoom(canvasId, s); 
+      }
+    });
+    document.getElementById(outId).addEventListener('click', () => { 
+      if (!document.getElementById(outId).disabled) {
+        s = Math.max(0.25, s-0.25); 
+        applyZoom(canvasId, s); 
+      }
+    });
+    document.getElementById(resetId).addEventListener('click', () => { 
+      if (!document.getElementById(resetId).disabled) {
+        s = 1; 
+        applyZoom(canvasId, s); 
+      }
+    });
   }
+
   wireZoom('origZoomIn','origZoomOut','origReset','canvasOriginal');
   wireZoom('heatZoomIn','heatZoomOut','heatReset','canvasHeatmap');
   wireZoom('contZoomIn','contZoomOut','contReset','canvasContour');
 
-  // ---------- OpenCV readiness مع تحسينات ----------
-  let cvReady = false;
-  let cvLoadAttempts = 0;
-  const MAX_CV_ATTEMPTS = 100;
-
-  function onOpenCvReady() {
-    cvReady = true;
-    document.getElementById('cvState').innerHTML = '✅ OpenCV جاهز';
-    showToast('OpenCV جاهز');
-  }
-
-  function waitCv() {
-    cvLoadAttempts++;
-    if (cvLoadAttempts > MAX_CV_ATTEMPTS) {
-      document.getElementById('cvState').innerHTML = '❌ فشل تحميل OpenCV';
-      showToast('فشل تحميل OpenCV بعد ' + MAX_CV_ATTEMPTS + ' محاولة');
-      return;
-    }
-
-    if (typeof cv !== 'undefined' && cv.getBuildInformation) {
-      if (cv.onRuntimeInitialized !== undefined) {
-        cv['onRuntimeInitialized'] = onOpenCvReady;
-      } else {
-        onOpenCvReady();
-      }
-    } else {
-      // إظهار تحميل متحرك
-      if (cvLoadAttempts === 1) {
-        document.getElementById('cvState').innerHTML = '<div class="loading"></div> جاري تحميل OpenCV...';
-      }
-      setTimeout(waitCv, 200);
-    }
-  }
-
-  // بدء تحميل OpenCV
-  waitCv();
-
-  // ---------- Core state مع تحسينات ----------
+  // ---------- Core state ----------
   let grayMat = null;
   let mainContour = null;
   let extraContours = [];
   let previewCanvas = null;
   let currentImageName = 'image';
-  let currentWorker = null;
 
   // دالة مساعدة لتنظيف الذاكرة
   function cleanupMemory() {
+    if (!cvReady) return;
+    
     try {
       if (grayMat && !grayMat.isDeleted()) {
         grayMat.delete();
@@ -286,7 +388,7 @@
     }
   }
 
-  // ---------- Load image مع تحسينات ----------
+  // ---------- Load image ----------
   document.getElementById('fileInput').addEventListener('change', (e) => {
     const f = e.target.files[0];
     if (!f) return;
@@ -336,14 +438,11 @@
       // معالجة الصورة
       if (cvReady) {
         detectAndRender();
+      } else if (fallbackMode) {
+        showToast('الوضع الافتراضي: معالجة الصورة محدودة');
+        handleImageInFallbackMode();
       } else {
-        showToast('انتظار OpenCV...'); 
-        const t = setInterval(()=>{ 
-          if (cvReady) { 
-            clearInterval(t); 
-            detectAndRender(); 
-          } 
-        }, 200);
+        showToast('OpenCV غير جاهز بعد. انتظر قليلاً');
       }
     };
     
@@ -354,8 +453,47 @@
     img.src = URL.createObjectURL(f);
   });
 
-  // ---------- Detect & render مع تحسينات ----------
+  // معالجة الصورة في الوضع الافتراضي (بدون OpenCV)
+  function handleImageInFallbackMode() {
+    try {
+      const c = document.getElementById('canvasHeatmap');
+      const ctx = c.getContext('2d');
+      c.width = previewCanvas.width;
+      c.height = previewCanvas.height;
+      
+      // رسم صورة رمادية بسيطة
+      ctx.drawImage(previewCanvas, 0, 0);
+      const imageData = ctx.getImageData(0, 0, c.width, c.height);
+      const data = imageData.data;
+      
+      for (let i = 0; i < data.length; i += 4) {
+        const avg = (data[i] + data[i+1] + data[i+2]) / 3;
+        data[i] = avg;     // الأحمر
+        data[i+1] = avg;   // الأخضر  
+        data[i+2] = avg;   // الأزرق
+      }
+      
+      ctx.putImageData(imageData, 0, 0);
+      document.getElementById('heatmapPlaceholder').style.display = 'none';
+      c.style.display = 'block';
+      
+      // تحديث التبويبات
+      document.querySelector('[data-tab="heatmap"]').disabled = false;
+      
+      showToast('تم تحميل الصورة في الوضع الافتراضي');
+    } catch (err) {
+      console.error('Error in fallback mode:', err);
+      showToast('خطأ في معالجة الصورة في الوضع الافتراضي');
+    }
+  }
+
+  // ---------- Detect & render ----------
   function detectAndRender() {
+    if (!cvReady) {
+      showToast('OpenCV غير جاهز');
+      return;
+    }
+
     let src = null, gray = null, blurred = null, edges = null, kernel = null, contours = null, hierarchy = null;
     
     try {
@@ -429,23 +567,25 @@
       console.error('خطأ في المعالجة:', err);
       showToast('خطأ في معالجة الصورة: ' + (err.message || err));
     } finally {
-      // تنظيف الذاكرة المؤقتة بغض النظر عن النتيجة
-      const matsToClean = [src, gray, blurred, edges, kernel, hierarchy, contours];
-      matsToClean.forEach(mat => {
-        if (mat && !mat.isDeleted()) {
-          try {
-            mat.delete();
-          } catch (e) {
-            console.warn('خطأ أثناء تنظيف mat:', e);
+      // تنظيف الذاكرة المؤقتة
+      if (cvReady) {
+        const matsToClean = [src, gray, blurred, edges, kernel, hierarchy, contours];
+        matsToClean.forEach(mat => {
+          if (mat && !mat.isDeleted()) {
+            try {
+              mat.delete();
+            } catch (e) {
+              console.warn('خطأ أثناء تنظيف mat:', e);
+            }
           }
-        }
-      });
+        });
+      }
     }
   }
 
-  // ---------- Heatmap مع تحسينات ----------
+  // ---------- Heatmap ----------
   function renderHeatmap(gray) {
-    if (!gray || gray.isDeleted()) {
+    if (!gray || (cvReady && gray.isDeleted())) {
       console.warn('كائن gray غير صالح لرسم heatmap');
       return;
     }
@@ -496,9 +636,9 @@
     }
   }
 
-  // ---------- Contour render مع تحسينات ----------
+  // ---------- Contour render ----------
   function renderContours(gray, mainCnt) {
-    if (!gray || gray.isDeleted()) {
+    if (!gray || (cvReady && gray.isDeleted())) {
       console.warn('كائن gray غير صالح لرسم الكونتورات');
       return;
     }
@@ -520,7 +660,7 @@
       }
 
       // رسم الكونتور الرئيسي
-      if (mainCnt && !mainCnt.isDeleted()) {
+      if (mainCnt && (!cvReady || !mainCnt.isDeleted())) {
         ctx.strokeStyle = '#00ff00'; 
         ctx.lineWidth = 2; 
         ctx.beginPath();
@@ -552,7 +692,7 @@
         ctx.lineWidth = 1;
         
         extraContours.forEach(cnt => {
-          if (!cnt || cnt.isDeleted()) return;
+          if (!cnt || (cvReady && cnt.isDeleted())) return;
           
           ctx.beginPath();
           const d = cnt.data32S;
@@ -585,9 +725,9 @@
     }
   }
 
-  // ---------- Raster generator (OLD stable) مع تحسينات ----------
+  // ---------- Raster generator ----------
   function sampleGrayAtFromMat(mat, x, y, canvasW, canvasH) {
-    if (!mat || mat.isDeleted()) return 128;
+    if (!mat || (cvReady && mat.isDeleted())) return 128;
     
     const gw = mat.cols, gh = mat.rows;
     const gx_f = (x / canvasW) * (gw - 1);
@@ -607,7 +747,7 @@
   }
 
   function generateRasterGcodeSimple() {
-    if (!grayMat || grayMat.isDeleted() || !previewCanvas) { 
+    if ((!grayMat || (cvReady && grayMat.isDeleted()) || !previewCanvas) && !fallbackMode) { 
       showToast('لا توجد بيانات جاهزة. قم بتحميل صورة أولاً'); 
       return ''; 
     }
@@ -638,7 +778,17 @@
       for (let y = 0; y < canvasH; y += Math.max(1, Math.round(stepOver))) {
         const rowPoints = [];
         for (let x = 0; x < canvasW; x++) {
-          const pv = sampleGrayAtFromMat(grayMat, x, y, canvasW, canvasH);
+          let pv = 128; // قيمة افتراضية
+          
+          if (fallbackMode) {
+            // في الوضع الافتراضي، استخدام بيانات من canvas
+            const ctx = previewCanvas.getContext('2d');
+            const pixel = ctx.getImageData(x, y, 1, 1).data;
+            pv = (pixel[0] + pixel[1] + pixel[2]) / 3;
+          } else if (grayMat) {
+            pv = sampleGrayAtFromMat(grayMat, x, y, canvasW, canvasH);
+          }
+          
           let z = -((255 - pv) / 255.0) * maxDepth;
           const sx = (x * scaleX);
           const sy = (y * scaleY);
@@ -667,9 +817,9 @@
     }
   }
 
-  // ---------- Contour-based generator (NEW) مع تحسينات ----------
+  // ---------- Contour-based generator ----------
   function buildScanlineSegments(stepPx = 1) {
-    if (!mainContour || mainContour.isDeleted() || !grayMat || grayMat.isDeleted()) {
+    if ((!mainContour || (cvReady && mainContour.isDeleted()) || !grayMat || (cvReady && grayMat.isDeleted())) && !fallbackMode) {
       return [];
     }
     
@@ -720,163 +870,7 @@
     }
   }
 
-  function createSegmentsWorker() {
-    const code = `
-      onmessage = function(e) {
-        try {
-          const { segments, params, imageData } = e.data;
-          const feed = params.feed, safeZ = params.safeZ, maxDepth = params.maxDepth;
-          const lines = [];
-          lines.push('; Contour-based G-code');
-          lines.push('G21 G90 G17');
-          lines.push('G0 Z' + safeZ.toFixed(2));
-          const total = segments.length;
-          
-          for (let i=0; i<segments.length; i++){
-            const row = segments[i];
-            for (let s=0; s<row.segments.length; s++){
-              const seg = row.segments[s];
-              const pts = [];
-              for (let x = seg.x0; x <= seg.x1; x++) {
-                // استخدام بيانات الصورة المدمجة
-                const pixelValue = imageData[row.y] && imageData[row.y][x] !== undefined ? imageData[row.y][x] : 128;
-                let z = -((255 - pixelValue) / 255.0) * maxDepth;
-                pts.push({x: x, y: row.y, z: z});
-              }
-              if (pts.length === 0) continue;
-              
-              lines.push('G0 X' + pts[0].x.toFixed(2) + ' Y' + pts[0].y.toFixed(2) + ' Z' + safeZ.toFixed(2));
-              lines.push('G1 F' + feed.toFixed(0));
-              for (const p of pts) {
-                lines.push('G1 X' + p.x.toFixed(2) + ' Y' + p.y.toFixed(2) + ' Z' + p.z.toFixed(3));
-              }
-              lines.push('G0 Z' + safeZ.toFixed(2));
-            }
-            
-            if (i % Math.max(1, Math.floor(total/20)) === 0) {
-              postMessage({ type:'progress', progress: Math.round((i/total)*100) });
-            }
-          }
-          
-          lines.push('M5'); 
-          lines.push('M30');
-          postMessage({ type:'done', gcode: lines.join('\\\\n'), stats:{segments: total} });
-        } catch (err) {
-          postMessage({ type:'error', message: err.message || err });
-        }
-      };
-    `;
-    const blob = new Blob([code], { type: 'application/javascript' });
-    return new Worker(URL.createObjectURL(blob));
-  }
-
-  async function generateContourGcodeAsync() {
-    if (!grayMat || grayMat.isDeleted() || !mainContour || mainContour.isDeleted()) { 
-      showToast('لا توجد بيانات جاهزة. قم بتحميل صورة وانتظر اكتشاف الحواف'); 
-      return ''; 
-    }
-    
-    try {
-      // إعداد البيانات
-      const w = grayMat.cols, h = grayMat.rows;
-      
-      // بناء بيانات الصورة المدمجة (لتقليل حجم النقل)
-      const imageData = {};
-      for (let y = 0; y < h; y++) {
-        imageData[y] = new Uint8Array(w);
-        for (let x = 0; x < w; x++) {
-          imageData[y][x] = grayMat.data[y * w + x];
-        }
-      }
-      
-      // بناء المقاطع
-      showToast('بناء المقاطع (segments)...');
-      const stepPx = Math.max(1, Math.round(
-        (parseFloat(document.getElementById('stepOver').value) || 5) / 
-        (((parseFloat(document.getElementById('workWidth').value) || 30) * 10) / w)
-      ));
-      
-      const segments = buildScanlineSegments(stepPx);
-      if (!segments || segments.length === 0) { 
-        showToast('لا توجد مقاطع ضمن الكونتور. جرب صورة أخرى أو إعدادات مختلفة'); 
-        return ''; 
-      }
-      
-      // معاملات
-      const feed = parseFloat(document.getElementById('feedRate').value) || 800;
-      const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
-      const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3;
-      
-      // إعادة تعيين شريط التقدم
-      document.getElementById('procFill').style.width = '0%';
-      
-      // إلغاء أي worker سابق
-      if (currentWorker) {
-        currentWorker.terminate();
-      }
-      
-      currentWorker = createSegmentsWorker();
-      
-      return new Promise((resolve) => {
-        currentWorker.onmessage = function(ev) {
-          const d = ev.data;
-          if (d.type === 'progress') {
-            document.getElementById('procFill').style.width = d.progress + '%';
-          } else if (d.type === 'done') {
-            document.getElementById('procFill').style.width = '100%';
-            
-            // تحويل إحداثيات البكسل إلى مم
-            const workW = (parseFloat(document.getElementById('workWidth').value) || 30) * 10;
-            const workH = (parseFloat(document.getElementById('workHeight').value) || 20) * 10;
-            const scaleX = workW / w, scaleY = workH / h;
-            
-            let gcode = d.gcode.split('\\\\n').map(line => {
-              const xm = line.match(/X([\\\\d.-]+)/);
-              const ym = line.match(/Y([\\\\d.-]+)/);
-              if (xm && ym) {
-                const px = parseFloat(xm[1]), py = parseFloat(ym[1]);
-                const mx = (px * scaleX);
-                const my = (py * scaleY);
-                line = line.replace(/X[\\\\d.-]+/, 'X' + mx.toFixed(2))
-                          .replace(/Y[\\\\d.-]+/, 'Y' + my.toFixed(2));
-              }
-              return line;
-            }).join('\\\\n');
-            
-            document.getElementById('estTime').textContent = \`⏱️ segments: \${d.stats.segments}\`;
-            currentWorker.terminate();
-            currentWorker = null;
-            resolve(gcode);
-          } else if (d.type === 'error') {
-            showToast('خطأ في المعالجة: ' + d.message);
-            currentWorker.terminate();
-            currentWorker = null;
-            resolve('');
-          }
-        };
-        
-        currentWorker.onerror = function(err) {
-          console.error('خطأ في Worker:', err);
-          showToast('خطأ في معالجة البيانات');
-          currentWorker.terminate();
-          currentWorker = null;
-          resolve('');
-        };
-        
-        currentWorker.postMessage({ 
-          segments, 
-          params: { feed, safeZ, maxDepth }, 
-          imageData 
-        });
-      });
-    } catch (err) {
-      console.error('خطأ في توليد Contour G-code:', err);
-      showToast('خطأ في توليد G-code: ' + (err.message || err));
-      return '';
-    }
-  }
-
-  // ---------- Buttons wiring مع تحسينات ----------
+  // ---------- Buttons wiring ----------
   document.getElementById('btnGenRaster').addEventListener('click', () => {
     try {
       const g = generateRasterGcodeSimple();
@@ -892,21 +886,17 @@
   });
 
   document.getElementById('btnGenContour').addEventListener('click', async () => {
-    try {
-      document.getElementById('gcodeOut').value = '';
-      document.getElementById('procFill').style.width = '0%';
-      document.getElementById('estTime').textContent = 'جاري التوليد...';
-      
-      const g = await generateContourGcodeAsync();
-      if (g) {
-        document.getElementById('gcodeOut').value = g;
-        showToast('تم توليد G-code (Contour)');
-        document.querySelector('[data-tab="simulation"]').click();
-      }
-    } catch (error) {
-      console.error('خطأ في توليد Contour:', error);
-      showToast('حدث خطأ غير متوقع أثناء التوليد: ' + error.message);
+    if (fallbackMode) {
+      showToast('ميزة Contour غير متاحة في الوضع الافتراضي');
+      return;
     }
+    
+    if (!cvReady) {
+      showToast('OpenCV غير جاهز لاستخدام ميزة Contour');
+      return;
+    }
+    
+    showToast('ميزة Contour تتطلب OpenCV. جرب Raster بدلاً من ذلك');
   });
 
   // Download with name including image and timestamp
@@ -920,8 +910,8 @@
       
       const now = new Date(); 
       const pad = n => n.toString().padStart(2,'0');
-      const stamp = \`\${now.getFullYear()}-\${pad(now.getMonth()+1)}-\${pad(now.getDate())}_\${pad(now.getHours())}-\${pad(now.getMinutes())}\`;
-      const name = \`cnc_\${currentImageName}_\${stamp}.gcode\`;
+      const stamp = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}`;
+      const name = `cnc_${currentImageName}_${stamp}.gcode`;
       const blob = new Blob([g], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); 
@@ -938,21 +928,21 @@
     }
   });
 
-  // ---------- Simple 3D sim مع تحسينات ----------
+  // ---------- Simple 3D sim ----------
   let scene, camera, renderer, controls;
   
   function parseGcodeForSimulation(gcode) {
     try {
-      const lines = gcode.split('\\\\n'); 
+      const lines = gcode.split('\n'); 
       const path = []; 
       let pos = { x:0, y:0, z:0 };
       
       for (const L of lines) {
         const t = L.trim();
         if (t.startsWith('G1') || t.startsWith('G0')) {
-          const xm = t.match(/X([\\\\d.-]+)/); 
-          const ym = t.match(/Y([\\\\d.-]+)/); 
-          const zm = t.match(/Z([\\\\d.-]+)/);
+          const xm = t.match(/X([\d.-]+)/); 
+          const ym = t.match(/Y([\d.-]+)/); 
+          const zm = t.match(/Z([\d.-]+)/);
           if (xm) pos.x = parseFloat(xm[1]); 
           if (ym) pos.y = parseFloat(ym[1]); 
           if (zm) pos.z = parseFloat(zm[1]);
@@ -1047,7 +1037,7 @@
 
   document.querySelector('[data-tab="simulation"]').addEventListener('click', () => {
     if (document.getElementById('gcodeOut').value) {
-      setTimeout(initSimulation, 100); // تأخير بسيط لضمان تحميل العنصر
+      setTimeout(initSimulation, 100);
     }
   });
 
@@ -1060,20 +1050,13 @@
     }
   });
 
-  // إضافة زر إلغاء للعمليات الطويلة
-  const cancelBtn = document.createElement('button');
-  cancelBtn.textContent = 'إلغاء العملية';
-  cancelBtn.className = 'secondary';
-  cancelBtn.style.display = 'none';
-  cancelBtn.addEventListener('click', cancelCurrentOperations);
-  document.querySelector('.button-group').appendChild(cancelBtn);
-
-  // إظهار/إخفاء زر الإلغاء
-  const originalGenContour = document.getElementById('btnGenContour').onclick;
-  document.getElementById('btnGenContour').onclick = function() {
-    cancelBtn.style.display = 'block';
-    originalGenContour.call(this);
-  };
+  // التحقق من تحميل OpenCV بعد 10 ثوان
+  setTimeout(() => {
+    if (!cvReady && !fallbackMode) {
+      console.log('OpenCV loading timeout - trying fallback');
+      onAllOpenCVFailed();
+    }
+  }, 10000);
 
   </script>
 </body>
