@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>CNC AI — v2.2 Performance & Control Fix</title>
+  <title>CNC AI — v2.3 Laser Edge & Simulation Pro</title>
 
   <!-- مكتبات -->
   <script src="https://docs.opencv.org/4.8.0/opencv.js" async></script>
@@ -77,11 +77,14 @@
     #topView { width:100%; height:200px; background:#0d1722; border-radius:6px; border:1px solid #334155; display:block; z-index:2 }
     #topLegend { width:100%; height:18px; border-radius:6px; border:1px solid #2b3844; background:linear-gradient(90deg,#ddd,#333); }
 
-    /* colormap buttons shared under previews */
-    .colormap-area { display:flex; justify-content:center; gap:8px; margin-top:10px; }
-    .colormap-buttons { display:flex; gap:6px; justify-content:center; }
-    .colormap-buttons button { background:#141b22; color:#cfeaf2; border:1px solid #26343f; padding:6px 8px; border-radius:6px; cursor:pointer; font-size:12px }
-    .colormap-buttons button.active { background:#06b6d4; color:#021; border-color:#06b6d4; }
+    /* heatmap toolbar inside heatmap tab */
+    .heatmap-toolbar { display:flex; gap:6px; justify-content:flex-start; margin-bottom:8px; align-items:center; }
+    .heatmap-toolbar button { background:#141b22; color:#cfeaf2; border:1px solid #26343f; padding:6px 8px; border-radius:6px; cursor:pointer; font-size:12px }
+    .heatmap-toolbar button.active { background:#06b6d4; color:#021; border-color:#06b6d4; }
+
+    /* Edge detail controls */
+    .edge-detail-controls { display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap }
+    .edge-detail-controls button, .edge-detail-controls input { font-size:12px; padding:6px; border-radius:6px; }
 
     /* simulation controls (fixed inside 3D area) */
     .sim-controls { position:absolute; top:10px; left:10px; z-index:30; display:flex; gap:8px; align-items:center; background:rgba(0,0,0,0.35); padding:6px;border-radius:6px }
@@ -96,7 +99,7 @@
 <body>
   <div class="app">
     <header>
-      <h1>CNC AI — v2.2 Performance & Control Fix</h1>
+      <h1>CNC AI — v2.3 Laser Edge & Simulation Pro</h1>
       <div id="cvState">
         <span class="loading" style="display:inline-block;width:16px;height:16px;border:3px solid #f3f3f3;border-top:3px solid #06b6d4;border-radius:50%;animation:spin 1s linear infinite;margin-left:8px;"></span>
         جاري تحميل OpenCV...
@@ -122,7 +125,7 @@
         <!-- Edge sensitivity slider -->
         <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
           <label style="margin:0;color:#9bb0c8">حساسية الحواف:</label>
-          <input id="edgeSensitivity" type="range" min="0.1" max="1.0" step="0.05" value="0.33" style="flex:1">
+          <input id="edgeSensitivity" type="range" min="0.05" max="1.0" step="0.05" value="0.33" style="flex:1">
           <div id="edgeValue" style="min-width:44px;text-align:center;color:#cfeaf2">0.33</div>
         </div>
 
@@ -130,6 +133,7 @@
           <button data-tab="original" class="active">🖼️ الأصلية</button>
           <button data-tab="heatmap">🔥 Heatmap</button>
           <button data-tab="contour">📐 Contours</button>
+          <button data-tab="edgedetail">🔎 تفاصيل الحواف</button>
           <button data-tab="topview">🔝 Top View</button>
           <button data-tab="simulation">🎬 المحاكاة</button>
         </div>
@@ -140,6 +144,18 @@
         </div>
 
         <div id="heatmap" class="tab-content">
+          <!-- Heatmap toolbar moved HERE -->
+          <div class="heatmap-toolbar" id="heatmapToolbar">
+            <span style="color:#9bb0c8;font-size:12px;margin-right:6px">Colormap:</span>
+            <button data-map="jet" class="active">Jet</button>
+            <button data-map="hot">Hot</button>
+            <button data-map="cool">Cool</button>
+            <button data-map="gray">Gray</button>
+            <div style="flex:1"></div>
+            <button id="heatZoomIn" title="تكبير" style="padding:6px 8px">🔍+</button>
+            <button id="heatZoomOut" title="تصغير" style="padding:6px 8px">🔍-</button>
+          </div>
+
           <div class="canvas-placeholder" id="heatmapPlaceholder">Heatmap ستظهر هنا</div>
           <canvas id="canvasHeatmap" style="display:none;"></canvas>
           <div class="small-meta">Heatmap تعتمد على الصورة الرمادية وتستخدم نموذج الألوان المحدد</div>
@@ -149,6 +165,26 @@
           <div class="canvas-placeholder" id="contourPlaceholder">Contours ستظهر هنا</div>
           <canvas id="canvasContour" style="display:none;"></canvas>
           <div class="small-meta">رسم الكنتورات المكتشفة</div>
+        </div>
+
+        <div id="edgedetail" class="tab-content">
+          <div class="edge-detail-controls">
+            <label style="font-weight:normal;"><input id="edgeAdaptive" type="checkbox"> استخدم Adaptive Threshold</label>
+            <button id="edgeContrast" title="تحسين التباين">تحسين التباين</button>
+            <button id="edgeReAnalyze" title="إعادة التحليل">🔄 إعادة التحليل</button>
+            <label style="margin-left:8px">عرض:</label>
+            <select id="edgeViewMode" style="width:140px">
+              <option value="raw">Raw Edges</option>
+              <option value="filtered" selected>Filtered Edges</option>
+              <option value="depth">Edge Depth Map</option>
+            </select>
+            <div style="flex:1"></div>
+            <button id="edgeZoomIn" title="تكبير">🔍+</button>
+            <button id="edgeZoomOut" title="تصغير">🔍-</button>
+          </div>
+          <div class="canvas-placeholder" id="edgeDetailPlaceholder">تفاصيل الحواف ستظهر هنا</div>
+          <canvas id="canvasEdgeDetail" style="display:none;"></canvas>
+          <div class="small-meta">تبويب مخصص لعرض وتحليل الحواف بدقة — هام لليزر</div>
         </div>
 
         <div id="topview" class="tab-content">
@@ -162,17 +198,7 @@
         <div id="simulation" class="tab-content">
           <div id="threeContainer">
             <div class="canvas-placeholder" id="simulationPlaceholder">المحاكاة ستظهر هنا بعد توليد G-code</div>
-            <!-- sim controls will be injected here -->
-          </div>
-        </div>
-
-        <!-- Shared colormap buttons (moved out of heatmap tab) -->
-        <div class="colormap-area">
-          <div class="colormap-buttons" id="colormapButtons">
-            <button data-map="jet" class="active">Jet</button>
-            <button data-map="hot">Hot</button>
-            <button data-map="cool">Cool</button>
-            <button data-map="gray">Gray</button>
+            <!-- sim controls injected here -->
           </div>
         </div>
 
@@ -326,6 +352,8 @@
     let scene = null, camera = null, renderer = null, controls = null;
     let simulation = { isPlaying: false, animationFrame: null, tool: null, toolPath: null, pathPoints: [], index: 0, speed: 1, controlsAdded: false };
 
+    // Edge detail zoom factor
+    let edgeDetailZoom = 1.0;
     // ================= Debug overlay system =================
     (function initDebugOverlay(){
       const debugList = document.getElementById('debugList');
@@ -385,7 +413,6 @@
         dbgToggleSize.textContent = debugOverlay.classList.contains('minimized') ? '🔼' : '🔽';
       });
 
-      // Click restore when minimized
       debugOverlay.addEventListener('click', (ev) => {
         if (debugOverlay.classList.contains('minimized')) {
           debugOverlay.classList.remove('minimized');
@@ -416,7 +443,6 @@
         try { addEntry('error', 'UnhandledRejection: ' + (ev.reason && ev.reason.message ? ev.reason.message : String(ev.reason)), ev.reason && ev.reason.stack ? ev.reason.stack : ''); } catch(e){}
       });
 
-      // expose a function for other code to log easily
       window.debugLog = function(msg) { try { addEntry('info', msg); } catch(e){} };
     })();
 
@@ -505,7 +531,6 @@
         return;
       }
       try {
-        // cleanup previous resources
         cleanupMats();
         disposeThree();
 
@@ -532,7 +557,7 @@
         showElement('canvasOriginal', 'originalPlaceholder');
 
         if (cvReady) {
-          await detectContours();
+          await detectContours(); // initial detection
         } else {
           showToast('في انتظار OpenCV...');
           setTimeout(async () => { if (cvReady) await detectContours(); }, 800);
@@ -543,8 +568,28 @@
       }
     });
 
+    // ================= Image preprocessing helpers =================
+    function contrastStretchMat(srcMat) {
+      // simple contrast stretch: new = (src - min) * (255/(max-min))
+      try {
+        const dst = new cv.Mat();
+        const minMax = cv.minMaxLoc(srcMat);
+        let minVal = minMax.minVal, maxVal = minMax.maxVal;
+        if (maxVal <= minVal) { srcMat.copyTo(dst); return dst; }
+        const alpha = 255.0 / (maxVal - minVal);
+        const beta = -minVal * alpha;
+        srcMat.convertTo(dst, cv.CV_8U, alpha, beta);
+        return dst;
+      } catch (e) {
+        console.warn('contrastStretchMat error', e);
+        const fallback = new cv.Mat();
+        srcMat.copyTo(fallback);
+        return fallback;
+      }
+    }
+
     // ================= Edge detection & contours (live + sensitivity) =================
-    async function detectContours() {
+    async function detectContours(useAdaptive=false) {
       if (!cvReady) {
         showToast('OpenCV غير جاهز بعد');
         return;
@@ -553,43 +598,64 @@
         const src = cv.imread(previewCanvas);
         const gray = new cv.Mat();
         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+        // contrast stretch for better edges
+        const stretched = contrastStretchMat(gray);
+
         const blurred = new cv.Mat();
-        cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
+        cv.GaussianBlur(stretched, blurred, new cv.Size(5, 5), 0);
 
         // pick edge mode
         const mode = document.getElementById('edgeMode').value || 'auto';
         // sensitivity
         const sens = parseFloat(document.getElementById('edgeSensitivity').value) || 0.33;
 
+        // thresholds computed from median
         const median = cv.mean(blurred)[0];
         const lowerThreshold = Math.max(0, (1.0 - sens) * median);
         const upperThreshold = Math.min(255, (1.0 + sens) * median);
 
         let edges = new cv.Mat();
-        if (mode === 'sobel') {
-          const gradX = new cv.Mat(), gradY = new cv.Mat();
-          cv.Sobel(blurred, gradX, cv.CV_16S, 1, 0, 3, 1, 0, cv.BORDER_DEFAULT);
-          cv.Sobel(blurred, gradY, cv.CV_16S, 0, 1, 3, 1, 0, cv.BORDER_DEFAULT);
-          cv.convertScaleAbs(gradX, gradX);
-          cv.convertScaleAbs(gradY, gradY);
-          cv.addWeighted(gradX, 0.5, gradY, 0.5, 0, edges);
-          gradX.delete(); gradY.delete();
-        } else if (mode === 'laplace') {
-          cv.Laplacian(blurred, edges, cv.CV_16S, 3, 1, 0, cv.BORDER_DEFAULT);
-          cv.convertScaleAbs(edges, edges);
+        if (useAdaptive || document.getElementById('edgeAdaptive') && document.getElementById('edgeAdaptive').checked) {
+          // Adaptive threshold branch for Edge Detail heavy mode
+          try {
+            const adapt = new cv.Mat();
+            cv.adaptiveThreshold(stretched, adapt, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
+            cv.Canny(blurred, edges, lowerThreshold * 0.7, upperThreshold * 1.1);
+            // combine adapt and edges
+            cv.bitwise_or(edges, adapt, edges);
+            adapt.delete();
+          } catch(e){
+            cv.Canny(blurred, edges, lowerThreshold, upperThreshold);
+          }
         } else {
-          cv.Canny(blurred, edges, lowerThreshold, upperThreshold);
+          if (mode === 'sobel') {
+            const gradX = new cv.Mat(), gradY = new cv.Mat();
+            cv.Sobel(blurred, gradX, cv.CV_16S, 1, 0, 3, 1, 0, cv.BORDER_DEFAULT);
+            cv.Sobel(blurred, gradY, cv.CV_16S, 0, 1, 3, 1, 0, cv.BORDER_DEFAULT);
+            cv.convertScaleAbs(gradX, gradX);
+            cv.convertScaleAbs(gradY, gradY);
+            cv.addWeighted(gradX, 0.5, gradY, 0.5, 0, edges);
+            gradX.delete(); gradY.delete();
+          } else if (mode === 'laplace') {
+            cv.Laplacian(blurred, edges, cv.CV_16S, 3, 1, 0, cv.BORDER_DEFAULT);
+            cv.convertScaleAbs(edges, edges);
+          } else {
+            cv.Canny(blurred, edges, lowerThreshold, upperThreshold);
+          }
         }
 
-        // improve edges
+        // morphological cleaning
         const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
         cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel);
+        cv.morphologyEx(edges, edges, cv.MORPH_OPEN, kernel);
 
+        // find contours
         const contours = new cv.MatVector();
         const hierarchy = new cv.Mat();
         cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
 
-        const minArea = (gray.cols * gray.rows) * 0.01; // default 1%
+        const minArea = (gray.cols * gray.rows) * 0.001; // more sensitive for laser (0.1%)
         const validContours = [];
         for (let i = 0; i < contours.size(); i++) {
           const cnt = contours.get(i);
@@ -608,21 +674,22 @@
           showToast(`تم كشف ${validContours.length} كونتور`);
         } else {
           showToast('لم يتم العثور على حواف واضحة في الصورة');
-          src.delete(); blurred.delete(); edges.delete(); hierarchy.delete(); contours.delete(); kernel.delete();
+          src.delete(); stretched.delete(); blurred.delete(); edges.delete(); hierarchy.delete(); contours.delete(); kernel.delete();
           gray.delete();
           return;
         }
 
         if (grayMat) { try { grayMat.delete(); } catch(e){} }
-        grayMat = gray.clone();
+        grayMat = stretched.clone(); // use stretched for heatmap depth mapping
 
-        renderHeatmap(); // uses currentColormap
-        renderContour(gray, contour);
+        // render visuals
+        renderHeatmap();
+        renderContour(grayMat, contour);
+        renderEdgeDetailView(); // update Edge Detail tab if open
 
         // cleanup temporaries
         src.delete(); blurred.delete(); edges.delete(); hierarchy.delete(); contours.delete(); kernel.delete();
-        gray.delete();
-
+        gray.delete(); stretched.delete();
       } catch (err) {
         console.error('detectContours error', err);
         showToast('فشل في تحليل الصورة');
@@ -639,6 +706,21 @@
       if (!previewCanvas) return;
       if (cvReady && previewCanvas && previewCanvas.width > 0) detectContours();
     });
+
+    // Edge Detail controls
+    document.getElementById('edgeReAnalyze').addEventListener('click', () => {
+      detectContours(true);
+    });
+    document.getElementById('edgeContrast').addEventListener('click', () => {
+      // re-run detection with explicit contrast stretching
+      detectContours(document.getElementById('edgeAdaptive').checked);
+      showToast('تم تحسين التباين وإعادة التحليل');
+    });
+    document.getElementById('edgeViewMode').addEventListener('change', () => {
+      renderEdgeDetailView();
+    });
+    document.getElementById('edgeZoomIn').addEventListener('click', () => { edgeDetailZoom = Math.min(4, edgeDetailZoom * 1.25); renderEdgeDetailView(); });
+    document.getElementById('edgeZoomOut').addEventListener('click', () => { edgeDetailZoom = Math.max(0.25, edgeDetailZoom / 1.25); renderEdgeDetailView(); });
 
     // ================= Colormap utilities =================
     function clamp(v, a=0, b=1){ return Math.max(a, Math.min(b, v)); }
@@ -743,6 +825,83 @@
       showElement('canvasContour', 'contourPlaceholder');
     }
 
+    // ================= Edge Detail rendering =================
+    function renderEdgeDetailView() {
+      const mode = document.getElementById('edgeViewMode').value || 'filtered';
+      const canvas = document.getElementById('canvasEdgeDetail');
+      const placeholder = document.getElementById('edgeDetailPlaceholder');
+      if (!grayMat || !previewCanvas) {
+        placeholder.style.display = 'flex';
+        canvas.style.display = 'none';
+        return;
+      }
+      canvas.style.display = 'block';
+      placeholder.style.display = 'none';
+
+      // create temp mats for display depending on mode
+      const gw = grayMat.cols, gh = grayMat.rows;
+      const tmp = new cv.Mat();
+      try {
+        if (mode === 'raw') {
+          // show raw edges (re-run Canny but minimal post)
+          cv.Canny(grayMat, tmp, 50, 150);
+        } else if (mode === 'filtered') {
+          // filtered edges: adaptive threshold + morphological cleaning
+          const stretched = contrastStretchMat(grayMat);
+          const blurred = new cv.Mat();
+          cv.GaussianBlur(stretched, blurred, new cv.Size(3,3), 0);
+          const adapt = new cv.Mat();
+          cv.adaptiveThreshold(stretched, adapt, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
+          cv.Canny(blurred, tmp, 40, 120);
+          cv.bitwise_and(tmp, adapt, tmp);
+          cv.morphologyEx(tmp, tmp, cv.MORPH_OPEN, cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(2,2)));
+          blurred.delete(); adapt.delete(); stretched.delete();
+        } else if (mode === 'depth') {
+          // create a depth-like map from edge strength: use Sobel magnitude
+          const gradX = new cv.Mat(), gradY = new cv.Mat();
+          cv.Sobel(grayMat, gradX, cv.CV_16S, 1, 0, 3);
+          cv.Sobel(grayMat, gradY, cv.CV_16S, 0, 1, 3);
+          const absX = new cv.Mat(), absY = new cv.Mat();
+          cv.convertScaleAbs(gradX, absX);
+          cv.convertScaleAbs(gradY, absY);
+          cv.addWeighted(absX, 0.5, absY, 0.5, 0, tmp);
+          gradX.delete(); gradY.delete(); absX.delete(); absY.delete();
+        }
+
+        // now draw tmp into canvas with zoom and colormap blending for visibility
+        const ctx = canvas.getContext('2d');
+        const z = edgeDetailZoom;
+        const w = Math.max(1, Math.floor(previewCanvas.width * z));
+        const h = Math.max(1, Math.floor(previewCanvas.height * z));
+        canvas.width = w;
+        canvas.height = h;
+
+        const imgData = ctx.createImageData(w, h);
+        // sample tmp (tmp is same size as grayMat)
+        for (let y=0;y<h;y++){
+          for (let x=0;x<w;x++){
+            const sx = Math.floor(x / z);
+            const sy = Math.floor(y / z);
+            let v = 0;
+            try { v = tmp.ucharPtr(sy, sx)[0]; } catch(e){ v = 0; }
+            // use heat colormap to highlight edges
+            const t = v / 255.0;
+            const col = getColormapColor(t, currentColormap);
+            const idx = (y*w + x)*4;
+            imgData.data[idx] = col.r;
+            imgData.data[idx+1] = col.g;
+            imgData.data[idx+2] = col.b;
+            imgData.data[idx+3] = 255;
+          }
+        }
+        ctx.putImageData(imgData, 0, 0);
+      } catch (e) {
+        console.error('renderEdgeDetailView error', e);
+      } finally {
+        try { tmp.delete(); } catch(e){}
+      }
+    }
+
     // ================= Bilinear sampling from grayscale Mat =================
     function sampleGrayAt(x, y) {
       if (!grayMat || !previewCanvas) return 128;
@@ -827,7 +986,6 @@
       });
       const ordered = [];
       if (list.length === 0) return ordered;
-      list.sort((a,b)=>0); // keep original order initially
       list[0].used = true;
       ordered.push(list[0].cnt);
       let lastPos = list[0].start;
@@ -1064,9 +1222,8 @@
       if (gcode) {
         showToast("تم توليد G-code (Raster)");
         renderTopViewFromGcode();
-        // open simulation tab and init (but do not auto-play)
         document.querySelector('.tab-buttons button[data-tab="simulation"]').click();
-        initSimulation(); 
+        initSimulation();
       }
     });
 
@@ -1119,6 +1276,31 @@
       document.getElementById('originX').value = (workWidth / 2).toFixed(1);
       document.getElementById('originY').value = (workHeight / 2).toFixed(1);
       showToast("تم توسيط نقطة الأصل");
+    });
+
+    // heatmap toolbar handlers (inside heatmap tab)
+    document.querySelectorAll('#heatmapToolbar button[data-map]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        document.querySelectorAll('#heatmapToolbar button[data-map]').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        currentColormap = btn.dataset.map;
+        renderHeatmap();
+        renderTopViewFromGcode();
+        renderEdgeDetailView();
+        showToast('تم تغيير نموذج الألوان إلى ' + currentColormap);
+      });
+    });
+
+    document.getElementById('heatZoomIn').addEventListener('click', () => {
+      // simple zoom behaviour: scale original preview canvas drawing (not image zoom for now)
+      const h = document.getElementById('canvasHeatmap');
+      if (!h) return;
+      h.style.transform = (h.style.transform === 'scale(1.25)') ? 'scale(1.5)' : 'scale(1.25)';
+    });
+    document.getElementById('heatZoomOut').addEventListener('click', () => {
+      const h = document.getElementById('canvasHeatmap');
+      if (!h) return;
+      h.style.transform = 'scale(1)';
     });
 
     // keyboard shortcuts
@@ -1288,7 +1470,6 @@
         }
         scene = null; camera = null;
         simulation.tool = null; simulation.toolPath = null;
-        // allow recreating controls
         simulation.controlsAdded = false;
       } catch (e) { console.warn('disposeThree error', e); }
     }
@@ -1322,11 +1503,13 @@
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
 
-        // lighting
-        const ambient = new THREE.AmbientLight(0x404040, 0.8);
+        // lighting (improved)
+        const ambient = new THREE.AmbientLight(0x606060, 0.9);
         scene.add(ambient);
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
         dirLight.position.set(50,120,50); scene.add(dirLight);
+        const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.6);
+        dirLight2.position.set(-50,60,-50); scene.add(dirLight2);
 
         // material block with selected wood color
         const woodHex = document.getElementById('woodColor').value || '#a0522d';
@@ -1334,7 +1517,7 @@
         const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20) / 10;
         const workDepth = (parseFloat(document.getElementById('workDepth').value) || 3) / 10;
         const materialGeometry = new THREE.BoxGeometry(workWidth, workDepth, workHeight);
-        const materialMaterial = new THREE.MeshPhongMaterial({ color: new THREE.Color(woodHex), transparent:true, opacity:0.95 });
+        const materialMaterial = new THREE.MeshStandardMaterial({ color: new THREE.Color(woodHex), metalness:0.1, roughness:0.6 });
         const materialMesh = new THREE.Mesh(materialGeometry, materialMaterial);
         materialMesh.position.set(workWidth/2, -workDepth/2, workHeight/2);
         scene.add(materialMesh);
@@ -1381,18 +1564,17 @@
     // ================= Top View rendering (colored + inverted Y + legend + colormap blending)
     function renderTopViewFromGcode(gcode) {
       try {
-        // allow calling without param
         if (!gcode) gcode = lastGeneratedGcode || document.getElementById('gcodeOut').value;
         if (!gcode) {
-          // fallback: draw grayscale -> depth
+          // fallback: draw grayscale->depth from grayMat
         }
         if (!previewCanvas) return;
         const topCanvas = document.getElementById('topView');
         const legendDiv = document.getElementById('topLegend');
 
-        // goal: limit pixels for top view to protect browser
+        // limit pixels for top view to protect browser
         const tw_orig = previewCanvas.width, th_orig = previewCanvas.height;
-        const maxTopPixels = 300 * 300; // cap for top-view rendering for performance
+        const maxTopPixels = 400 * 400; // default cap (balanced)
         let scaleDown = 1.0;
         if (tw_orig * th_orig > maxTopPixels) {
           scaleDown = Math.sqrt(maxTopPixels / (tw_orig * th_orig));
@@ -1409,12 +1591,10 @@
 
         const points = parseGcodeForSimulation(gcode);
 
-        // wood color base
         const woodHex = document.getElementById('woodColor').value || '#a0522d';
         const woodRgb = hexToRgb(woodHex);
         const blackRgb = { r: 10, g: 6, b: 3 };
 
-        // mm -> pixel mapping (use original preview dims but map into tw/th)
         const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30);
         const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20);
         const originX = cmToMm(parseFloat(document.getElementById('originX').value) || 0);
@@ -1431,12 +1611,10 @@
         for (let i=0;i<depthMap.length;i++) depthMap[i]=0;
 
         if (!points || points.length === 0) {
-          // fallback: sample grayMat directly but scaled
           if (!grayMat) return;
           const imgData = ctx.createImageData(tw, th);
           for (let y=0;y<th;y++){
             for (let x=0;x<tw;x++){
-              // map x,y back to preview pixels
               const srcX = Math.round(x / scaleDown);
               const srcY = Math.round(y / scaleDown);
               const v = sampleGrayAt(srcX, srcY);
@@ -1454,7 +1632,6 @@
           return;
         }
 
-        // accumulate depths from gcode points (map mm->pixel)
         for (let i=0;i<points.length;i++) {
           const p = points[i];
           if (typeof p.x === 'undefined') continue;
@@ -1463,7 +1640,7 @@
           const depth = Math.min(Math.abs(p.z), maxDepth);
           const idx = coords.y * tw + coords.x;
           depthMap[idx] = Math.max(depthMap[idx], depth);
-          const spread = 1; // keep spread small for performance
+          const spread = 1;
           for (let oy=-spread; oy<=spread; oy++) {
             for (let ox=-spread; ox<=spread; ox++) {
               const nx = coords.x + ox, ny = coords.y + oy;
@@ -1538,19 +1715,6 @@
         }
       });
 
-      // colormap buttons binding (shared)
-      document.querySelectorAll('#colormapButtons button').forEach(btn=>{
-        btn.addEventListener('click', ()=>{
-          document.querySelectorAll('#colormapButtons button').forEach(b=>b.classList.remove('active'));
-          btn.classList.add('active');
-          currentColormap = btn.dataset.map;
-          // update heatmap & topview
-          renderHeatmap();
-          renderTopViewFromGcode();
-          showToast('تم تغيير نموذج الألوان إلى ' + currentColormap);
-        });
-      });
-
       // set initial state of TopView canvas placeholder
       const top = document.getElementById('topView');
       top.width = 600; top.height = 400;
@@ -1564,7 +1728,6 @@
         camera.updateProjectionMatrix();
         renderer.setSize(container.clientWidth, container.clientHeight);
       }
-      // topView size will be dynamically computed on render
     });
 
     // cleanup when leaving page
@@ -1572,7 +1735,6 @@
       try { cleanupMats(); } catch(e){}
       try { disposeThree(); } catch(e){}
     });
-
   </script>
 </body>
 </html>
