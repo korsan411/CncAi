@@ -3,130 +3,76 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>CNC AI — v2.3 Laser Edge & Simulation Pro</title>
+  <title>CncAi v2.3 — Dual Mode Final (Router + Laser)</title>
 
-  <!-- مكتبات -->
+  <!-- OpenCV -->
   <script src="https://docs.opencv.org/4.8.0/opencv.js" async></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
 
   <style>
-    * { box-sizing: border-box; }
-    body { margin: 0; font-family: Arial, Segoe UI, system-ui; background: #041022; color:#e6eef6; line-height:1.45 }
-    .app { max-width:1400px; margin:12px auto; padding:14px }
-    header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-bottom:12px; border-bottom:1px solid #1e293b }
-    .grid { display:grid; grid-template-columns:1fr 520px; gap:16px }
-    @media (max-width:1100px){ .grid{ grid-template-columns:1fr } }
-    .panel { background:#0b1320; padding:16px; border-radius:10px; border:1px solid #1e293b }
-    .tab-buttons { display:flex; gap:8px; margin-top:12px; background: rgba(14,23,33,0.6); padding:6px; border-radius:8px }
-    .tab-buttons button { flex:1; border:none; padding:8px 10px; border-radius:6px; background:transparent; color:#9bb0c8; cursor:pointer }
-    .tab-buttons button.active { background:#0f172a; color:#e6eef6; box-shadow: inset 0 -3px 0 #06b6d4; }
-    .tab-content { display:none; margin-top:12px }
-    .tab-content.active { display:block }
-    canvas { max-width:100%; border-radius:6px; background:#000; display:block; margin:0 auto; border:1px solid #334155 }
-    #threeContainer { width:100%; height:420px; background:#081224; border-radius:8px; overflow:hidden; position:relative }
-    label { display:block; margin-top:12px; color:#cfeaf2; font-weight:bold }
-    input, select, textarea, button { font-size:0.9rem }
-    input, select { width:100%; padding:8px 10px; border-radius:6px; border:1px solid #1e293b; background:#0f172a; color:#e6eef6; margin-top:6px }
-    .button-group { display:flex; flex-direction:column; gap:8px; margin-top:12px }
-    .button-row { display:flex; gap:8px; }
-    button { background:#1e293b; color:#e6eef6; border:none; padding:10px; border-radius:8px; cursor:pointer }
-    button.primary { background:#06b6d4; color:#021; font-weight:bold }
-    button.secondary { background:#334155; }
-    #toast { position:fixed; left:16px; bottom:16px; background:rgba(0,0,0,0.85); color:#fff; padding:10px 14px; border-radius:8px; display:none; z-index:10000 }
-    .canvas-placeholder { width:100%; min-height:260px; background:#000; border-radius:6px; display:flex; align-items:center; justify-content:center; color:#9bb0c8; border:1px solid #334155 }
-    .small-meta { font-size:12px; color:#9bb0c8; margin-top:6px }
-
-    /* Debug overlay */
-    #debugOverlay {
-      position: fixed;
-      right: 16px;
-      bottom: 16px;
-      width: 420px;
-      max-height: 55vh;
-      background: rgba(2,6,23,0.9);
-      color: #e6eef6;
-      border: 1px solid rgba(102, 126, 234, 0.08);
-      border-radius: 8px;
-      font-size: 13px;
-      z-index: 20000;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      box-shadow: 0 8px 40px rgba(0,0,0,0.6);
-    }
-    #debugOverlay.minimized { height: 36px; width: 160px; cursor: pointer; }
-    #debugHeader {
-      display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.03);
-      background: linear-gradient(90deg, rgba(6,182,212,0.06), rgba(8,145,178,0.02));
-    }
-    #debugHeader b { color:#aee8f2; }
-    #debugControls { display:flex; gap:6px; align-items:center; }
-    .dbg-btn { background:transparent; border:1px solid rgba(255,255,255,0.06); color:#cfeaf2; padding:6px 8px; border-radius:6px; cursor:pointer; font-size:12px; }
-    #debugList { overflow:auto; padding:8px; display:flex; flex-direction:column; gap:6px; }
-    .dbg-item { padding:8px; border-radius:6px; background:rgba(255,255,255,0.02); line-height:1.2; max-height:120px; overflow:auto; font-family:monospace; font-size:12px; }
-    .dbg-time { opacity:0.7; font-size:11px; margin-bottom:6px; display:block; }
-    .dbg-error { border-left:4px solid #ef4444; }
-    .dbg-warn { border-left:4px solid #f59e0b; }
-    .dbg-info { border-left:4px solid #06b6d4; color:#cfeaf2; }
-    .dbg-meta { opacity:0.75; font-size:11px; margin-top:6px; color:#9bb0c8; }
-    #debugFooter { padding:6px 10px; border-top:1px solid rgba(255,255,255,0.02); text-align:right; font-size:12px; color:#9bb0c8; background:rgba(0,0,0,0.03); display:flex; justify-content:space-between; align-items:center; }
-
-    /* Top view + legend */
-    #topViewContainer { margin-top:12px; display:flex; flex-direction:column; gap:6px; align-items:center; position:relative }
-    #topView { width:100%; height:200px; background:#0d1722; border-radius:6px; border:1px solid #334155; display:block; z-index:2 }
-    #topLegend { width:100%; height:18px; border-radius:6px; border:1px solid #2b3844; background:linear-gradient(90deg,#ddd,#333); }
-
-    /* heatmap toolbar inside heatmap tab */
-    .heatmap-toolbar { display:flex; gap:6px; justify-content:flex-start; margin-bottom:8px; align-items:center; }
-    .heatmap-toolbar button { background:#141b22; color:#cfeaf2; border:1px solid #26343f; padding:6px 8px; border-radius:6px; cursor:pointer; font-size:12px }
-    .heatmap-toolbar button.active { background:#06b6d4; color:#021; border-color:#06b6d4; }
-
-    /* Edge detail controls */
-    .edge-detail-controls { display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap }
-    .edge-detail-controls button, .edge-detail-controls input { font-size:12px; padding:6px; border-radius:6px; }
-
-    /* simulation controls (fixed inside 3D area) */
-    .sim-controls { position:absolute; top:10px; left:10px; z-index:30; display:flex; gap:8px; align-items:center; background:rgba(0,0,0,0.35); padding:6px;border-radius:6px }
-    .sim-controls button { background:rgba(0,0,0,0.55); color:white; border:1px solid #06b6d4; border-radius:4px; padding:6px 8px; cursor:pointer; font-size:0.9rem }
-    .sim-progress { position:absolute; bottom:10px; left:10px; z-index:30; background:rgba(0,0,0,0.35); padding:6px 8px;border-radius:6px; color:#cfeaf2; font-size:12px }
-
-    .opt-controls { display:flex; gap:8px; align-items:center; margin-top:12px; flex-wrap:wrap }
-    .opt-controls label { font-weight:normal; color:#cfeaf2; display:flex; gap:6px; align-items:center; }
-    @keyframes spin { 0%{transform:rotate(0)}100%{transform:rotate(360deg)} }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Tahoma,Arial,Segoe UI,system-ui;background:#061423;color:#e6eef6}
+    .app{max-width:1200px;margin:12px auto;padding:14px}
+    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #123}
+    .grid{display:grid;grid-template-columns:1fr 420px;gap:14px}
+    @media(max-width:1000px){.grid{grid-template-columns:1fr}}
+    .panel{background:#091826;padding:14px;border-radius:10px;border:1px solid #1f3440}
+    .tab-buttons{display:flex;gap:6px;margin-top:12px;background:rgba(8,15,20,0.5);padding:6px;border-radius:8px}
+    .tab-buttons button{flex:1;border:none;padding:8px;border-radius:6px;background:transparent;color:#9bb0c8;cursor:pointer}
+    .tab-buttons button.active{background:#0f2b37;color:#e6eef6;box-shadow:inset 0 -3px 0 #06b6d4}
+    .tab-content{display:none;margin-top:12px}
+    .tab-content.active{display:block}
+    .canvas-placeholder{width:100%;min-height:220px;background:#021018;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#8fb7c5;border:1px solid #243b45}
+    canvas{max-width:100%;border-radius:6px;background:#000;display:block;border:1px solid #233a44}
+    label{display:block;margin-top:10px;color:#cfeaf2;font-weight:600}
+    input,select,textarea,button{font-size:.95rem}
+    input,select{width:100%;padding:8px;border-radius:6px;border:1px solid #123540;background:#07262d;color:#e6eef6;margin-top:6px}
+    .heatmap-toolbar{display:flex;gap:6px;align-items:center;margin-bottom:10px}
+    .heatmap-toolbar button{background:#0b2430;color:#cfeaf2;border:1px solid #1f4954;padding:6px;border-radius:6px;cursor:pointer}
+    .heatmap-toolbar button.active{background:#06b6d4;color:#021;border-color:#06b6d4}
+    .small-meta{font-size:12px;color:#9bb0c8;margin-top:6px}
+    .controls-row{display:flex;gap:8px;align-items:center}
+    .controls-row > *{flex:1}
+    .btn-row{display:flex;gap:8px;margin-top:12px}
+    button.primary{background:#06b6d4;color:#021;padding:10px;border-radius:8px;border:none;cursor:pointer}
+    button.secondary{background:#12353f;color:#cfeaf2;padding:10px;border-radius:8px;border:none;cursor:pointer}
+    #toast{position:fixed;left:16px;bottom:16px;background:rgba(0,0,0,0.8);color:#fff;padding:8px 12px;border-radius:8px;display:none;z-index:10000}
+    .meta-small{font-size:12px;color:#95b7c1}
   </style>
 </head>
 <body>
   <div class="app">
     <header>
-      <h1>CNC AI — v2.3 Laser Edge & Simulation Pro</h1>
-      <div id="cvState">
-        <span class="loading" style="display:inline-block;width:16px;height:16px;border:3px solid #f3f3f3;border-top:3px solid #06b6d4;border-radius:50%;animation:spin 1s linear infinite;margin-left:8px;"></span>
-        جاري تحميل OpenCV...
-      </div>
+      <h2>CncAi v2.3 — Dual Mode Final (Router + Laser)</h2>
+      <div id="cvState"><small style="opacity:.8">جاري تحميل OpenCV...</small></div>
     </header>
 
     <div class="grid">
-      <!-- LEFT panel -->
+      <!-- LEFT -->
       <div class="panel">
-        <div style="display:flex;gap:8px;align-items:center;">
+        <div style="display:flex;gap:8px;align-items:center">
           <input id="fileInput" type="file" accept="image/*"/>
-          <label class="file-input-label" for="fileInput" style="display:inline-block;padding:8px 12px;background:#1e293b;border-radius:6px;color:#e6eef6;cursor:pointer;border:1px dashed #334155">📁 اختر صورة</label>
+          <label for="fileInput" style="display:inline-block;padding:8px 12px;background:#0f2b34;border-radius:6px;color:#e6eef6;cursor:pointer;border:1px dashed #234a52">📁 اختر صورة</label>
           <div style="flex:1"></div>
-
-          <label for="edgeMode" style="font-weight:normal;color:#9bb0c8">Edge Mode:</label>
-          <select id="edgeMode" style="width:140px">
-            <option value="auto">Canny (عادي)</option>
-            <option value="sobel">Sobel (دقيق)</option>
-            <option value="laplace">Laplacian (ناعـم)</option>
+          <label style="font-weight:normal;color:#9bb0c8;margin:0 6px">Edge Mode:</label>
+          <select id="edgeMode" style="width:150px">
+            <option value="auto">Canny</option>
+            <option value="sobel">Sobel</option>
+            <option value="laplace">Laplacian</option>
           </select>
         </div>
 
-        <!-- Edge sensitivity slider -->
         <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
           <label style="margin:0;color:#9bb0c8">حساسية الحواف:</label>
           <input id="edgeSensitivity" type="range" min="0.05" max="1.0" step="0.05" value="0.33" style="flex:1">
           <div id="edgeValue" style="min-width:44px;text-align:center;color:#cfeaf2">0.33</div>
+        </div>
+
+        <div style="display:flex;gap:8px;align-items:center;margin-top:10px">
+          <label style="font-weight:normal;color:#9bb0c8;margin:0 6px">نوع الماكينة:</label>
+          <select id="machineType" style="width:220px">
+            <option value="router" selected>🪵 CNC Router</option>
+            <option value="laser">🔥 Laser Engraving</option>
+          </select>
         </div>
 
         <div class="tab-buttons" role="tablist">
@@ -134,607 +80,320 @@
           <button data-tab="heatmap">🔥 Heatmap</button>
           <button data-tab="contour">📐 Contours</button>
           <button data-tab="edgedetail">🔎 تفاصيل الحواف</button>
+          <button data-tab="laserDetail">🔬 Laser Detail</button>
           <button data-tab="topview">🔝 Top View</button>
-          <button data-tab="simulation">🎬 المحاكاة</button>
         </div>
 
         <div id="original" class="tab-content active">
           <div class="canvas-placeholder" id="originalPlaceholder">الصورة الأصلية ستظهر هنا</div>
-          <canvas id="canvasOriginal" style="display:none;"></canvas>
+          <canvas id="canvasOriginal" style="display:none"></canvas>
         </div>
 
         <div id="heatmap" class="tab-content">
-          <!-- Heatmap toolbar moved HERE -->
           <div class="heatmap-toolbar" id="heatmapToolbar">
-            <span style="color:#9bb0c8;font-size:12px;margin-right:6px">Colormap:</span>
+            <span style="color:#9bb0c8;font-size:13px;margin-right:6px">Colormap:</span>
             <button data-map="jet" class="active">Jet</button>
             <button data-map="hot">Hot</button>
             <button data-map="cool">Cool</button>
             <button data-map="gray">Gray</button>
-            <div style="flex:1"></div>
-            <button id="heatZoomIn" title="تكبير" style="padding:6px 8px">🔍+</button>
-            <button id="heatZoomOut" title="تصغير" style="padding:6px 8px">🔍-</button>
           </div>
-
           <div class="canvas-placeholder" id="heatmapPlaceholder">Heatmap ستظهر هنا</div>
-          <canvas id="canvasHeatmap" style="display:none;"></canvas>
-          <div class="small-meta">Heatmap تعتمد على الصورة الرمادية وتستخدم نموذج الألوان المحدد</div>
+          <canvas id="canvasHeatmap" style="display:none"></canvas>
+          <div class="small-meta">تغيير نموذج الألوان يؤثر على المعاينة وTop View</div>
         </div>
 
         <div id="contour" class="tab-content">
           <div class="canvas-placeholder" id="contourPlaceholder">Contours ستظهر هنا</div>
-          <canvas id="canvasContour" style="display:none;"></canvas>
-          <div class="small-meta">رسم الكنتورات المكتشفة</div>
+          <canvas id="canvasContour" style="display:none"></canvas>
         </div>
 
         <div id="edgedetail" class="tab-content">
-          <div class="edge-detail-controls">
-            <label style="font-weight:normal;"><input id="edgeAdaptive" type="checkbox"> استخدم Adaptive Threshold</label>
-            <button id="edgeContrast" title="تحسين التباين">تحسين التباين</button>
-            <button id="edgeReAnalyze" title="إعادة التحليل">🔄 إعادة التحليل</button>
-            <label style="margin-left:8px">عرض:</label>
-            <select id="edgeViewMode" style="width:140px">
-              <option value="raw">Raw Edges</option>
-              <option value="filtered" selected>Filtered Edges</option>
-              <option value="depth">Edge Depth Map</option>
-            </select>
-            <div style="flex:1"></div>
-            <button id="edgeZoomIn" title="تكبير">🔍+</button>
-            <button id="edgeZoomOut" title="تصغير">🔍-</button>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+            <label style="font-weight:normal"><input id="edgeAdaptive" type="checkbox"> استخدام Adaptive Threshold</label>
+            <button id="edgeContrast" class="secondary" style="padding:6px 8px">تحسين التباين</button>
+            <button id="edgeReAnalyze" class="secondary" style="padding:6px 8px">🔄 إعادة التحليل</button>
           </div>
           <div class="canvas-placeholder" id="edgeDetailPlaceholder">تفاصيل الحواف ستظهر هنا</div>
-          <canvas id="canvasEdgeDetail" style="display:none;"></canvas>
-          <div class="small-meta">تبويب مخصص لعرض وتحليل الحواف بدقة — هام لليزر</div>
+          <canvas id="canvasEdgeDetail" style="display:none"></canvas>
+        </div>
+
+        <div id="laserDetail" class="tab-content">
+          <div class="canvas-placeholder" id="laserDetailPlaceholder">خريطة الليزر (Smooth Depth Map) ستظهر هنا</div>
+          <canvas id="canvasLaserDetail" style="display:none"></canvas>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+            <label style="font-weight:normal;color:#9bb0c8">نعومة المنحنى:</label>
+            <input id="laserSmoothness" type="range" min="0" max="12" step="0.5" value="3" style="flex:1">
+            <div id="laserSmoothVal" style="min-width:36px;text-align:center;color:#cfeaf2">3.0</div>
+            <button id="useLaserMap" class="primary" style="margin-left:8px">استخدم لخريطة الليزر</button>
+          </div>
+          <div class="small-meta">خريطة ملساء لتوليد موحد للطاقة — مهم للّيزر</div>
         </div>
 
         <div id="topview" class="tab-content">
-          <div id="topViewContainer">
-            <canvas id="topView"></canvas>
-            <div id="topLegend" title="عمق النقش — الألوان فقط"></div>
+          <div class="canvas-placeholder" id="topPlaceholder">
+            <canvas id="topView" width="600" height="300"></canvas>
           </div>
-          <div class="small-meta">معاينة من الأعلى للعمق المتوقع بعد تنفيذ G-code</div>
+          <div id="topLegend" style="height:14px;margin-top:6px;border-radius:6px;border:1px solid #2b3844;background:linear-gradient(90deg,#ddd,#333)"></div>
         </div>
-
-        <div id="simulation" class="tab-content">
-          <div id="threeContainer">
-            <div class="canvas-placeholder" id="simulationPlaceholder">المحاكاة ستظهر هنا بعد توليد G-code</div>
-            <!-- sim controls injected here -->
-          </div>
-        </div>
-
       </div>
 
-      <!-- RIGHT panel -->
+      <!-- RIGHT: settings & actions -->
       <div class="panel">
-        <h3>⚙️ إعدادات</h3>
+        <h3>⚙️ إعدادات عامة</h3>
 
-        <label for="machineType">نوع الماكينة</label>
-        <select id="machineType">
-          <option value="router">Router CNC</option>
-          <option value="laser">Laser Engraver</option>
-          <option value="plasma">Plasma Cutter</option>
-          <option value="3dprinter">3D Printer</option>
-        </select>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div>
-            <label for="workWidth">عرض العمل (سم)</label>
-            <input id="workWidth" type="number" value="30" step="0.1" min="1" max="200"/>
-            <div class="small-meta" id="widthMm">300.0 مم</div>
-          </div>
-          <div>
-            <label for="workHeight">ارتفاع العمل (سم)</label>
-            <input id="workHeight" type="number" value="20" step="0.1" min="1" max="200"/>
-            <div class="small-meta" id="heightMm">200.0 مم</div>
-          </div>
+        <div id="routerSettings" class="router-block">
+          <label>عرض العمل (سم)</label>
+          <input id="workWidth" type="number" value="30" step="0.1">
+          <label>ارتفاع العمل (سم)</label>
+          <input id="workHeight" type="number" value="20" step="0.1">
+          <label>خطوة المسح (مم)</label>
+          <input id="stepOver" type="number" value="5" step="0.1">
+          <label>أقصى عمق (مم)</label>
+          <input id="maxDepth" type="number" value="3.0" step="0.1">
+          <label>سرعة التغذية (مم/د)</label>
+          <input id="feedRate" type="number" value="800">
+          <label>ارتفاع الأمان (مم)</label>
+          <input id="safeZ" type="number" value="5">
         </div>
 
-        <label for="workDepth">عمق العمل (مم)</label>
-        <input id="workDepth" type="number" value="3.0" step="0.1" min="0.1" max="50"/>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div>
-            <label for="originX">نقطة الأصل X (سم)</label>
-            <input id="originX" type="number" value="0" step="0.1"/>
-          </div>
-          <div>
-            <label for="originY">نقطة الأصل Y (سم)</label>
-            <input id="originY" type="number" value="0" step="0.1"/>
-          </div>
-        </div>
-        <div style="margin-top:6px"><button id="btnCenterOrigin" class="secondary">🎯 توسيط نقطة الأصل</button></div>
-
-        <hr style="border-color:#122433;margin:12px 0"/>
-
-        <label for="feedRate">سرعة التغذية (مم/دقيقة)</label>
-        <input id="feedRate" type="number" value="800" min="10" max="5000"/>
-        <label for="safeZ">ارتفاع الأمان (مم)</label>
-        <input id="safeZ" type="number" value="5" step="0.1" min="0" max="100"/>
-
-        <label for="scanDir">اتجاه المسارات (Raster)</label>
-        <select id="scanDir">
-          <option value="x">أفقي (X)</option>
-          <option value="y">رأسي (Y)</option>
-        </select>
-
-        <label for="stepOver">خطوة المسح (مم)</label>
-        <input id="stepOver" type="number" value="5" step="0.1" min="0.1" max="50"/>
-        <label for="maxDepth">أقصى عمق (مم)</label>
-        <input id="maxDepth" type="number" value="3.0" step="0.1" min="0.1" max="50"/>
-
-        <!-- NEW: Fixed Z + Invert Z -->
-        <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
-          <label style="font-weight:normal;"><input id="fixedZ" type="checkbox" /> استخدام Z ثابت</label>
-          <input id="fixedZValue" type="number" value="-1.0" step="0.1" style="width:120px" />
-        </div>
-        <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
-          <label style="font-weight:normal;"><input id="invertZ" type="checkbox" /> عكس Z</label>
-          <div style="flex:1"></div>
-          <label style="font-weight:normal;color:#9bb0c8">لون الخشب:</label>
-          <select id="woodColor" style="width:140px">
-            <option value="#deb887">خشب فاتح</option>
-            <option value="#a0522d" selected>خشب متوسط</option>
-            <option value="#d2b48c">بيج</option>
-            <option value="#8b5a2b">ماهوجني</option>
-          </select>
+        <div id="laserSettings" class="laser-block" style="display:none">
+          <label>قوة الليزر (مرجعية)</label>
+          <input id="laserPower" type="number" value="60" min="1" max="100">
+          <label>دقة النقش (DPI)</label>
+          <input id="laserDpi" type="number" value="300" min="50" max="2400">
+          <label>مقياس التعرض</label>
+          <input id="laserExposureScale" type="range" min="0.1" max="3" step="0.1" value="1">
         </div>
 
-        <!-- Optimization controls (prototype) -->
-        <div class="opt-controls">
-          <label><input id="optPath" type="checkbox"> Optimize Path (Contour)</label>
-          <label><input id="optDynamicFeed" type="checkbox"> Dynamic Feed (Depth based)</label>
-          <label title="مسافة القرب بالملم لتجنب الرفع">Proximity(mm): <input id="optProximity" type="number" value="10" min="0" step="1" style="width:80px"/></label>
+        <div class="btn-row">
+          <button id="btnGen" class="primary">⚡ توليد G-code</button>
+          <button id="btnDownload" class="secondary">💾 تحميل G-code</button>
         </div>
 
-        <div class="button-group">
-          <div class="button-row">
-            <button id="btnGen" class="primary">⚡ توليد G-code (Raster)</button>
-            <button id="btnQuick" class="secondary">🧪 اختبار سريع</button>
-          </div>
+        <div id="estTime" style="margin-top:12px;color:#9bb0c8;text-align:center;padding:8px;background:#072a30;border-radius:6px"></div>
 
-          <div style="margin-top:8px">
-            <label for="contourMode">نطاق الحواف (Contour)</label>
-            <select id="contourMode">
-              <option value="outer">الخارجية فقط</option>
-              <option value="all">كل الحواف</option>
-            </select>
-            <div style="height:8px"></div>
-            <div class="button-row">
-              <button id="btnContour" class="secondary">🌀 توليد G-code (Contour)</button>
-              <button id="btnDownload" class="secondary">💾 تحميل G-code</button>
-            </div>
-          </div>
-        </div>
-
-        <div id="estTime" style="margin-top:12px;color:#9bb0c8;text-align:center;padding:8px;background:#0f172a;border-radius:6px"></div>
-
-        <label for="gcodeOut" style="margin-top:12px">📄 مخرجات G-code</label>
-        <textarea id="gcodeOut" readonly placeholder="سيظهر G-code هنا بعد التوليد..." style="height:180px;background:#021024;color:#cfeaf2;border-radius:8px;padding:10px;"></textarea>
-
+        <label style="margin-top:12px">📄 مخرجات G-code</label>
+        <textarea id="gcodeOut" readonly style="height:200px;background:#021024;color:#cfeaf2;border-radius:8px;padding:10px"></textarea>
+        <div class="meta-small" style="margin-top:8px">الحفظ: احفظ الملف قبل تشغيله على ماكينة الفعلية وتحقق من إعدادات الأمان.</div>
       </div>
     </div>
-  </div>
 
-  <!-- Debug Overlay -->
-  <div id="debugOverlay" aria-live="polite" role="status">
-    <div id="debugHeader">
-      <div><b>Debug</b> — Console</div>
-      <div id="debugControls">
-        <button id="dbgToggleSize" class="dbg-btn" title="تصغير/تكبير">🔽</button>
-        <button id="dbgCopy" class="dbg-btn" title="نسخ السجل">📋 نسخ</button>
-        <button id="dbgClear" class="dbg-btn" title="مسح السجل">🧹 مسح</button>
-      </div>
-    </div>
-    <div id="debugList"></div>
-    <div id="debugFooter">
-      <div id="debugSummary">0 سجلات</div>
-      <div style="flex:1"></div>
-      <div style="font-size:12px;color:#9bb0c8">انقر التصغير لحفظ الشاشة</div>
-    </div>
+    <div id="toast"></div>
   </div>
-
-  <div id="toast"></div>
 
   <script>
-    // ================= متغيرات عامة =================
+    // ================= State =================
     let cvReady = false;
+    let previewCanvas = null;
     let grayMat = null;
     let contour = null;
-    let previewCanvas = null;
-    let additionalContours = []; // {contour, area}
-    let lastScanDir = 'x';
-    let lastGeneratedGcode = '';
-
-    // colormap current
+    let additionalContours = [];
     let currentColormap = 'jet';
+    let laserMap = null, laserMapW = 0, laserMapH = 0;
+    let machineMode = 'router';
+    let laserMapPrepared = false;
 
-    // Simulation / Three
-    let scene = null, camera = null, renderer = null, controls = null;
-    let simulation = { isPlaying: false, animationFrame: null, tool: null, toolPath: null, pathPoints: [], index: 0, speed: 1, controlsAdded: false };
-
-    // Edge detail zoom factor
-    let edgeDetailZoom = 1.0;
-    // ================= Debug overlay system =================
-    (function initDebugOverlay(){
-      const debugList = document.getElementById('debugList');
-      const dbgClear = document.getElementById('dbgClear');
-      const dbgCopy = document.getElementById('dbgCopy');
-      const dbgToggleSize = document.getElementById('dbgToggleSize');
-      const debugOverlay = document.getElementById('debugOverlay');
-      const debugSummary = document.getElementById('debugSummary');
-      const logs = [];
-
-      function formatTime(d) { return d.toISOString().slice(11, 23); }
-      function updateSummary() { debugSummary.textContent = logs.length + ' سجلات'; }
-
-      function addEntry(type, message, stack) {
-        const time = new Date();
-        const entry = { time, type, message, stack };
-        logs.push(entry);
-        updateSummary();
-
-        const div = document.createElement('div');
-        div.className = 'dbg-item ' + (type === 'error' ? 'dbg-error' : (type === 'warn' ? 'dbg-warn' : 'dbg-info'));
-        const tspan = document.createElement('span');
-        tspan.className = 'dbg-time';
-        tspan.textContent = `[${formatTime(time)}] ${type.toUpperCase()}`;
-        const msg = document.createElement('div');
-        msg.textContent = message;
-        div.appendChild(tspan);
-        div.appendChild(msg);
-        if (stack) {
-          const meta = document.createElement('div');
-          meta.className = 'dbg-meta';
-          meta.textContent = String(stack).split('\n').slice(0,3).join(' | ');
-          div.appendChild(meta);
-        }
-        debugList.prepend(div);
-      }
-
-      dbgClear.addEventListener('click', () => {
-        debugList.innerHTML = '';
-        logs.length = 0;
-        updateSummary();
-      });
-
-      dbgCopy.addEventListener('click', async () => {
-        try {
-          const text = logs.map(l => `[${l.time.toISOString()}] ${l.type.toUpperCase()}: ${l.message}\n${l.stack||''}`).join('\n\n');
-          await navigator.clipboard.writeText(text);
-          addEntry('info', 'تم نسخ السجل إلى الحافظة');
-        } catch (e) {
-          addEntry('error', 'فشل نسخ السجل: ' + (e.message || e));
-        }
-      });
-
-      dbgToggleSize.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        debugOverlay.classList.toggle('minimized');
-        dbgToggleSize.textContent = debugOverlay.classList.contains('minimized') ? '🔼' : '🔽';
-      });
-
-      debugOverlay.addEventListener('click', (ev) => {
-        if (debugOverlay.classList.contains('minimized')) {
-          debugOverlay.classList.remove('minimized');
-          dbgToggleSize.textContent = '🔽';
-        }
-      });
-
-      // override console methods
-      const _log = console.log, _warn = console.warn, _error = console.error;
-      console.log = function(...args) {
-        try { addEntry('info', args.map(a=> (typeof a==='object' ? JSON.stringify(a) : String(a))).join(' ')); } catch(e){}
-        _log.apply(console, args);
-      };
-      console.warn = function(...args) {
-        try { addEntry('warn', args.map(a=> (typeof a==='object' ? JSON.stringify(a) : String(a))).join(' '), new Error().stack); } catch(e){}
-        _warn.apply(console, args);
-      };
-      console.error = function(...args) {
-        try { addEntry('error', args.map(a=> (typeof a==='object' ? JSON.stringify(a) : String(a))).join(' '), new Error().stack); } catch(e){}
-        _error.apply(console, args);
-      };
-
-      window.addEventListener('error', function(ev){
-        try { addEntry('error', ev.message + ' (' + ev.filename + ':' + ev.lineno + ')', ev.error && ev.error.stack ? ev.error.stack : ev.filename + ':' + ev.lineno); } catch(e){}
-      });
-
-      window.addEventListener('unhandledrejection', function(ev){
-        try { addEntry('error', 'UnhandledRejection: ' + (ev.reason && ev.reason.message ? ev.reason.message : String(ev.reason)), ev.reason && ev.reason.stack ? ev.reason.stack : ''); } catch(e){}
-      });
-
-      window.debugLog = function(msg) { try { addEntry('info', msg); } catch(e){} };
-    })();
-
-    // ================= Helper UI funcs =================
-    function showToast(msg, ms = 3000) {
+    // ================= UI helpers =================
+    function showToast(txt, ms = 2200) {
       const t = document.getElementById('toast');
-      t.textContent = msg;
-      t.style.display = 'block';
-      clearTimeout(t._t);
-      t._t = setTimeout(() => t.style.display = 'none', ms);
-      try { console.log(msg); } catch (e) {}
+      t.textContent = txt; t.style.display = 'block';
+      clearTimeout(t._t); t._t = setTimeout(()=> t.style.display = 'none', ms);
+      console.log('[toast]', txt);
     }
 
-    function cmToMm(cm) { return cm * 10; }
-    function mmToCm(mm) { return mm / 10; }
-
-    function updateDimensionDisplay() {
-      const widthCm = parseFloat(document.getElementById('workWidth').value) || 0;
-      const heightCm = parseFloat(document.getElementById('workHeight').value) || 0;
-      document.getElementById('widthMm').textContent = cmToMm(widthCm).toFixed(1) + ' مم';
-      document.getElementById('heightMm').textContent = cmToMm(heightCm).toFixed(1) + ' مم';
-    }
-
-    function showElement(elementId, hidePlaceholderId) {
-      const element = document.getElementById(elementId);
-      const placeholder = document.getElementById(hidePlaceholderId);
-      if (element && placeholder) {
-        element.style.display = 'block';
-        placeholder.style.display = 'none';
-      }
-    }
-
-    // ================= OpenCV readiness =================
-    function waitForCv() {
+    // Wait for OpenCV
+    (function waitForCv(){
       if (typeof cv !== 'undefined' && cv.getBuildInformation) {
         cvReady = true;
         document.getElementById('cvState').innerHTML = '✅ OpenCV جاهز';
-        showToast('تم تحميل OpenCV بنجاح', 1200);
+        showToast('تم تحميل OpenCV');
       } else {
-        setTimeout(waitForCv, 100);
+        setTimeout(waitForCv, 120);
       }
-    }
-    waitForCv();
+    })();
 
-    // ================= Clean Mats =================
-    function cleanupMats() {
-      try {
-        if (grayMat && !grayMat.isDeleted) { grayMat.delete(); grayMat = null; }
-      } catch (e) { console.warn('cleanup grayMat', e); }
-      try {
-        if (contour && !contour.isDeleted && contour.delete) {
-          contour.delete();
-          contour = null;
-        }
-      } catch (e) { console.warn('cleanup contour', e); }
-      try {
-        additionalContours.forEach(item => {
-          if (item && item.contour && !item.contour.isDeleted) {
-            item.contour.delete();
-          }
-        });
-      } catch (e) { console.warn('cleanup additionalContours', e); }
-      additionalContours = [];
-    }
+    // ================= Utilities =================
+    function cmToMm(cm){ return (parseFloat(cm)||0) * 10; }
+    function clamp(v,a=0,b=1){ return Math.max(a, Math.min(b, v)); }
 
-    // ================= Tabs behavior =================
-    document.querySelectorAll('.tab-buttons button').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.tab-buttons button').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+    // ================= Tabs =================
+    document.querySelectorAll('.tab-buttons button').forEach(btn=>{
+      btn.addEventListener('click', ()=> {
+        document.querySelectorAll('.tab-buttons button').forEach(b=>b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
         btn.classList.add('active');
         document.getElementById(btn.dataset.tab).classList.add('active');
-
-        if (btn.dataset.tab === 'simulation' && document.getElementById('gcodeOut').value) {
-          initSimulation();
-        }
       });
     });
 
-    // ================= Load image =================
-    document.getElementById('fileInput').addEventListener('change', async function (e) {
-      const file = e.target.files[0];
-      if (!file) return;
-      if (!file.type.match('image.*')) {
-        showToast('الرجاء اختيار ملف صورة فقط');
-        return;
-      }
-      try {
-        cleanupMats();
-        disposeThree();
+    // ================= Machine mode handling =================
+    const machineSelect = document.getElementById('machineType');
+    machineSelect.addEventListener('change', ()=> applyMachineMode());
 
-        const img = new Image();
-        img.src = URL.createObjectURL(file);
-        await img.decode();
-
-        previewCanvas = document.getElementById('canvasOriginal');
-        const ctx = previewCanvas.getContext('2d');
-
-        const maxPixels = 1024 * 1024; // 1MP for preview canvas
-        let w = img.width, h = img.height;
-        const currentPixels = w * h;
-        if (currentPixels > maxPixels) {
-          const ratio = Math.sqrt(maxPixels / currentPixels);
-          w = Math.floor(w * ratio);
-          h = Math.floor(h * ratio);
-          showToast('تم تحسين حجم الصورة للأداء الأفضل');
-        }
-
-        previewCanvas.width = w;
-        previewCanvas.height = h;
-        ctx.drawImage(img, 0, 0, w, h);
-        showElement('canvasOriginal', 'originalPlaceholder');
-
-        if (cvReady) {
-          await detectContours(); // initial detection
-        } else {
-          showToast('في انتظار OpenCV...');
-          setTimeout(async () => { if (cvReady) await detectContours(); }, 800);
-        }
-      } catch (error) {
-        console.error('image load error', error);
-        showToast('فشل في تحميل الصورة');
-      }
-    });
-
-    // ================= Image preprocessing helpers =================
-    function contrastStretchMat(srcMat) {
-      // simple contrast stretch: new = (src - min) * (255/(max-min))
-      try {
-        const dst = new cv.Mat();
-        const minMax = cv.minMaxLoc(srcMat);
-        let minVal = minMax.minVal, maxVal = minMax.maxVal;
-        if (maxVal <= minVal) { srcMat.copyTo(dst); return dst; }
-        const alpha = 255.0 / (maxVal - minVal);
-        const beta = -minVal * alpha;
-        srcMat.convertTo(dst, cv.CV_8U, alpha, beta);
-        return dst;
-      } catch (e) {
-        console.warn('contrastStretchMat error', e);
-        const fallback = new cv.Mat();
-        srcMat.copyTo(fallback);
-        return fallback;
-      }
+    function clearPreviews() {
+      // hide canvases and clear maps to avoid cross-mode contamination
+      ['canvasHeatmap','canvasContour','canvasEdgeDetail','canvasLaserDetail','canvasOriginal'].forEach(id=>{
+        const el=document.getElementById(id); if(el) el.style.display='none';
+      });
+      laserMap = null; laserMapW = laserMapH = 0; laserMapPrepared = false;
+      // clear top view
+      const top = document.getElementById('topView'); if(top){ const ctx=top.getContext('2d'); ctx.clearRect(0,0,top.width,top.height); }
+      document.getElementById('gcodeOut').value = '';
+      document.getElementById('estTime').innerText = '';
     }
 
-    // ================= Edge detection & contours (live + sensitivity) =================
-    async function detectContours(useAdaptive=false) {
-      if (!cvReady) {
-        showToast('OpenCV غير جاهز بعد');
-        return;
-      }
+    function applyMachineMode(){
+      // clear previews to avoid confusion
+      clearPreviews();
+      machineMode = machineSelect.value;
+      document.getElementById('laserSettings').style.display = (machineMode === 'laser') ? 'block' : 'none';
+      document.getElementById('routerSettings').style.display = (machineMode === 'router') ? 'block' : 'none';
+      showToast('الوضع: ' + (machineMode === 'laser' ? 'Laser Engraving' : 'CNC Router'), 1000);
+    }
+    applyMachineMode();
+
+    // ================= File load =================
+    document.getElementById('fileInput').addEventListener('change', async (e) => {
+      const f = e.target.files[0]; if(!f) return;
+      if(!f.type.match('image.*')) { showToast('الرجاء اختيار ملف صورة'); return; }
+      try {
+        cleanupMats();
+        const img = new Image();
+        img.src = URL.createObjectURL(f);
+        await img.decode();
+        previewCanvas = document.getElementById('canvasOriginal');
+        const ctx = previewCanvas.getContext('2d');
+        const maxPixels = 1024*1024;
+        let w = img.width, h = img.height;
+        if (w*h > maxPixels) { const ratio = Math.sqrt(maxPixels/(w*h)); w = Math.floor(w*ratio); h = Math.floor(h*ratio); showToast('تم تقليل دقة المعاينة للأداء'); }
+        previewCanvas.width = w; previewCanvas.height = h;
+        ctx.drawImage(img, 0, 0, w, h);
+        document.getElementById('originalPlaceholder').style.display = 'none';
+        previewCanvas.style.display = 'block';
+        if (cvReady) await detectContours(); else showToast('في انتظار OpenCV...');
+      } catch(err) { console.error(err); showToast('خطأ في تحميل الصورة'); }
+    });
+
+    // ================= Cleanup =================
+    function cleanupMats(){
+      try{ if(grayMat && !grayMat.isDeleted){ grayMat.delete(); grayMat = null; } } catch(e){}
+      try{ if(contour && !contour.isDeleted && contour.delete){ contour.delete(); contour = null; } } catch(e){}
+      try{ additionalContours.forEach(c=>{ if(c.contour && !c.contour.isDeleted) c.contour.delete(); }); } catch(e){}
+      additionalContours = [];
+      laserMap = null; laserMapW = laserMapH = 0; laserMapPrepared = false;
+    }
+
+    // ================= Image helpers =================
+    function contrastStretchMat(src) {
+      try {
+        const dst = new cv.Mat();
+        const mm = cv.minMaxLoc(src);
+        const minV = mm.minVal, maxV = mm.maxVal;
+        if (maxV <= minV) { src.copyTo(dst); return dst; }
+        const alpha = 255.0 / (maxV - minV); const beta = -minV * alpha;
+        src.convertTo(dst, cv.CV_8U, alpha, beta);
+        return dst;
+      } catch(e) { console.warn('contrastStretch error', e); const d = new cv.Mat(); src.copyTo(d); return d; }
+    }
+
+    // ================= Edge detection & contours =================
+    async function detectContours() {
+      if (!cvReady || !previewCanvas) return;
       try {
         const src = cv.imread(previewCanvas);
-        const gray = new cv.Mat();
-        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-
-        // contrast stretch for better edges
+        const gray = new cv.Mat(); cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
         const stretched = contrastStretchMat(gray);
+        const blurred = new cv.Mat(); cv.GaussianBlur(stretched, blurred, new cv.Size(5,5), 0);
 
-        const blurred = new cv.Mat();
-        cv.GaussianBlur(stretched, blurred, new cv.Size(5, 5), 0);
-
-        // pick edge mode
-        const mode = document.getElementById('edgeMode').value || 'auto';
-        // sensitivity
         const sens = parseFloat(document.getElementById('edgeSensitivity').value) || 0.33;
-
-        // thresholds computed from median
         const median = cv.mean(blurred)[0];
-        const lowerThreshold = Math.max(0, (1.0 - sens) * median);
-        const upperThreshold = Math.min(255, (1.0 + sens) * median);
+        const low = Math.max(0, (1.0 - sens) * median);
+        const high = Math.min(255, (1.0 + sens) * median);
+
+        const mode = document.getElementById('edgeMode').value || 'auto';
+        const useAdaptive = document.getElementById('edgeAdaptive').checked;
 
         let edges = new cv.Mat();
-        if (useAdaptive || document.getElementById('edgeAdaptive') && document.getElementById('edgeAdaptive').checked) {
-          // Adaptive threshold branch for Edge Detail heavy mode
+        if (useAdaptive) {
           try {
+            const tmpStr = contrastStretchMat(gray);
             const adapt = new cv.Mat();
-            cv.adaptiveThreshold(stretched, adapt, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
-            cv.Canny(blurred, edges, lowerThreshold * 0.7, upperThreshold * 1.1);
-            // combine adapt and edges
+            cv.adaptiveThreshold(tmpStr, adapt, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
+            cv.Canny(blurred, edges, low*0.7, high*1.1);
             cv.bitwise_or(edges, adapt, edges);
-            adapt.delete();
-          } catch(e){
-            cv.Canny(blurred, edges, lowerThreshold, upperThreshold);
+            adapt.delete(); tmpStr.delete();
+          } catch(e) {
+            cv.Canny(blurred, edges, low, high);
           }
         } else {
           if (mode === 'sobel') {
-            const gradX = new cv.Mat(), gradY = new cv.Mat();
-            cv.Sobel(blurred, gradX, cv.CV_16S, 1, 0, 3, 1, 0, cv.BORDER_DEFAULT);
-            cv.Sobel(blurred, gradY, cv.CV_16S, 0, 1, 3, 1, 0, cv.BORDER_DEFAULT);
-            cv.convertScaleAbs(gradX, gradX);
-            cv.convertScaleAbs(gradY, gradY);
-            cv.addWeighted(gradX, 0.5, gradY, 0.5, 0, edges);
-            gradX.delete(); gradY.delete();
+            const gx = new cv.Mat(), gy = new cv.Mat();
+            cv.Sobel(blurred, gx, cv.CV_16S, 1, 0);
+            cv.Sobel(blurred, gy, cv.CV_16S, 0, 1);
+            cv.convertScaleAbs(gx, gx); cv.convertScaleAbs(gy, gy);
+            cv.addWeighted(gx, 0.5, gy, 0.5, 0, edges);
+            gx.delete(); gy.delete();
           } else if (mode === 'laplace') {
-            cv.Laplacian(blurred, edges, cv.CV_16S, 3, 1, 0, cv.BORDER_DEFAULT);
+            cv.Laplacian(blurred, edges, cv.CV_16S);
             cv.convertScaleAbs(edges, edges);
           } else {
-            cv.Canny(blurred, edges, lowerThreshold, upperThreshold);
+            cv.Canny(blurred, edges, low, high);
           }
         }
 
-        // morphological cleaning
-        const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
+        const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3,3));
         cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel);
         cv.morphologyEx(edges, edges, cv.MORPH_OPEN, kernel);
 
-        // find contours
-        const contours = new cv.MatVector();
-        const hierarchy = new cv.Mat();
+        const contours = new cv.MatVector(), hierarchy = new cv.Mat();
         cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
 
-        const minArea = (gray.cols * gray.rows) * 0.001; // more sensitive for laser (0.1%)
-        const validContours = [];
-        for (let i = 0; i < contours.size(); i++) {
+        const minArea = (stretched.cols * stretched.rows) * 0.001;
+        const valid = [];
+        for (let i=0;i<contours.size();i++){
           const cnt = contours.get(i);
           const area = cv.contourArea(cnt);
-          if (area > minArea) {
-            validContours.push({ contour: cnt, area });
-          } else {
-            try { cnt.delete(); } catch (e) {}
-          }
+          if (area > minArea) valid.push({contour:cnt, area});
+          else try{ cnt.delete(); } catch(e){}
         }
 
-        if (validContours.length > 0) {
-          validContours.sort((a,b)=> b.area - a.area);
-          contour = validContours[0].contour;
-          additionalContours = validContours.slice(1).map(v => ({ contour: v.contour, area: v.area }));
-          showToast(`تم كشف ${validContours.length} كونتور`);
+        if (valid.length > 0) {
+          valid.sort((a,b)=>b.area - a.area);
+          contour = valid[0].contour;
+          additionalContours = valid.slice(1).map(v=>({contour:v.contour, area:v.area}));
+          showToast('تم كشف ' + valid.length + ' كونتور');
         } else {
-          showToast('لم يتم العثور على حواف واضحة في الصورة');
-          src.delete(); stretched.delete(); blurred.delete(); edges.delete(); hierarchy.delete(); contours.delete(); kernel.delete();
-          gray.delete();
-          return;
+          contour = null; additionalContours = []; showToast('لم يتم العثور على حواف كافية');
         }
 
-        if (grayMat) { try { grayMat.delete(); } catch(e){} }
-        grayMat = stretched.clone(); // use stretched for heatmap depth mapping
+        if (grayMat) try{ grayMat.delete(); } catch(e){}
+        grayMat = stretched.clone();
 
-        // render visuals
+        // render previews
         renderHeatmap();
-        renderContour(grayMat, contour);
-        renderEdgeDetailView(); // update Edge Detail tab if open
+        renderContour();
+        renderEdgeDetail();
+        renderLaserMapPreview();
 
-        // cleanup temporaries
-        src.delete(); blurred.delete(); edges.delete(); hierarchy.delete(); contours.delete(); kernel.delete();
-        gray.delete(); stretched.delete();
-      } catch (err) {
+        // cleanup
+        src.delete(); gray.delete(); blurred.delete(); edges.delete(); kernel.delete(); contours.delete(); hierarchy.delete(); stretched.delete();
+      } catch(err) {
         console.error('detectContours error', err);
-        showToast('فشل في تحليل الصورة');
+        showToast('خطأ في كشف الحواف');
       }
     }
 
-    // live update when edge mode or sensitivity changed
-    document.getElementById('edgeMode').addEventListener('change', () => {
-      if (!previewCanvas) return;
-      if (cvReady && previewCanvas && previewCanvas.width > 0) detectContours();
-    });
-    document.getElementById('edgeSensitivity').addEventListener('input', (e) => {
-      document.getElementById('edgeValue').textContent = parseFloat(e.target.value).toFixed(2);
-      if (!previewCanvas) return;
-      if (cvReady && previewCanvas && previewCanvas.width > 0) detectContours();
-    });
-
-    // Edge Detail controls
-    document.getElementById('edgeReAnalyze').addEventListener('click', () => {
-      detectContours(true);
-    });
-    document.getElementById('edgeContrast').addEventListener('click', () => {
-      // re-run detection with explicit contrast stretching
-      detectContours(document.getElementById('edgeAdaptive').checked);
-      showToast('تم تحسين التباين وإعادة التحليل');
-    });
-    document.getElementById('edgeViewMode').addEventListener('change', () => {
-      renderEdgeDetailView();
-    });
-    document.getElementById('edgeZoomIn').addEventListener('click', () => { edgeDetailZoom = Math.min(4, edgeDetailZoom * 1.25); renderEdgeDetailView(); });
-    document.getElementById('edgeZoomOut').addEventListener('click', () => { edgeDetailZoom = Math.max(0.25, edgeDetailZoom / 1.25); renderEdgeDetailView(); });
-
-    // ================= Colormap utilities =================
-    function clamp(v, a=0, b=1){ return Math.max(a, Math.min(b, v)); }
+    // ================= Colormap =================
     function getColormapColor(t, map) {
       t = clamp(t);
       if (map === 'hot') {
-        if (t < 0.33) return { r: Math.round(t/0.33*128), g: 0, b: 0 };
-        if (t < 0.66) return { r: Math.round(128 + (t-0.33)/0.33*127), g: Math.round((t-0.33)/0.33*128), b: 0 };
-        return { r: 255, g: Math.round(128 + (t-0.66)/0.34*127), b: Math.round((t-0.66)/0.34*127) };
+        if (t < 0.33) return {r: Math.round(t/0.33*128), g:0, b:0};
+        if (t < 0.66) return {r: Math.round(128 + (t-0.33)/0.33*127), g: Math.round((t-0.33)/0.33*128), b:0};
+        return { r:255, g: Math.round(128 + (t-0.66)/0.34*127), b: Math.round((t-0.66)/0.34*127) };
       } else if (map === 'cool') {
-        return { r: Math.round(255 * t), g: Math.round(255 * (1 - t)), b: 255 };
+        return { r: Math.round(255*t), g: Math.round(255*(1-t)), b:255 };
       } else if (map === 'gray') {
-        const v = Math.round(255 * t);
-        return { r: v, g: v, b: v };
+        const v = Math.round(255*t); return { r:v,g:v,b:v };
       } else {
         const r = Math.round(255 * clamp(1.5 - Math.abs(1.0 - 4.0*(t-0.5)), 0, 1));
         const g = Math.round(255 * clamp(1.5 - Math.abs(0.5 - 4.0*(t-0.25)), 0, 1));
@@ -743,998 +402,285 @@
       }
     }
 
-    function hexToRgb(hex) {
-      if (!hex) return { r:160, g:82, b:45 };
-      const h = hex.replace('#','');
-      const hh = (h.length===3) ? h.split('').map(c=>c+c).join('') : h;
-      const bigint = parseInt(hh, 16);
-      return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
-    }
-    function mixColors(c1, c2, t) {
-      return {
-        r: Math.round(c1.r * (1 - t) + c2.r * t),
-        g: Math.round(c1.g * (1 - t) + c2.g * t),
-        b: Math.round(c1.b * (1 - t) + c2.b * t)
-      };
-    }
-
-    // ================= Rendering heatmap & contour (colormaps) =================
+    // ================= Rendering previews =================
     function renderHeatmap() {
       if (!grayMat || !previewCanvas) return;
-      const heatCanvas = document.getElementById('canvasHeatmap');
-      const ctx = heatCanvas.getContext('2d');
-      heatCanvas.width = grayMat.cols;
-      heatCanvas.height = grayMat.rows;
-      const imgData = ctx.createImageData(heatCanvas.width, heatCanvas.height);
+      const c = document.getElementById('canvasHeatmap'), ctx = c.getContext('2d');
+      c.width = grayMat.cols; c.height = grayMat.rows;
+      const img = ctx.createImageData(c.width, c.height);
       const data = grayMat.data;
-      for (let i = 0; i < data.length; i++) {
-        const value = data[i]; // 0..255
-        const t = value / 255.0; // normalized
-        const col = getColormapColor(t, currentColormap);
-        const idx = i * 4;
-        imgData.data[idx] = col.r;
-        imgData.data[idx + 1] = col.g;
-        imgData.data[idx + 2] = col.b;
-        imgData.data[idx + 3] = 255;
+      for (let i=0;i<data.length;i++) {
+        const v = data[i], t = v / 255.0, col = getColormapColor(t, currentColormap), idx = i*4;
+        img.data[idx] = col.r; img.data[idx+1] = col.g; img.data[idx+2] = col.b; img.data[idx+3] = 255;
       }
-      ctx.putImageData(imgData, 0, 0);
-      showElement('canvasHeatmap', 'heatmapPlaceholder');
-
-      // also update contour view (overlay)
-      try {
-        if (contour) renderContour(grayMat, contour);
-      } catch(e){}
-      // update top view if G-code exists
-      if (lastGeneratedGcode) renderTopViewFromGcode();
+      ctx.putImageData(img, 0, 0);
+      document.getElementById('heatmapPlaceholder').style.display = 'none';
+      c.style.display = 'block';
     }
 
-    function renderContour(gray, mainContour) {
-      const contourCanvas = document.getElementById('canvasContour');
-      const ctx = contourCanvas.getContext('2d');
-      contourCanvas.width = gray.cols;
-      contourCanvas.height = gray.rows;
-      const heatCanvas = document.getElementById('canvasHeatmap');
-      try { ctx.drawImage(heatCanvas, 0, 0); } catch(e) { ctx.fillStyle='#222'; ctx.fillRect(0,0,contourCanvas.width,contourCanvas.height); }
-      if (mainContour) {
-        ctx.strokeStyle = '#00ff00';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        const data = mainContour.data32S;
-        for (let i = 0; i < data.length; i += 2) {
-          const x = data[i], y = data[i + 1];
-          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-        }
-        ctx.closePath();
-        ctx.stroke();
+    function renderContour() {
+      if (!grayMat) return;
+      const c = document.getElementById('canvasContour'), ctx = c.getContext('2d');
+      c.width = grayMat.cols; c.height = grayMat.rows;
+      try { ctx.drawImage(document.getElementById('canvasHeatmap'), 0, 0); } catch(e) { ctx.fillStyle='#111'; ctx.fillRect(0,0,c.width,c.height); }
+      if (contour) {
+        ctx.strokeStyle = '#00ff88'; ctx.lineWidth = 2; ctx.beginPath();
+        const d = contour.data32S;
+        for (let i=0;i<d.length;i+=2) { const x=d[i], y=d[i+1]; if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }
+        ctx.closePath(); ctx.stroke();
       }
-      ctx.strokeStyle = '#ffff00';
-      ctx.lineWidth = 1;
-      additionalContours.forEach(ci => {
-        try {
-          const cnt = ci.contour;
-          ctx.beginPath();
-          const d = cnt.data32S;
-          for (let i = 0; i < d.length; i += 2) {
-            const x = d[i], y = d[i+1];
-            if (i === 0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-          }
-          ctx.closePath();
-          ctx.stroke();
-        } catch(e) { console.warn('renderContour extra error', e); }
+      additionalContours.forEach(ci=>{
+        try{
+          ctx.strokeStyle = '#ffd24d'; ctx.lineWidth = 1; ctx.beginPath();
+          const d = ci.contour.data32S;
+          for (let i=0;i<d.length;i+=2) { if(i===0) ctx.moveTo(d[i],d[i+1]); else ctx.lineTo(d[i],d[i+1]); }
+          ctx.closePath(); ctx.stroke();
+        } catch(e){}
       });
-      showElement('canvasContour', 'contourPlaceholder');
+      document.getElementById('contourPlaceholder').style.display='none';
+      c.style.display='block';
     }
 
-    // ================= Edge Detail rendering =================
-    function renderEdgeDetailView() {
-      const mode = document.getElementById('edgeViewMode').value || 'filtered';
-      const canvas = document.getElementById('canvasEdgeDetail');
-      const placeholder = document.getElementById('edgeDetailPlaceholder');
-      if (!grayMat || !previewCanvas) {
-        placeholder.style.display = 'flex';
-        canvas.style.display = 'none';
-        return;
-      }
-      canvas.style.display = 'block';
-      placeholder.style.display = 'none';
-
-      // create temp mats for display depending on mode
-      const gw = grayMat.cols, gh = grayMat.rows;
+    function renderEdgeDetail() {
+      const canvas = document.getElementById('canvasEdgeDetail'), ph = document.getElementById('edgeDetailPlaceholder');
+      if(!grayMat || !previewCanvas){ ph.style.display='flex'; canvas.style.display='none'; return; }
+      ph.style.display='none'; canvas.style.display='block';
       const tmp = new cv.Mat();
       try {
-        if (mode === 'raw') {
-          // show raw edges (re-run Canny but minimal post)
-          cv.Canny(grayMat, tmp, 50, 150);
-        } else if (mode === 'filtered') {
-          // filtered edges: adaptive threshold + morphological cleaning
+        const useAdaptive = document.getElementById('edgeAdaptive').checked;
+        if (useAdaptive) {
           const stretched = contrastStretchMat(grayMat);
-          const blurred = new cv.Mat();
-          cv.GaussianBlur(stretched, blurred, new cv.Size(3,3), 0);
           const adapt = new cv.Mat();
           cv.adaptiveThreshold(stretched, adapt, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
-          cv.Canny(blurred, tmp, 40, 120);
+          cv.Canny(stretched, tmp, 40, 120);
           cv.bitwise_and(tmp, adapt, tmp);
-          cv.morphologyEx(tmp, tmp, cv.MORPH_OPEN, cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(2,2)));
-          blurred.delete(); adapt.delete(); stretched.delete();
-        } else if (mode === 'depth') {
-          // create a depth-like map from edge strength: use Sobel magnitude
-          const gradX = new cv.Mat(), gradY = new cv.Mat();
-          cv.Sobel(grayMat, gradX, cv.CV_16S, 1, 0, 3);
-          cv.Sobel(grayMat, gradY, cv.CV_16S, 0, 1, 3);
-          const absX = new cv.Mat(), absY = new cv.Mat();
-          cv.convertScaleAbs(gradX, absX);
-          cv.convertScaleAbs(gradY, absY);
-          cv.addWeighted(absX, 0.5, absY, 0.5, 0, tmp);
-          gradX.delete(); gradY.delete(); absX.delete(); absY.delete();
+          adapt.delete(); stretched.delete();
+        } else {
+          cv.Canny(grayMat, tmp, 50, 150);
         }
-
-        // now draw tmp into canvas with zoom and colormap blending for visibility
-        const ctx = canvas.getContext('2d');
-        const z = edgeDetailZoom;
-        const w = Math.max(1, Math.floor(previewCanvas.width * z));
-        const h = Math.max(1, Math.floor(previewCanvas.height * z));
-        canvas.width = w;
-        canvas.height = h;
-
-        const imgData = ctx.createImageData(w, h);
-        // sample tmp (tmp is same size as grayMat)
+        const w = tmp.cols, h = tmp.rows; canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d'); const img = ctx.createImageData(w,h);
         for (let y=0;y<h;y++){
           for (let x=0;x<w;x++){
-            const sx = Math.floor(x / z);
-            const sy = Math.floor(y / z);
-            let v = 0;
-            try { v = tmp.ucharPtr(sy, sx)[0]; } catch(e){ v = 0; }
-            // use heat colormap to highlight edges
-            const t = v / 255.0;
-            const col = getColormapColor(t, currentColormap);
-            const idx = (y*w + x)*4;
-            imgData.data[idx] = col.r;
-            imgData.data[idx+1] = col.g;
-            imgData.data[idx+2] = col.b;
-            imgData.data[idx+3] = 255;
+            const v = tmp.ucharPtr(y,x)[0] / 255.0, col = getColormapColor(v, currentColormap), idx = (y*w + x)*4;
+            img.data[idx] = col.r; img.data[idx+1] = col.g; img.data[idx+2] = col.b; img.data[idx+3] = 255;
           }
         }
-        ctx.putImageData(imgData, 0, 0);
-      } catch (e) {
-        console.error('renderEdgeDetailView error', e);
-      } finally {
-        try { tmp.delete(); } catch(e){}
-      }
+        ctx.putImageData(img,0,0);
+      } catch(e){ console.warn('renderEdgeDetail', e); }
+      finally { try{ tmp.delete(); } catch(e){} }
     }
 
-    // ================= Bilinear sampling from grayscale Mat =================
-    function sampleGrayAt(x, y) {
-      if (!grayMat || !previewCanvas) return 128;
-      const gw = grayMat.cols, gh = grayMat.rows;
-      const gx_f = (x / previewCanvas.width) * (gw - 1);
-      const gy_f = (y / previewCanvas.height) * (gh - 1);
-      const x0 = Math.floor(gx_f), y0 = Math.floor(gy_f);
-      const x1 = Math.min(gw - 1, x0 + 1), y1 = Math.min(gh - 1, y0 + 1);
-      const sx = gx_f - x0, sy = gy_f - y0;
-      const v00 = grayMat.data[y0 * gw + x0];
-      const v10 = grayMat.data[y0 * gw + x1];
-      const v01 = grayMat.data[y1 * gw + x0];
-      const v11 = grayMat.data[y1 * gw + x1];
-      const v0 = v00 * (1 - sx) + v10 * sx;
-      const v1 = v01 * (1 - sx) + v11 * sx;
-      return Math.round(v0 * (1 - sy) + v1 * sy);
-    }
-
-    // ================= Raster helpers (with dynamic feed support) =================
-    function addSegmentPoints(rowPoints, startX, endX, y, scaleX, scaleY, originX, originY, maxDepth, invertZ, useFixedZ, fixedZValue) {
-      for (let x = startX; x <= endX; x += 2) {
-        const pv = sampleGrayAt(x, y);
-        let z;
-        if (useFixedZ) {
-          z = fixedZValue;
-        } else {
-          z = -((255 - pv) / 255.0) * maxDepth;
-        }
-        if (invertZ) z = -z;
-        const scaledX = (x * scaleX) + originX;
-        const scaledY = (y * scaleY) + originY;
-        rowPoints.push({ x: scaledX, y: scaledY, z, rawGray: pv });
-      }
-    }
-
-    function processRowPoints(rowPoints, lines, feed, safeZ, reverse, useDynamicFeed, maxDepth) {
-      if (rowPoints.length === 0) return;
-      if (reverse) rowPoints.reverse();
-      let avgDepth = 0;
-      if (useDynamicFeed) {
-        let sum = 0;
-        for (let p of rowPoints) sum += Math.abs(p.z || 0);
-        avgDepth = sum / rowPoints.length;
-      }
-      const feedLocal = useDynamicFeed && maxDepth > 0 ? Math.max(50, feed * (1 - (avgDepth / maxDepth) * 0.5)) : feed;
-      lines.push('G0 X' + rowPoints[0].x.toFixed(2) + ' Y' + rowPoints[0].y.toFixed(2) + ' Z' + safeZ.toFixed(2));
-      lines.push('G1 F' + feedLocal.toFixed(0));
-      for (let i = 0; i < rowPoints.length; i++) {
-        const p = rowPoints[i];
-        lines.push('G1 X' + p.x.toFixed(2) + ' Y' + p.y.toFixed(2) + ' Z' + p.z.toFixed(3));
-      }
-      lines.push('G0 Z' + safeZ.toFixed(2));
-    }
-
-    function calculateRowLength(rowPoints) {
-      let length = 0;
-      for (let i = 1; i < rowPoints.length; i++) {
-        length += Math.hypot(rowPoints[i].x - rowPoints[i-1].x, rowPoints[i].y - rowPoints[i-1].y);
-      }
-      return length;
-    }
-
-    // ================= Utility: compute centroid of contour and first point =================
-    function contourInfoToXY(cnt, scaleX, scaleY, originX, originY) {
-      const data = cnt.data32S;
-      if (!data || data.length < 2) return { start: {x:0,y:0}, centroid: {x:0,y:0} };
-      const x0 = data[0], y0 = data[1];
-      let sx=0, sy=0, n=0;
-      for (let i=0;i<data.length;i+=2){ sx+=data[i]; sy+=data[i+1]; n++; }
-      const cx = sx / n, cy = sy / n;
-      return {
-        start: { x: x0*scaleX + originX, y: y0*scaleY + originY },
-        centroid: { x: cx*scaleX + originX, y: cy*scaleY + originY }
-      };
-    }
-
-    // ================= Ordering contours (nearest-first) =================
-    function orderContoursNearest(contoursArray, scaleX, scaleY, originX, originY) {
-      const list = contoursArray.map(c=> {
-        const info = contourInfoToXY(c, scaleX, scaleY, originX, originY);
-        return { cnt: c, start: info.start, centroid: info.centroid, used:false };
-      });
-      const ordered = [];
-      if (list.length === 0) return ordered;
-      list[0].used = true;
-      ordered.push(list[0].cnt);
-      let lastPos = list[0].start;
-      for (let k=1;k<list.length;k++){
-        let bestIdx = -1, bestDist = Infinity;
-        for (let i=0;i<list.length;i++){
-          if (list[i].used) continue;
-          const dx = list[i].centroid.x - lastPos.x, dy = list[i].centroid.y - lastPos.y;
-          const d = Math.hypot(dx,dy);
-          if (d < bestDist) { bestDist = d; bestIdx = i; }
-        }
-        if (bestIdx === -1) break;
-        list[bestIdx].used = true;
-        ordered.push(list[bestIdx].cnt);
-        lastPos = list[bestIdx].start;
-      }
-      return ordered;
-    }
-
-    // ================= Generate Raster G-code =================
-    function generateRasterGcode(scaleDown = false) {
-      if (!grayMat || !contour) {
-        showToast("لا توجد صورة جاهزة للالمعالجة");
-        return "";
-      }
-      try {
-        const dir = document.getElementById('scanDir').value;
-        lastScanDir = dir;
-        const stepOver = parseFloat(document.getElementById('stepOver').value) || 5;
-        const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3;
-        const feed = parseFloat(document.getElementById('feedRate').value) || 800;
-        const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
-
-        const useFixedZ = document.getElementById('fixedZ').checked;
-        const fixedZValue = parseFloat(document.getElementById('fixedZValue').value) || -1.0;
-        const invertZ = document.getElementById('invertZ').checked;
-
-        const useDynamicFeed = document.getElementById('optDynamicFeed').checked;
-
-        const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30);
-        const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20);
-        const originX = cmToMm(parseFloat(document.getElementById('originX').value) || 0);
-        const originY = cmToMm(parseFloat(document.getElementById('originY').value) || 0);
-
-        const lines = [];
-        lines.push('G21 G90 G17');
-        lines.push('G0 Z' + safeZ.toFixed(2));
-
-        let totalLen = 0;
-        const step = scaleDown ? stepOver * 4 : stepOver;
-        const scaleX = workWidth / previewCanvas.width;
-        const scaleY = workHeight / previewCanvas.height;
-
-        if (dir === 'x') {
-          for (let y = 0; y < previewCanvas.height; y += step) {
-            const rowPoints = [];
-            let inContour = false;
-            let segmentStart = -1;
-            for (let x = 0; x < previewCanvas.width; x += 2) {
-              const pt = new cv.Point(x, y);
-              const inside = cv.pointPolygonTest(contour, pt, false) >= 0;
-              if (inside && !inContour) { segmentStart = x; inContour = true; }
-              else if (!inside && inContour) {
-                addSegmentPoints(rowPoints, segmentStart, x - 1, y, scaleX, scaleY, originX, originY, maxDepth, invertZ, useFixedZ, fixedZValue);
-                inContour = false;
+    // ================= Laser map: smoothing + preview =================
+    function generateLaserMap(smoothness=3.0) {
+      if(!grayMat || !previewCanvas) return null;
+      const w = grayMat.cols, h = grayMat.rows;
+      // base normalized depth (0..1): darker -> deeper
+      const base = new Float32Array(w*h);
+      for (let i=0;i<w*h;i++) base[i] = (255 - grayMat.data[i]) / 255.0;
+      // smoothing: iterative box blur proportional to smoothness
+      const passes = Math.max(1, Math.round(smoothness / 2));
+      let tmp = base.slice();
+      const rad = Math.max(1, Math.round(smoothness/2));
+      for (let p=0;p<passes;p++){
+        const out = new Float32Array(w*h);
+        for (let y=0;y<h;y++){
+          for (let x=0;x<w;x++){
+            let s=0,cnt=0;
+            for (let oy=-rad;oy<=rad;oy++){
+              const ny=y+oy; if(ny<0||ny>=h) continue;
+              for (let ox=-rad;ox<=rad;ox++){
+                const nx=x+ox; if(nx<0||nx>=w) continue;
+                s += tmp[ny*w + nx]; cnt++;
               }
             }
-            if (inContour) addSegmentPoints(rowPoints, segmentStart, previewCanvas.width - 1, y, scaleX, scaleY, originX, originY, maxDepth, invertZ, useFixedZ, fixedZValue);
-            if (rowPoints.length > 1) {
-              processRowPoints(rowPoints, lines, feed, safeZ, (y / step) % 2 !== 0, useDynamicFeed, maxDepth);
-              totalLen += calculateRowLength(rowPoints);
-            }
-          }
-        } else if (dir === 'y') {
-          for (let x = 0; x < previewCanvas.width; x += step) {
-            const colPoints = [];
-            let inContour = false;
-            let segmentStart = -1;
-            for (let y = 0; y < previewCanvas.height; y += 2) {
-              const pt = new cv.Point(x, y);
-              const inside = cv.pointPolygonTest(contour, pt, false) >= 0;
-              if (inside && !inContour) { segmentStart = y; inContour = true; }
-              else if (!inside && inContour) {
-                addSegmentPoints(colPoints, x, x, segmentStart, scaleX, scaleY, originX, originY, maxDepth, invertZ, useFixedZ, fixedZValue);
-                inContour = false;
-              }
-            }
-            if (inContour) addSegmentPoints(colPoints, x, x, previewCanvas.height - 1, scaleX, scaleY, originX, originY, maxDepth, invertZ, useFixedZ, fixedZValue);
-            if (colPoints.length > 1) {
-              processRowPoints(colPoints, lines, feed, safeZ, (x / step) % 2 !== 0, useDynamicFeed, maxDepth);
-              totalLen += calculateRowLength(colPoints);
-            }
+            out[y*w + x] = s / Math.max(1,cnt);
           }
         }
-
-        lines.push('M5');
-        lines.push('M30');
-
-        const timeMin = (totalLen / (feed || 1)) + ((Math.max(0, safeZ) / 50) * (totalLen / 1000));
-        document.getElementById('estTime').innerHTML = "⏱️ تقدير الوقت: " + timeMin.toFixed(1) + " دقيقة";
-
-        return lines.join('\n');
-      } catch (error) {
-        console.error('generateRasterGcode error', error);
-        showToast('فشل في توليد G-code (Raster)');
-        return "";
+        tmp = out;
       }
+      laserMap = tmp; laserMapW = w; laserMapH = h; laserMapPrepared = true;
+      return {map: tmp, w, h};
     }
 
-    // ================= Generate Contour G-code (with path optimization) =================
-    function generateContourGcode() {
-      if (!grayMat || !contour) {
-        showToast("لا توجد بيانات حواف لتوليد الكود");
-        return "";
-      }
-      try {
-        const mode = document.getElementById('contourMode').value || 'outer';
-        lastScanDir = 'contour';
-        const feed = parseFloat(document.getElementById('feedRate').value) || 800;
-        const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
-        const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3;
-
-        const useFixedZ = document.getElementById('fixedZ').checked;
-        const fixedZValue = parseFloat(document.getElementById('fixedZValue').value) || -1.0;
-        const invertZ = document.getElementById('invertZ').checked;
-
-        const useDynamicFeed = document.getElementById('optDynamicFeed').checked;
-        const useOptimizePath = document.getElementById('optPath').checked;
-        const proximity = parseFloat(document.getElementById('optProximity').value) || 10; // mm
-
-        const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30);
-        const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20);
-        const originX = cmToMm(parseFloat(document.getElementById('originX').value) || 0);
-        const originY = cmToMm(parseFloat(document.getElementById('originY').value) || 0);
-        const scaleX = workWidth / previewCanvas.width;
-        const scaleY = workHeight / previewCanvas.height;
-
-        const lines = [];
-        lines.push('G21 G90 G17');
-        lines.push('G0 Z' + safeZ.toFixed(2));
-
-        // prepare contours array
-        let contoursToUse = (mode === 'outer') ? [contour] : [contour, ...additionalContours.map(c => c.contour)];
-
-        // optional ordering optimization
-        if (useOptimizePath && contoursToUse.length > 1) {
-          try {
-            contoursToUse = orderContoursNearest(contoursToUse, scaleX, scaleY, originX, originY);
-            debugLog('Path Optimization: contours reordered (nearest-first).');
-          } catch (e) { console.warn('orderContoursNearest error', e); }
+    function renderLaserMapPreview() {
+      const res = generateLaserMap(parseFloat(document.getElementById('laserSmoothness').value) || 3.0);
+      const canvas = document.getElementById('canvasLaserDetail'), ph = document.getElementById('laserDetailPlaceholder');
+      if(!res){ ph.style.display='flex'; canvas.style.display='none'; return; }
+      ph.style.display='none'; canvas.style.display='block';
+      const w=res.w, h=res.h; canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d'); const img = ctx.createImageData(w,h);
+      for (let y=0;y<h;y++){
+        for (let x=0;x<w;x++){
+          const v = res.map[y*w + x]; const col = getColormapColor(v, currentColormap);
+          const idx = (y*w + x)*4;
+          img.data[idx] = col.r; img.data[idx+1] = col.g; img.data[idx+2] = col.b; img.data[idx+3] = 255;
         }
-
-        let totalLen = 0;
-        let currentPos = { x: originX, y: originY };
-
-        for (const cnt of contoursToUse) {
-          const data = cnt.data32S;
-          if (!data || data.length < 4) continue;
-
-          let x0 = data[0], y0 = data[1];
-          const startX = (x0 * scaleX + originX);
-          const startY = (y0 * scaleY + originY);
-
-          // compute distance to current pos
-          const distToStart = Math.hypot(startX - currentPos.x, startY - currentPos.y);
-          // travel
-          lines.push(`G0 X${startX.toFixed(2)} Y${startY.toFixed(2)} Z${safeZ.toFixed(2)}`);
-
-          // determine starting depth
-          const startGray = sampleGrayAt(x0, y0);
-          let zStart;
-          if (useFixedZ) zStart = fixedZValue;
-          else zStart = -((255 - startGray) / 255.0) * maxDepth;
-          if (invertZ) zStart = -zStart;
-
-          // compute average depth along contour for dynamic feed
-          let avgDepth = 0;
-          if (useDynamicFeed) {
-            let sum = 0, count = 0;
-            for (let i = 0; i < data.length; i += 2) {
-              const px = data[i], py = data[i+1];
-              const v = sampleGrayAt(px, py);
-              sum += ((255 - v)/255.0) * maxDepth;
-              count++;
-            }
-            avgDepth = (count>0) ? (sum / count) : 0;
-          }
-          const feedLocal = useDynamicFeed && maxDepth>0 ? Math.max(50, feed * (1 - (avgDepth / maxDepth) * 0.5)) : feed;
-
-          lines.push(`G1 F${feedLocal.toFixed(0)}`);
-          lines.push(`G1 Z${zStart.toFixed(3)}`);
-
-          for (let i = 2; i < data.length; i += 2) {
-            const x = data[i], y = data[i + 1];
-            const px = (x * scaleX + originX).toFixed(2);
-            const py = (y * scaleY + originY).toFixed(2);
-            const pv = sampleGrayAt(x, y);
-            let zVal;
-            if (useFixedZ) zVal = fixedZValue;
-            else zVal = -((255 - pv) / 255.0) * maxDepth;
-            if (invertZ) zVal = -zVal;
-            lines.push(`G1 X${px} Y${py} Z${zVal.toFixed(3)}`);
-            totalLen += Math.hypot((x*scaleX)-x0, (y*scaleY)-y0);
-            x0 = x; y0 = y;
-          }
-
-          // close loop
-          lines.push(`G1 X${startX.toFixed(2)} Y${startY.toFixed(2)} Z${zStart.toFixed(3)}`);
-          lines.push(`G0 Z${safeZ.toFixed(2)}`);
-
-          currentPos = { x: startX, y: startY };
-        }
-
-        lines.push('M5');
-        lines.push('M30');
-
-        const timeMin = totalLen / (parseFloat(document.getElementById('feedRate').value)||800);
-        document.getElementById('estTime').innerHTML = "⏱️ تقدير الوقت (Contour): " + timeMin.toFixed(1) + " دقيقة";
-
-        return lines.join('\n');
-
-      } catch (error) {
-        console.error('generateContourGcode error', error);
-        showToast('فشل في توليد G-code (Contour)');
-        return "";
       }
+      ctx.putImageData(img,0,0);
     }
 
-    // ================= Buttons =================
-    document.getElementById('btnGen').addEventListener('click', () => {
-      const gcode = generateRasterGcode(false);
-      document.getElementById('gcodeOut').value = gcode;
-      lastGeneratedGcode = gcode;
-      if (gcode) {
-        showToast("تم توليد G-code (Raster)");
-        renderTopViewFromGcode();
-        document.querySelector('.tab-buttons button[data-tab="simulation"]').click();
-        initSimulation();
+    // ================= Generate Laser G-code =================
+    function generateLaserGcode() {
+      if(!laserMapPrepared || !laserMap) { showToast('لم تُحضّر خريطة الليزر. اضغط "استخدم لخريطة الليزر"'); return ''; }
+      const w = laserMapW, h = laserMapH;
+      const workWidth = cmToMm(document.getElementById('workWidth').value || 30);
+      const workHeight = cmToMm(document.getElementById('workHeight').value || 20);
+      const scaleX = workWidth / w, scaleY = workHeight / h;
+      const exposureScale = parseFloat(document.getElementById('laserExposureScale').value) || 1.0;
+      const basePower = parseFloat(document.getElementById('laserPower').value) || 60;
+      const feed = Math.max(100, Math.round((parseFloat(document.getElementById('laserDpi').value)||300)/2));
+      const lines = [];
+      lines.push('; Laser Mode G-code (raster approximate)');
+      lines.push('G21 G90 (mm, absolute)');
+      for (let row=0; row<h; row++){
+        const y_mm = (row * scaleY);
+        const leftToRight = (row % 2 === 0);
+        const xStart = leftToRight ? 0 : w-1;
+        const xEnd = leftToRight ? w-1 : 0;
+        lines.push(`G0 X${(xStart*scaleX).toFixed(3)} Y${y_mm.toFixed(3)} F${feed}`);
+        let x = xStart;
+        while(true){
+          const intensity = laserMap[row*w + x];
+          const power = Math.round(Math.min(1000, intensity * basePower * exposureScale * 10));
+          lines.push(`M3 S${power}`);
+          lines.push(`G1 X${(x*scaleX).toFixed(3)} Y${y_mm.toFixed(3)} F${feed}`);
+          if (x === xEnd) break;
+          x = leftToRight ? x+1 : x-1;
+        }
+        lines.push('M5');
       }
-    });
+      lines.push('M5','M30');
+      showToast('تم توليد G-code للّيزر');
+      return lines.join('\n');
+    }
 
-    document.getElementById('btnQuick').addEventListener('click', () => {
-      const gcode = generateRasterGcode(true);
-      document.getElementById('gcodeOut').value = gcode;
-      lastGeneratedGcode = gcode;
-      if (gcode) {
-        showToast("تم توليد G-code سريع (Raster)");
-        renderTopViewFromGcode();
-        document.querySelector('.tab-buttons button[data-tab="simulation"]').click();
-        initSimulation();
+    // ================= Generate Router G-code =================
+    function generateRouterGcode() {
+      if(!grayMat) { showToast('لا توجد بيانات كافية للـ Router'); return ''; }
+      const w = grayMat.cols, h = grayMat.rows;
+      const workWidth = cmToMm(document.getElementById('workWidth').value || 30);
+      const workHeight = cmToMm(document.getElementById('workHeight').value || 20);
+      const scaleX = workWidth / w, scaleY = workHeight / h;
+      const step = Math.max(1, Math.round(parseFloat(document.getElementById('stepOver').value) || 5));
+      const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3.0;
+      const feed = parseFloat(document.getElementById('feedRate').value) || 800;
+      const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
+      const lines = [];
+      lines.push('; Router Raster G-code (approx)');
+      lines.push('G21 G90');
+      lines.push(`G0 Z${safeZ.toFixed(2)}`);
+      let totalLen = 0;
+      for (let y=0; y<h; y += step) {
+        const row = [];
+        for (let x=0; x<w; x += 2) {
+          const v = grayMat.data[y*w + x];
+          const z = -((255 - v)/255.0) * maxDepth;
+          row.push({x: x*scaleX, y: y*scaleY, z});
+        }
+        if (row.length === 0) continue;
+        lines.push(`G0 X${row[0].x.toFixed(2)} Y${row[0].y.toFixed(2)} Z${safeZ.toFixed(2)}`);
+        lines.push(`G1 F${feed}`);
+        for (let p of row) lines.push(`G1 X${p.x.toFixed(2)} Y${p.y.toFixed(2)} Z${p.z.toFixed(3)}`);
+        lines.push(`G0 Z${safeZ.toFixed(2)}`);
+        for (let i=1;i<row.length;i++) totalLen += Math.hypot(row[i].x-row[i-1].x, row[i].y-row[i-1].y);
       }
-    });
+      lines.push('M5','M30');
+      const avgSpeed = Math.max(10, feed);
+      const timeMin = (totalLen / avgSpeed);
+      document.getElementById('estTime').innerText = '⏱️ تقدير الوقت: ' + timeMin.toFixed(1) + ' دقيقة';
+      showToast('تم توليد G-code للـ Router');
+      return lines.join('\n');
+    }
 
-    document.getElementById('btnContour').addEventListener('click', () => {
-      const gcode = generateContourGcode();
-      document.getElementById('gcodeOut').value = gcode;
-      lastGeneratedGcode = gcode;
-      if (gcode) {
-        showToast("تم توليد G-code (Contour)");
-        renderTopViewFromGcode();
-        document.querySelector('.tab-buttons button[data-tab="simulation"]').click();
-        initSimulation();
+    // ================= Top view rendering =================
+    function renderTopViewFromGcode() {
+      const top = document.getElementById('topView'); if(!top || !previewCanvas) return;
+      const ctx = top.getContext('2d');
+      const w = previewCanvas.width, h = previewCanvas.height; top.width = w; top.height = h;
+      const img = ctx.createImageData(w,h);
+      if (machineMode === 'laser' && laserMapPrepared && laserMap) {
+        for (let y=0;y<h;y++){
+          for (let x=0;x<w;x++){
+            const v = laserMap[y*w + x] || 0;
+            const col = getColormapColor(v, currentColormap);
+            const idx = (y*w + x)*4; img.data[idx]=col.r; img.data[idx+1]=col.g; img.data[idx+2]=col.b; img.data[idx+3]=255;
+          }
+        }
+      } else if (grayMat) {
+        for (let i=0;i<grayMat.data.length;i++){
+          const t = grayMat.data[i]/255.0; const col = getColormapColor(t, currentColormap); const idx = i*4;
+          img.data[idx]=col.r; img.data[idx+1]=col.g; img.data[idx+2]=col.b; img.data[idx+3]=255;
+        }
       }
-    });
+      ctx.putImageData(img,0,0); drawTopLegend(currentColormap);
+    }
 
-    document.getElementById('btnDownload').addEventListener('click', () => {
-      const text = document.getElementById('gcodeOut').value;
-      if (!text) { showToast("لا يوجد G-code لتحميله"); return; }
+    function drawTopLegend(map) {
       try {
-        const now = new Date();
-        const dateStr = now.toISOString().slice(0, 19).replace(/[:.]/g, '-');
-        const filename = `cnc_output_${dateStr}.gcode`;
-        const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showToast(`تم تحميل الملف: ${filename}`);
-      } catch (error) {
-        console.error('file download error', error);
-        showToast('فشل في تحميل الملف');
-      }
-    });
+        const legend = document.getElementById('topLegend'); const steps = 6; const stops = [];
+        for (let i=0;i<=steps;i++){ const t = i/steps; const c = getColormapColor(t,map); stops.push(`rgb(${c.r},${c.g},${c.b}) ${Math.round((i/steps)*100)}%`); }
+        legend.style.background = `linear-gradient(90deg, ${stops.join(',')})`;
+      } catch(e){}
+    }
 
-    document.getElementById('btnCenterOrigin').addEventListener('click', () => {
-      const workWidth = parseFloat(document.getElementById('workWidth').value) || 0;
-      const workHeight = parseFloat(document.getElementById('workHeight').value) || 0;
-      document.getElementById('originX').value = (workWidth / 2).toFixed(1);
-      document.getElementById('originY').value = (workHeight / 2).toFixed(1);
-      showToast("تم توسيط نقطة الأصل");
-    });
-
-    // heatmap toolbar handlers (inside heatmap tab)
+    // ================= UI bindings =================
     document.querySelectorAll('#heatmapToolbar button[data-map]').forEach(btn=>{
       btn.addEventListener('click', ()=>{
         document.querySelectorAll('#heatmapToolbar button[data-map]').forEach(b=>b.classList.remove('active'));
         btn.classList.add('active');
         currentColormap = btn.dataset.map;
-        renderHeatmap();
-        renderTopViewFromGcode();
-        renderEdgeDetailView();
-        showToast('تم تغيير نموذج الألوان إلى ' + currentColormap);
+        renderHeatmap(); renderEdgeDetail(); renderLaserMapPreview(); renderTopViewFromGcode();
       });
     });
 
-    document.getElementById('heatZoomIn').addEventListener('click', () => {
-      // simple zoom behaviour: scale original preview canvas drawing (not image zoom for now)
-      const h = document.getElementById('canvasHeatmap');
-      if (!h) return;
-      h.style.transform = (h.style.transform === 'scale(1.25)') ? 'scale(1.5)' : 'scale(1.25)';
-    });
-    document.getElementById('heatZoomOut').addEventListener('click', () => {
-      const h = document.getElementById('canvasHeatmap');
-      if (!h) return;
-      h.style.transform = 'scale(1)';
+    document.getElementById('laserSmoothness').addEventListener('input', (e)=>{
+      document.getElementById('laserSmoothVal').innerText = parseFloat(e.target.value).toFixed(1);
+      renderLaserMapPreview();
     });
 
-    // keyboard shortcuts
-    document.addEventListener('keydown', function (e) {
-      if (e.ctrlKey || e.metaKey) {
-        switch (e.key.toLowerCase()) {
-          case 'g': e.preventDefault(); document.getElementById('btnGen').click(); break;
-          case 'r': e.preventDefault(); document.getElementById('btnQuick').click(); break;
-          case 'd': e.preventDefault(); document.getElementById('btnDownload').click(); break;
-          case '`': e.preventDefault(); document.getElementById('dbgToggleSize').click(); break;
-        }
-      }
+    document.getElementById('useLaserMap').addEventListener('click', ()=>{
+      generateLaserMap(parseFloat(document.getElementById('laserSmoothness').value) || 3.0);
+      renderLaserMapPreview();
+      showToast('تم تفعيل خريطة الليزر للاستخدام عند التوليد');
     });
 
-    // ================= Simulation 3D & Controls =================
-    function parseGcodeForSimulation(gcode) {
-      const lines = gcode.split('\n');
-      const path = [];
-      let pos = { x: 0, y: 0, z: 0 };
-      for (let line of lines) {
-        line = line.trim();
-        if (!line) continue;
-        if (line.startsWith('G0') || line.startsWith('G1')) {
-          const xm = line.match(/X([-\d.]+)/i);
-          const ym = line.match(/Y([-\d.]+)/i);
-          const zm = line.match(/Z([-\d.]+)/i);
-          if (xm) pos.x = parseFloat(xm[1]);
-          if (ym) pos.y = parseFloat(ym[1]);
-          if (zm) pos.z = parseFloat(zm[1]);
-          path.push({ x: pos.x, y: pos.y, z: pos.z });
-        }
-      }
-      return path;
-    }
-
-    function createToolPathVisualization(pathPoints, dir) {
-      if (!pathPoints || pathPoints.length < 2) return null;
-      const points = pathPoints.map(p => new THREE.Vector3(p.x / 10, -p.z, p.y / 10));
-      const geometry = new THREE.BufferGeometry().setFromPoints(points);
-      let color = 0x10b981; // x
-      if (dir === 'y') color = 0x3b82f6;
-      if (dir === 'contour') color = 0xf59e0b;
-      const material = new THREE.LineBasicMaterial({ color: color });
-      const line = new THREE.Line(geometry, material);
-      return line;
-    }
-
-    function createToolModel() {
-      const group = new THREE.Group();
-      const bodyGeom = new THREE.CylinderGeometry(0.6, 0.6, 6, 12);
-      const bodyMat = new THREE.MeshPhongMaterial({ color: 0xff4444 });
-      const body = new THREE.Mesh(bodyGeom, bodyMat);
-      body.rotation.x = Math.PI / 2;
-      group.add(body);
-      const tipGeom = new THREE.ConeGeometry(0.8, 2.5, 12);
-      const tipMat = new THREE.MeshPhongMaterial({ color: 0xffff00 });
-      const tip = new THREE.Mesh(tipGeom, tipMat);
-      tip.rotation.x = Math.PI / 2;
-      tip.position.z = 4;
-      group.add(tip);
-      group.scale.set(1.5,1.5,1.5);
-      return group;
-    }
-
-    function addSimulationControls(container) {
-      if (simulation.controlsAdded) return; // create once
-      simulation.controlsAdded = true;
-
-      const controlsDiv = document.createElement('div');
-      controlsDiv.className = 'sim-controls';
-      controlsDiv.innerHTML = `
-        <button id="simPlay">▶</button><button id="simPause">⏸</button><button id="simReset">⏮</button>
-        <label style="color:#cfeaf2;font-size:12px;margin-left:6px">سرعة</label>
-        <input id="simSpeed" type="range" min="0.2" max="3" step="0.1" value="${simulation.speed}" style="width:120px">
-        <span id="simSpeedLabel" style="min-width:36px;text-align:center">${simulation.speed.toFixed(1)}x</span>
-      `;
-      container.appendChild(controlsDiv);
-
-      const prog = document.createElement('div');
-      prog.className = 'sim-progress';
-      prog.innerHTML = `الحالة: <span id="simStatus">جاهز</span> — تقدم: <span id="simProgress">0%</span>`;
-      container.appendChild(prog);
-
-      document.getElementById('simPlay').addEventListener('click', () => {
-        if (!simulation.pathPoints || simulation.pathPoints.length === 0) return;
-        if (!simulation.isPlaying) {
-          simulation.isPlaying = true;
-          animateSimPath();
-          document.getElementById('simStatus').textContent = 'جاري التشغيل';
-          showToast('بدأت المحاكاة');
-        }
-      });
-      document.getElementById('simPause').addEventListener('click', () => {
-        if (simulation.isPlaying) {
-          simulation.isPlaying = false;
-          cancelAnimationFrame(simulation.animationFrame);
-          simulation.animationFrame = null;
-          document.getElementById('simStatus').textContent = 'متوقف';
-          showToast('أقفلت المحاكاة مؤقتاً');
-        }
-      });
-      document.getElementById('simReset').addEventListener('click', () => {
-        simulation.isPlaying = false;
-        if (simulation.animationFrame) { cancelAnimationFrame(simulation.animationFrame); simulation.animationFrame = null; }
-        simulation.index = 0;
-        simulation.elapsedTime = 0;
-        updateToolPosition(0);
-        document.getElementById('simProgress').textContent = '0%';
-        document.getElementById('simStatus').textContent = 'جاهز';
-        showToast('تم إعادة المحاكاة');
-      });
-
-      const speedSlider = document.getElementById('simSpeed');
-      const speedLabel = document.getElementById('simSpeedLabel');
-      speedSlider.addEventListener('input', (e) => {
-        simulation.speed = parseFloat(e.target.value);
-        speedLabel.textContent = simulation.speed.toFixed(1) + 'x';
-      });
-    }
-
-    function animateSimPath() {
-      if (!simulation.pathPoints || simulation.pathPoints.length === 0) return;
-      const total = simulation.pathPoints.length;
-      function step() {
-        if (!simulation.isPlaying) return;
-        simulation.index += simulation.speed;
-        if (simulation.index >= total) {
-          simulation.index = total - 1;
-          updateToolPosition(simulation.index);
-          document.getElementById('simProgress').textContent = '100%';
-          document.getElementById('simStatus').textContent = 'مكتمل';
-          simulation.isPlaying = false;
-          if (simulation.animationFrame) { cancelAnimationFrame(simulation.animationFrame); simulation.animationFrame = null; }
-          showToast('اكتملت المحاكاة');
-          return;
-        }
-        updateToolPosition(simulation.index);
-        const prog = ((Math.floor(simulation.index) + 1) / total) * 100;
-        document.getElementById('simProgress').textContent = prog.toFixed(1) + '%';
-        simulation.animationFrame = requestAnimationFrame(step);
-      }
-      if (!simulation.animationFrame) step();
-    }
-
-    function updateToolPosition(index) {
-      if (!simulation.tool || !simulation.pathPoints || simulation.pathPoints.length === 0) return;
-      const i = Math.floor(index);
-      const p = simulation.pathPoints[i];
-      if (!p) return;
-      simulation.tool.position.set(p.x / 10, -p.z, p.y / 10);
-    }
-
-    function disposeThree() {
-      try {
-        if (simulation.animationFrame) { cancelAnimationFrame(simulation.animationFrame); simulation.animationFrame = null; }
-        simulation.isPlaying = false;
-        simulation.index = 0;
-        simulation.pathPoints = [];
-        if (controls) { try { controls.dispose(); } catch(e){} controls = null; }
-        if (renderer) {
-          try {
-            renderer.forceContextLoss();
-            renderer.domElement && renderer.domElement.parentNode && renderer.domElement.parentNode.removeChild(renderer.domElement);
-            renderer.dispose();
-          } catch (e) { console.warn('renderer dispose', e); }
-          renderer = null;
-        }
-        scene = null; camera = null;
-        simulation.tool = null; simulation.toolPath = null;
-        simulation.controlsAdded = false;
-      } catch (e) { console.warn('disposeThree error', e); }
-    }
-
-    function initSimulation() {
-      const container = document.getElementById('threeContainer');
-      disposeThree(); // ensure fresh start
-
-      const placeholder = document.getElementById('simulationPlaceholder');
-      if (placeholder) placeholder.style.display = 'none';
-
-      try {
-        const gcode = document.getElementById('gcodeOut').value;
-        if (!gcode) throw new Error('لا يوجد G-code للمحاكاة');
-
-        scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x081224);
-
-        const containerW = container.clientWidth, containerH = container.clientHeight;
-        camera = new THREE.PerspectiveCamera(60, containerW / containerH, 0.1, 2000);
-        camera.position.set(100, 100, 100);
-        camera.lookAt(0, 0, 0);
-
-        renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
-        renderer.setSize(containerW, containerH);
-        renderer.setClearColor(0x000000, 0);
-        container.appendChild(renderer.domElement);
-
-        // OrbitControls for inspection
-        controls = new THREE.OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.05;
-
-        // lighting (improved)
-        const ambient = new THREE.AmbientLight(0x606060, 0.9);
-        scene.add(ambient);
-        const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
-        dirLight.position.set(50,120,50); scene.add(dirLight);
-        const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.6);
-        dirLight2.position.set(-50,60,-50); scene.add(dirLight2);
-
-        // material block with selected wood color
-        const woodHex = document.getElementById('woodColor').value || '#a0522d';
-        const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30) / 10;
-        const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20) / 10;
-        const workDepth = (parseFloat(document.getElementById('workDepth').value) || 3) / 10;
-        const materialGeometry = new THREE.BoxGeometry(workWidth, workDepth, workHeight);
-        const materialMaterial = new THREE.MeshStandardMaterial({ color: new THREE.Color(woodHex), metalness:0.1, roughness:0.6 });
-        const materialMesh = new THREE.Mesh(materialGeometry, materialMaterial);
-        materialMesh.position.set(workWidth/2, -workDepth/2, workHeight/2);
-        scene.add(materialMesh);
-
-        // parse gcode to pathPoints (in mm) and create three line
-        const pathPoints = parseGcodeForSimulation(gcode);
-        simulation.pathPoints = pathPoints;
-        simulation.toolPath = createToolPathVisualization(pathPoints, lastScanDir);
-        if (simulation.toolPath) scene.add(simulation.toolPath);
-
-        // tool
-        simulation.tool = createToolModel();
-        simulation.tool.position.set(0,0,0);
-        scene.add(simulation.tool);
-
-        // helpers
-        const gridSize = Math.max(workWidth, workHeight) * 1.2;
-        const gridHelper = new THREE.GridHelper(gridSize, 10);
-        gridHelper.position.set(gridSize/2, 0, gridSize/2);
-        scene.add(gridHelper);
-        const axesHelper = new THREE.AxesHelper(Math.max(workWidth, workHeight)/2 + 5);
-        scene.add(axesHelper);
-
-        // add controls UI (once)
-        addSimulationControls(container);
-
-        // render loop
-        (function renderLoop() {
-          if (!renderer) return;
-          try { requestAnimationFrame(renderLoop); } catch(e){}
-          if (controls) controls.update();
-          if (renderer && scene && camera) renderer.render(scene, camera);
-        })();
-
-        showToast('تم تهيئة المحاكاة');
-
-      } catch (error) {
-        console.error('initSimulation error', error);
-        showToast('فشل في تهيئة المحاكاة');
-        if (placeholder) placeholder.style.display = 'flex';
-      }
-    }
-
-    // ================= Top View rendering (colored + inverted Y + legend + colormap blending)
-    function renderTopViewFromGcode(gcode) {
-      try {
-        if (!gcode) gcode = lastGeneratedGcode || document.getElementById('gcodeOut').value;
-        if (!gcode) {
-          // fallback: draw grayscale->depth from grayMat
-        }
-        if (!previewCanvas) return;
-        const topCanvas = document.getElementById('topView');
-        const legendDiv = document.getElementById('topLegend');
-
-        // limit pixels for top view to protect browser
-        const tw_orig = previewCanvas.width, th_orig = previewCanvas.height;
-        const maxTopPixels = 400 * 400; // default cap (balanced)
-        let scaleDown = 1.0;
-        if (tw_orig * th_orig > maxTopPixels) {
-          scaleDown = Math.sqrt(maxTopPixels / (tw_orig * th_orig));
-        }
-        const tw = Math.max(1, Math.floor(tw_orig * scaleDown));
-        const th = Math.max(1, Math.floor(th_orig * scaleDown));
-
-        topCanvas.width = tw;
-        topCanvas.height = th;
-        const ctx = topCanvas.getContext('2d');
-
-        const depthMap = new Float32Array(tw * th);
-        const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3.0;
-
-        const points = parseGcodeForSimulation(gcode);
-
-        const woodHex = document.getElementById('woodColor').value || '#a0522d';
-        const woodRgb = hexToRgb(woodHex);
-        const blackRgb = { r: 10, g: 6, b: 3 };
-
-        const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30);
-        const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20);
-        const originX = cmToMm(parseFloat(document.getElementById('originX').value) || 0);
-        const originY = cmToMm(parseFloat(document.getElementById('originY').value) || 0);
-
-        function mmToPixel(px_mm_x, px_mm_y) {
-          const xRatio = (px_mm_x - originX) / workWidth;
-          const yRatio = (px_mm_y - originY) / workHeight;
-          const xPix = Math.round(xRatio * (tw - 1));
-          const yPix = th - 1 - Math.round(yRatio * (th - 1)); // invert Y
-          return { x: xPix, y: yPix };
-        }
-
-        for (let i=0;i<depthMap.length;i++) depthMap[i]=0;
-
-        if (!points || points.length === 0) {
-          if (!grayMat) return;
-          const imgData = ctx.createImageData(tw, th);
-          for (let y=0;y<th;y++){
-            for (let x=0;x<tw;x++){
-              const srcX = Math.round(x / scaleDown);
-              const srcY = Math.round(y / scaleDown);
-              const v = sampleGrayAt(srcX, srcY);
-              const depth = ((255 - v)/255.0)*maxDepth;
-              const t = depth / maxDepth;
-              const cmapCol = getColormapColor(t, currentColormap);
-              const mixed1 = mixColors(woodRgb, blackRgb, t*0.6);
-              const finalCol = mixColors(mixed1, cmapCol, 0.35);
-              const idx = (y*tw + x)*4;
-              imgData.data[idx]=finalCol.r; imgData.data[idx+1]=finalCol.g; imgData.data[idx+2]=finalCol.b; imgData.data[idx+3]=255;
-            }
-          }
-          ctx.putImageData(imgData,0,0);
-          drawTopLegend(currentColormap);
-          return;
-        }
-
-        for (let i=0;i<points.length;i++) {
-          const p = points[i];
-          if (typeof p.x === 'undefined') continue;
-          const coords = mmToPixel(p.x, p.y);
-          if (coords.x < 0 || coords.x >= tw || coords.y < 0 || coords.y >= th) continue;
-          const depth = Math.min(Math.abs(p.z), maxDepth);
-          const idx = coords.y * tw + coords.x;
-          depthMap[idx] = Math.max(depthMap[idx], depth);
-          const spread = 1;
-          for (let oy=-spread; oy<=spread; oy++) {
-            for (let ox=-spread; ox<=spread; ox++) {
-              const nx = coords.x + ox, ny = coords.y + oy;
-              if (nx<0||nx>=tw||ny<0||ny>=th) continue;
-              const nIdx = ny*tw + nx;
-              const weight = Math.max(0, 1 - (Math.hypot(ox,oy) / (spread + 0.1)));
-              depthMap[nIdx] = Math.max(depthMap[nIdx], depth * weight);
-            }
-          }
-        }
-
-        const imgData = ctx.createImageData(tw, th);
-        for (let y=0;y<th;y++) {
-          for (let x=0;x<tw;x++) {
-            const idx = y*tw + x;
-            const d = Math.min(depthMap[idx], maxDepth);
-            const t = (maxDepth === 0) ? 0 : (d / maxDepth);
-            const cmapCol = getColormapColor(t, currentColormap);
-            const mixed1 = mixColors(woodRgb, blackRgb, t*0.6);
-            const finalCol = mixColors(mixed1, cmapCol, 0.35);
-            const di = (y*tw + x)*4;
-            imgData.data[di] = finalCol.r;
-            imgData.data[di+1] = finalCol.g;
-            imgData.data[di+2] = finalCol.b;
-            imgData.data[di+3] = 255;
-          }
-        }
-        ctx.putImageData(imgData, 0, 0);
-
-        drawTopLegend(currentColormap);
-
-      } catch (e) {
-        console.error('renderTopViewFromGcode error', e);
-      }
-    }
-
-    function drawTopLegend(map) {
-      try {
-        const legend = document.getElementById('topLegend');
-        const steps = 6;
-        const stops = [];
-        for (let i=0;i<=steps;i++){
-          const t = i / steps;
-          const c = getColormapColor(t, map);
-          stops.push(`rgb(${c.r},${c.g},${c.b}) ${Math.round((i/steps)*100)}%`);
-        }
-        legend.style.background = `linear-gradient(90deg, ${stops.join(',')})`;
-      } catch(e){}
-    }
-
-    // ================= Init UI and bindings =================
-    document.addEventListener('DOMContentLoaded', () => {
-      updateDimensionDisplay();
-      showToast('تم تحميل التطبيق بنجاح', 1200);
-      document.getElementById('workWidth').addEventListener('input', () => setTimeout(updateDimensionDisplay, 200));
-      document.getElementById('workHeight').addEventListener('input', () => setTimeout(updateDimensionDisplay, 200));
-
-      const machineDefaults = {
-        router: { feed: 800, safeZ: 5, maxDepth: 3, stepOver: 5, description: "Router CNC - مناسبة للنحت" },
-        laser: { feed: 1200, safeZ: 0, maxDepth: 0, stepOver: 0.2, description: "Laser Engraver - مناسبة للنقش بالليزر" },
-        plasma: { feed: 1500, safeZ: 3, maxDepth: 0, stepOver: 1, description: "Plasma Cutter" },
-        "3dprinter": { feed: 1000, safeZ: 0.2, maxDepth: 0.2, stepOver: 0.4, description: "3D Printer - FDM" }
-      };
-      document.getElementById('machineType').addEventListener('change', (e) => {
-        const def = machineDefaults[e.target.value];
-        if (def) {
-          document.getElementById('feedRate').value = def.feed;
-          document.getElementById('safeZ').value = def.safeZ;
-          document.getElementById('maxDepth').value = def.maxDepth;
-          document.getElementById('stepOver').value = def.stepOver;
-          showToast(`تم تحميل إعدادات ${e.target.value}`);
-        }
-      });
-
-      // set initial state of TopView canvas placeholder
-      const top = document.getElementById('topView');
-      top.width = 600; top.height = 400;
+    document.getElementById('edgeSensitivity').addEventListener('input', (e)=>{
+      document.getElementById('edgeValue').textContent = parseFloat(e.target.value).toFixed(2);
+      if (previewCanvas && cvReady) detectContours();
     });
 
-    // resize three renderer & topView on window resize
-    window.addEventListener('resize', () => {
-      const container = document.getElementById('threeContainer');
-      if (camera && renderer && container) {
-        camera.aspect = container.clientWidth / container.clientHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(container.clientWidth, container.clientHeight);
-      }
+    document.getElementById('edgeReAnalyze').addEventListener('click', ()=> detectContours());
+    document.getElementById('edgeContrast').addEventListener('click', ()=>{ if(previewCanvas) detectContours(); showToast('تم تحسين التباين وإعادة التحليل'); });
+
+    document.getElementById('btnGen').addEventListener('click', ()=>{
+      let g = '';
+      if (machineMode === 'laser') g = generateLaserGcode();
+      else g = generateRouterGcode();
+      document.getElementById('gcodeOut').value = g;
+      renderTopViewFromGcode();
     });
 
-    // cleanup when leaving page
-    window.addEventListener('beforeunload', () => {
-      try { cleanupMats(); } catch(e){}
-      try { disposeThree(); } catch(e){}
+    document.getElementById('btnDownload').addEventListener('click', ()=>{
+      const text = document.getElementById('gcodeOut').value;
+      if(!text){ showToast('لا يوجد G-code لتحميله'); return; }
+      const blob = new Blob([text], {type: 'text/plain'}); const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'cnc_output.gcode'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+      showToast('تم تحميل الملف');
     });
+
+    document.addEventListener('keydown', (e)=>{ if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='g') { e.preventDefault(); document.getElementById('btnGen').click(); } });
+
+    // ================= Initial boot =================
+    (function init(){
+      ['canvasHeatmap','canvasContour','canvasEdgeDetail','canvasLaserDetail','canvasOriginal'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
+      setTimeout(()=>{ if(cvReady) { showToast('جاهز للاختبار'); detectContours().catch(()=>{}); } else { showToast('OpenCV لا يزال يتحمل — انتظر ثواني'); } }, 800);
+    })();
+
+    // ================= Cleanup on unload =================
+    window.addEventListener('beforeunload', ()=>{ try{ cleanupMats(); } catch(e){} });
+
+    // ================= End =================
   </script>
 </body>
 </html>
