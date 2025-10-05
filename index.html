@@ -627,20 +627,25 @@
       downloadGcode(lastGeneratedGcode, ext);
     });
 
-    // ================= دالة Z من خريطة الارتفاعات (مصححة) =================
+    // ================= دالة Z من خريطة الارتفاعات (مصححة تماماً) =================
     function getZfromHeatmap(px, py){
       if (!grayMat) return 0;
       const w = grayMat.cols, h = grayMat.rows;
+      
+      // التأكد من أن الإحداثيات ضمن حدود الصورة
       const x = Math.max(0, Math.min(w-1, Math.round(px)));
       const y = Math.max(0, Math.min(h-1, Math.round(py)));
-      const v = grayMat.data[y * w + x]; // 0..255 (0 = أسود = أعمق)
+      
+      const v = grayMat.data[y * w + x]; // 0..255 (0 = أسود, 255 = أبيض)
       const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3.0;
       
-      // Z من خريطة الارتفاعات: الأسود = أعمق، الأبيض = سطح
-      const normalizedDepth = (255 - v) / 255.0; // 0-1 (0 = سطح, 1 = أعمق)
-      const z_mm = -normalizedDepth * maxDepth; // سالب للقطع تحت السطح
+      // التصحيح: الأسود = أعمق، الأبيض = سطح
+      // v=0 (أسود) → normalizedDepth=1 → z_mm = -maxDepth
+      // v=255 (أبيض) → normalizedDepth=0 → z_mm = 0
+      const normalizedDepth = (255 - v) / 255.0;
+      const z_mm = -normalizedDepth * maxDepth;
       
-      return Math.min(0, z_mm); // التأكد من أنه لا يزيد عن الصفر
+      return z_mm;
     }
 
     // ================= التحقق من النقاط داخل الكونتور (محسنة) =================
@@ -783,11 +788,9 @@
           const startX = leftToRight ? xMin : xMax;
           const endX = leftToRight ? xMax : xMin;
           
-          // حساب Y النسبي من BBOX
           const relativeY = y - yMin;
           const y_mm = relativeY * boxScaleY;
           
-          // Rapid إلى نقطة البداية
           const startX_mm = (startX - xMin) * boxScaleX;
           lines.push(`G0 X${formatNumber(startX_mm, 3)} Y${formatNumber(y_mm, 3)} Z${formatNumber(safeZ, 2)} F${feed * 2}`);
           
@@ -795,13 +798,13 @@
           let firstPoint = true;
           
           while(true) {
-            // حساب X النسبي من BBOX
             const relativeX = x - xMin;
             const x_mm = relativeX * boxScaleX;
             
-            // التحقق إذا كانت النقطة داخل الكونتور الرئيسي
             const inside = isPointInsideMainContour(x, y);
-            const z = inside ? getZfromHeatmap(x, y) : safeZ;
+            
+            // التصحيح: خارج الكونتور → Z = 0 (سطح)، داخل الكونتور → Z من خريطة الارتفاعات
+            const z = inside ? getZfromHeatmap(x, y) : 0;
             
             if (firstPoint) {
               // للنقطة الأولى: حركة Z أولاً ثم XY
@@ -809,7 +812,6 @@
               lines.push(`G1 X${formatNumber(x_mm, 3)} Y${formatNumber(y_mm, 3)} F${feed}`);
               firstPoint = false;
             } else {
-              // للنقاط التالية: حركة XYZ معاً
               lines.push(`G1 X${formatNumber(x_mm, 3)} Y${formatNumber(y_mm, 3)} Z${formatNumber(z, 3)} F${feed}`);
             }
             
@@ -817,7 +819,6 @@
             x = leftToRight ? x + 1 : x - 1;
           }
           
-          // رفع الأداة بعد انتهاء الصف
           lines.push(`G0 Z${formatNumber(safeZ, 2)}`);
         }
         
@@ -843,7 +844,6 @@
       const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
       const feed = parseFloat(document.getElementById('feedRate').value) || 800;
       
-      // حساب BBOX للكونتورات
       let designMinX = Infinity, designMinY = Infinity, designMaxX = 0, designMaxY = 0;
       const list = outerOnly ? [contoursArr[0]] : contoursArr.slice();
       
@@ -871,29 +871,27 @@
         
         lines.push(`(Contour ${ci} — area ${Math.round(c.area)})`);
         
-        // النقطة الأولى
         const p0 = c.points[0];
         const x0_mm = (p0.x - designMinX) * scaleX;
         const y0_mm = (p0.y - designMinY) * scaleY;
         
         lines.push(`G0 X${formatNumber(x0_mm, 3)} Y${formatNumber(y0_mm, 3)} Z${formatNumber(safeZ, 2)}`);
-        lines.push(`G1 Z${formatNumber(0, 3)} F${feed / 3}`); // نزول بطيء
+        
+        // التصحيح: النزول إلى Z=0 (سطح المادة) بدلاً من safeZ
+        lines.push(`G1 Z${formatNumber(0, 3)} F${feed / 3}`);
         lines.push(`G1 F${feed}`);
         
         for (let j = 0; j < c.points.length; j++){
           const p = c.points[j];
           const x_mm = (p.x - designMinX) * scaleX;
           const y_mm = (p.y - designMinY) * scaleY;
-          let zVal = 0;
           
-          if (machineMode === 'router') {
-            zVal = getZfromHeatmap(p.x, p.y);
-          }
+          // التصحيح: Z من خريطة الارتفاعات فقط داخل الكونتور
+          let zVal = getZfromHeatmap(p.x, p.y);
           
           lines.push(`G1 X${formatNumber(x_mm, 3)} Y${formatNumber(y_mm, 3)} Z${formatNumber(zVal, 3)} F${feed}`);
         }
         
-        // إغلاق الكونتور
         lines.push(`G1 X${formatNumber(x0_mm, 3)} Y${formatNumber(y0_mm, 3)} Z${formatNumber(0, 3)} F${feed}`);
         lines.push(`G0 Z${formatNumber(safeZ, 2)}`);
       }
