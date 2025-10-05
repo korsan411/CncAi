@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>CNC AI — Path Optimization Prototype</title>
+  <title>CNC AI — v2.2 Performance & Control Fix</title>
 
   <!-- مكتبات -->
   <script src="https://docs.opencv.org/4.8.0/opencv.js" async></script>
@@ -73,25 +73,30 @@
     #debugFooter { padding:6px 10px; border-top:1px solid rgba(255,255,255,0.02); text-align:right; font-size:12px; color:#9bb0c8; background:rgba(0,0,0,0.03); display:flex; justify-content:space-between; align-items:center; }
 
     /* Top view + legend */
-    #topViewContainer { margin-top:12px; display:flex; flex-direction:column; gap:6px; align-items:center; }
-    #topView { width:100%; height:200px; background:#0d1722; border-radius:6px; border:1px solid #334155; display:block }
+    #topViewContainer { margin-top:12px; display:flex; flex-direction:column; gap:6px; align-items:center; position:relative }
+    #topView { width:100%; height:200px; background:#0d1722; border-radius:6px; border:1px solid #334155; display:block; z-index:2 }
     #topLegend { width:100%; height:18px; border-radius:6px; border:1px solid #2b3844; background:linear-gradient(90deg,#ddd,#333); }
 
-    /* colormap buttons under heatmap */
-    .colormap-buttons { display:flex; gap:6px; justify-content:center; margin-top:8px; }
+    /* colormap buttons shared under previews */
+    .colormap-area { display:flex; justify-content:center; gap:8px; margin-top:10px; }
+    .colormap-buttons { display:flex; gap:6px; justify-content:center; }
     .colormap-buttons button { background:#141b22; color:#cfeaf2; border:1px solid #26343f; padding:6px 8px; border-radius:6px; cursor:pointer; font-size:12px }
     .colormap-buttons button.active { background:#06b6d4; color:#021; border-color:#06b6d4; }
 
+    /* simulation controls (fixed inside 3D area) */
+    .sim-controls { position:absolute; top:10px; left:10px; z-index:30; display:flex; gap:8px; align-items:center; background:rgba(0,0,0,0.35); padding:6px;border-radius:6px }
+    .sim-controls button { background:rgba(0,0,0,0.55); color:white; border:1px solid #06b6d4; border-radius:4px; padding:6px 8px; cursor:pointer; font-size:0.9rem }
+    .sim-progress { position:absolute; bottom:10px; left:10px; z-index:30; background:rgba(0,0,0,0.35); padding:6px 8px;border-radius:6px; color:#cfeaf2; font-size:12px }
+
     .opt-controls { display:flex; gap:8px; align-items:center; margin-top:12px; flex-wrap:wrap }
     .opt-controls label { font-weight:normal; color:#cfeaf2; display:flex; gap:6px; align-items:center; }
-
     @keyframes spin { 0%{transform:rotate(0)}100%{transform:rotate(360deg)} }
   </style>
 </head>
 <body>
   <div class="app">
     <header>
-      <h1>CNC AI — Path Optimization Prototype</h1>
+      <h1>CNC AI — v2.2 Performance & Control Fix</h1>
       <div id="cvState">
         <span class="loading" style="display:inline-block;width:16px;height:16px;border:3px solid #f3f3f3;border-top:3px solid #06b6d4;border-radius:50%;animation:spin 1s linear infinite;margin-left:8px;"></span>
         جاري تحميل OpenCV...
@@ -137,22 +142,13 @@
         <div id="heatmap" class="tab-content">
           <div class="canvas-placeholder" id="heatmapPlaceholder">Heatmap ستظهر هنا</div>
           <canvas id="canvasHeatmap" style="display:none;"></canvas>
-
-          <!-- colormap buttons under heatmap -->
-          <div class="colormap-buttons" id="colormapButtons">
-            <button data-map="jet" class="active">Jet</button>
-            <button data-map="hot">Hot</button>
-            <button data-map="cool">Cool</button>
-            <button data-map="gray">Gray</button>
-          </div>
-
-          <div class="small-meta">اختَر نموذج الـ colormap. التغيير يحدث لحظياً ويؤثر على Heatmap وTop View.</div>
+          <div class="small-meta">Heatmap تعتمد على الصورة الرمادية وتستخدم نموذج الألوان المحدد</div>
         </div>
 
         <div id="contour" class="tab-content">
           <div class="canvas-placeholder" id="contourPlaceholder">Contours ستظهر هنا</div>
           <canvas id="canvasContour" style="display:none;"></canvas>
-          <div class="small-meta">تبديل وضع كشف الحواف أو تحريك حساسية الحواف يحدث إعادة معالجة تلقائية</div>
+          <div class="small-meta">رسم الكنتورات المكتشفة</div>
         </div>
 
         <div id="topview" class="tab-content">
@@ -160,14 +156,26 @@
             <canvas id="topView"></canvas>
             <div id="topLegend" title="عمق النقش — الألوان فقط"></div>
           </div>
-          <div class="small-meta">معاينة من الأعلى للعمق المتوقع بعد تنفيذ G-code (الألوان تتبع اختيار Colormap)</div>
+          <div class="small-meta">معاينة من الأعلى للعمق المتوقع بعد تنفيذ G-code</div>
         </div>
 
         <div id="simulation" class="tab-content">
           <div id="threeContainer">
             <div class="canvas-placeholder" id="simulationPlaceholder">المحاكاة ستظهر هنا بعد توليد G-code</div>
+            <!-- sim controls will be injected here -->
           </div>
         </div>
+
+        <!-- Shared colormap buttons (moved out of heatmap tab) -->
+        <div class="colormap-area">
+          <div class="colormap-buttons" id="colormapButtons">
+            <button data-map="jet" class="active">Jet</button>
+            <button data-map="hot">Hot</button>
+            <button data-map="cool">Cool</button>
+            <button data-map="gray">Gray</button>
+          </div>
+        </div>
+
       </div>
 
       <!-- RIGHT panel -->
@@ -315,8 +323,8 @@
     let currentColormap = 'jet';
 
     // Simulation / Three
-    let scene, camera, renderer, controls;
-    let simulation = { isPlaying: false, animationFrame: null, tool: null, toolPath: null, pathPoints: [], index: 0, speed: 1 };
+    let scene = null, camera = null, renderer = null, controls = null;
+    let simulation = { isPlaying: false, animationFrame: null, tool: null, toolPath: null, pathPoints: [], index: 0, speed: 1, controlsAdded: false };
 
     // ================= Debug overlay system =================
     (function initDebugOverlay(){
@@ -410,7 +418,6 @@
 
       // expose a function for other code to log easily
       window.debugLog = function(msg) { try { addEntry('info', msg); } catch(e){} };
-
     })();
 
     // ================= Helper UI funcs =================
@@ -447,7 +454,7 @@
       if (typeof cv !== 'undefined' && cv.getBuildInformation) {
         cvReady = true;
         document.getElementById('cvState').innerHTML = '✅ OpenCV جاهز';
-        showToast('تم تحميل OpenCV بنجاح', 1400);
+        showToast('تم تحميل OpenCV بنجاح', 1200);
       } else {
         setTimeout(waitForCv, 100);
       }
@@ -498,7 +505,10 @@
         return;
       }
       try {
+        // cleanup previous resources
         cleanupMats();
+        disposeThree();
+
         const img = new Image();
         img.src = URL.createObjectURL(file);
         await img.decode();
@@ -506,7 +516,7 @@
         previewCanvas = document.getElementById('canvasOriginal');
         const ctx = previewCanvas.getContext('2d');
 
-        const maxPixels = 1024 * 1024; // 1MP
+        const maxPixels = 1024 * 1024; // 1MP for preview canvas
         let w = img.width, h = img.height;
         const currentPixels = w * h;
         if (currentPixels > maxPixels) {
@@ -633,7 +643,6 @@
     // ================= Colormap utilities =================
     function clamp(v, a=0, b=1){ return Math.max(a, Math.min(b, v)); }
     function getColormapColor(t, map) {
-      // t in [0,1]
       t = clamp(t);
       if (map === 'hot') {
         if (t < 0.33) return { r: Math.round(t/0.33*128), g: 0, b: 0 };
@@ -694,7 +703,7 @@
         if (contour) renderContour(grayMat, contour);
       } catch(e){}
       // update top view if G-code exists
-      if (lastGeneratedGcode) renderTopViewFromGcode(lastGeneratedGcode);
+      if (lastGeneratedGcode) renderTopViewFromGcode();
     }
 
     function renderContour(gray, mainContour) {
@@ -772,7 +781,6 @@
     function processRowPoints(rowPoints, lines, feed, safeZ, reverse, useDynamicFeed, maxDepth) {
       if (rowPoints.length === 0) return;
       if (reverse) rowPoints.reverse();
-      // compute avg depth for dynamic feed
       let avgDepth = 0;
       if (useDynamicFeed) {
         let sum = 0;
@@ -799,11 +807,9 @@
 
     // ================= Utility: compute centroid of contour and first point =================
     function contourInfoToXY(cnt, scaleX, scaleY, originX, originY) {
-      // use first point as representative start, and centroid for distance measure
       const data = cnt.data32S;
       if (!data || data.length < 2) return { start: {x:0,y:0}, centroid: {x:0,y:0} };
       const x0 = data[0], y0 = data[1];
-      // compute centroid
       let sx=0, sy=0, n=0;
       for (let i=0;i<data.length;i+=2){ sx+=data[i]; sy+=data[i+1]; n++; }
       const cx = sx / n, cy = sy / n;
@@ -815,20 +821,16 @@
 
     // ================= Ordering contours (nearest-first) =================
     function orderContoursNearest(contoursArray, scaleX, scaleY, originX, originY) {
-      // contoursArray: array of cv.Mat (data32S)
       const list = contoursArray.map(c=> {
         const info = contourInfoToXY(c, scaleX, scaleY, originX, originY);
         return { cnt: c, start: info.start, centroid: info.centroid, used:false };
       });
       const ordered = [];
       if (list.length === 0) return ordered;
-      // start from the largest contour's start if available
-      let cur = list[0];
-      // choose initial as the one with leftmost or just index 0
-      cur.used = true;
-      ordered.push(cur.cnt);
-      let lastPos = cur.start;
-      // greedy nearest by centroid
+      list.sort((a,b)=>0); // keep original order initially
+      list[0].used = true;
+      ordered.push(list[0].cnt);
+      let lastPos = list[0].start;
       for (let k=1;k<list.length;k++){
         let bestIdx = -1, bestDist = Infinity;
         for (let i=0;i<list.length;i++){
@@ -924,7 +926,6 @@
         lines.push('M5');
         lines.push('M30');
 
-        // improved estimate
         const timeMin = (totalLen / (feed || 1)) + ((Math.max(0, safeZ) / 50) * (totalLen / 1000));
         document.getElementById('estTime').innerHTML = "⏱️ تقدير الوقت: " + timeMin.toFixed(1) + " دقيقة";
 
@@ -990,15 +991,10 @@
           const startX = (x0 * scaleX + originX);
           const startY = (y0 * scaleY + originY);
 
-          // if proximity small, move without full lift (try reduce non-cutting)
+          // compute distance to current pos
           const distToStart = Math.hypot(startX - currentPos.x, startY - currentPos.y);
-          if (distToStart > (proximity || 10)) {
-            lines.push(`G0 X${startX.toFixed(2)} Y${startY.toFixed(2)} Z${safeZ.toFixed(2)}`);
-          } else {
-            // small move -> do a gentle move at safeZ (still rapid)
-            lines.push(`G0 X${startX.toFixed(2)} Y${startY.toFixed(2)} Z${safeZ.toFixed(2)}`);
-            debugLog(`Short travel ${distToStart.toFixed(2)}mm — used short move`);
-          }
+          // travel
+          lines.push(`G0 X${startX.toFixed(2)} Y${startY.toFixed(2)} Z${safeZ.toFixed(2)}`);
 
           // determine starting depth
           const startGray = sampleGrayAt(x0, y0);
@@ -1067,8 +1063,10 @@
       lastGeneratedGcode = gcode;
       if (gcode) {
         showToast("تم توليد G-code (Raster)");
-        renderTopViewFromGcode(gcode);
+        renderTopViewFromGcode();
+        // open simulation tab and init (but do not auto-play)
         document.querySelector('.tab-buttons button[data-tab="simulation"]').click();
+        initSimulation(); 
       }
     });
 
@@ -1078,8 +1076,9 @@
       lastGeneratedGcode = gcode;
       if (gcode) {
         showToast("تم توليد G-code سريع (Raster)");
-        renderTopViewFromGcode(gcode);
+        renderTopViewFromGcode();
         document.querySelector('.tab-buttons button[data-tab="simulation"]').click();
+        initSimulation();
       }
     });
 
@@ -1089,8 +1088,9 @@
       lastGeneratedGcode = gcode;
       if (gcode) {
         showToast("تم توليد G-code (Contour)");
-        renderTopViewFromGcode(gcode);
+        renderTopViewFromGcode();
         document.querySelector('.tab-buttons button[data-tab="simulation"]').click();
+        initSimulation();
       }
     });
 
@@ -1184,10 +1184,8 @@
     }
 
     function addSimulationControls(container) {
-      const old = container.querySelector('.sim-controls');
-      if (old) old.remove();
-      const oldInfo = container.querySelector('.sim-progress');
-      if (oldInfo) oldInfo.remove();
+      if (simulation.controlsAdded) return; // create once
+      simulation.controlsAdded = true;
 
       const controlsDiv = document.createElement('div');
       controlsDiv.className = 'sim-controls';
@@ -1204,7 +1202,6 @@
       prog.innerHTML = `الحالة: <span id="simStatus">جاهز</span> — تقدم: <span id="simProgress">0%</span>`;
       container.appendChild(prog);
 
-      // Events
       document.getElementById('simPlay').addEventListener('click', () => {
         if (!simulation.pathPoints || simulation.pathPoints.length === 0) return;
         if (!simulation.isPlaying) {
@@ -1218,13 +1215,14 @@
         if (simulation.isPlaying) {
           simulation.isPlaying = false;
           cancelAnimationFrame(simulation.animationFrame);
+          simulation.animationFrame = null;
           document.getElementById('simStatus').textContent = 'متوقف';
           showToast('أقفلت المحاكاة مؤقتاً');
         }
       });
       document.getElementById('simReset').addEventListener('click', () => {
         simulation.isPlaying = false;
-        cancelAnimationFrame(simulation.animationFrame);
+        if (simulation.animationFrame) { cancelAnimationFrame(simulation.animationFrame); simulation.animationFrame = null; }
         simulation.index = 0;
         simulation.elapsedTime = 0;
         updateToolPosition(0);
@@ -1253,7 +1251,7 @@
           document.getElementById('simProgress').textContent = '100%';
           document.getElementById('simStatus').textContent = 'مكتمل';
           simulation.isPlaying = false;
-          cancelAnimationFrame(simulation.animationFrame);
+          if (simulation.animationFrame) { cancelAnimationFrame(simulation.animationFrame); simulation.animationFrame = null; }
           showToast('اكتملت المحاكاة');
           return;
         }
@@ -1273,13 +1271,32 @@
       simulation.tool.position.set(p.x / 10, -p.z, p.y / 10);
     }
 
+    function disposeThree() {
+      try {
+        if (simulation.animationFrame) { cancelAnimationFrame(simulation.animationFrame); simulation.animationFrame = null; }
+        simulation.isPlaying = false;
+        simulation.index = 0;
+        simulation.pathPoints = [];
+        if (controls) { try { controls.dispose(); } catch(e){} controls = null; }
+        if (renderer) {
+          try {
+            renderer.forceContextLoss();
+            renderer.domElement && renderer.domElement.parentNode && renderer.domElement.parentNode.removeChild(renderer.domElement);
+            renderer.dispose();
+          } catch (e) { console.warn('renderer dispose', e); }
+          renderer = null;
+        }
+        scene = null; camera = null;
+        simulation.tool = null; simulation.toolPath = null;
+        // allow recreating controls
+        simulation.controlsAdded = false;
+      } catch (e) { console.warn('disposeThree error', e); }
+    }
+
     function initSimulation() {
       const container = document.getElementById('threeContainer');
-      if (renderer) {
-        try { container.removeChild(renderer.domElement); renderer.dispose(); } catch(e){}
-        renderer = null; scene = null; camera = null; controls = null;
-        simulation.tool = null; simulation.toolPath = null; simulation.pathPoints = []; simulation.index = 0;
-      }
+      disposeThree(); // ensure fresh start
+
       const placeholder = document.getElementById('simulationPlaceholder');
       if (placeholder) placeholder.style.display = 'none';
 
@@ -1341,19 +1358,15 @@
         const axesHelper = new THREE.AxesHelper(Math.max(workWidth, workHeight)/2 + 5);
         scene.add(axesHelper);
 
-        // add controls UI
+        // add controls UI (once)
         addSimulationControls(container);
-
-        // prepare sim state
-        simulation.index = 0;
-        simulation.isPlaying = false;
-        simulation.animationFrame = null;
 
         // render loop
         (function renderLoop() {
-          requestAnimationFrame(renderLoop);
+          if (!renderer) return;
+          try { requestAnimationFrame(renderLoop); } catch(e){}
           if (controls) controls.update();
-          renderer.render(scene, camera);
+          if (renderer && scene && camera) renderer.render(scene, camera);
         })();
 
         showToast('تم تهيئة المحاكاة');
@@ -1365,14 +1378,30 @@
       }
     }
 
-    // ================= Top View rendering (colored + inverted Y + legend + colormap blending) =================
+    // ================= Top View rendering (colored + inverted Y + legend + colormap blending)
     function renderTopViewFromGcode(gcode) {
       try {
+        // allow calling without param
+        if (!gcode) gcode = lastGeneratedGcode || document.getElementById('gcodeOut').value;
+        if (!gcode) {
+          // fallback: draw grayscale -> depth
+        }
         if (!previewCanvas) return;
         const topCanvas = document.getElementById('topView');
         const legendDiv = document.getElementById('topLegend');
-        const tw = previewCanvas.width, th = previewCanvas.height;
-        topCanvas.width = tw; topCanvas.height = th;
+
+        // goal: limit pixels for top view to protect browser
+        const tw_orig = previewCanvas.width, th_orig = previewCanvas.height;
+        const maxTopPixels = 300 * 300; // cap for top-view rendering for performance
+        let scaleDown = 1.0;
+        if (tw_orig * th_orig > maxTopPixels) {
+          scaleDown = Math.sqrt(maxTopPixels / (tw_orig * th_orig));
+        }
+        const tw = Math.max(1, Math.floor(tw_orig * scaleDown));
+        const th = Math.max(1, Math.floor(th_orig * scaleDown));
+
+        topCanvas.width = tw;
+        topCanvas.height = th;
         const ctx = topCanvas.getContext('2d');
 
         const depthMap = new Float32Array(tw * th);
@@ -1385,7 +1414,7 @@
         const woodRgb = hexToRgb(woodHex);
         const blackRgb = { r: 10, g: 6, b: 3 };
 
-        // mm -> pixel mapping
+        // mm -> pixel mapping (use original preview dims but map into tw/th)
         const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30);
         const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20);
         const originX = cmToMm(parseFloat(document.getElementById('originX').value) || 0);
@@ -1395,25 +1424,25 @@
           const xRatio = (px_mm_x - originX) / workWidth;
           const yRatio = (px_mm_y - originY) / workHeight;
           const xPix = Math.round(xRatio * (tw - 1));
-          // invert Y to match visual orientation
-          const yPix = th - 1 - Math.round(yRatio * (th - 1));
+          const yPix = th - 1 - Math.round(yRatio * (th - 1)); // invert Y
           return { x: xPix, y: yPix };
         }
 
-        // init depth map
         for (let i=0;i<depthMap.length;i++) depthMap[i]=0;
 
-        // If no points, fallback to grayscale->depth using image
         if (!points || points.length === 0) {
+          // fallback: sample grayMat directly but scaled
+          if (!grayMat) return;
           const imgData = ctx.createImageData(tw, th);
           for (let y=0;y<th;y++){
             for (let x=0;x<tw;x++){
-              const v = sampleGrayAt(x,y);
+              // map x,y back to preview pixels
+              const srcX = Math.round(x / scaleDown);
+              const srcY = Math.round(y / scaleDown);
+              const v = sampleGrayAt(srcX, srcY);
               const depth = ((255 - v)/255.0)*maxDepth;
-              const t = depth / maxDepth; // 0..1
-              // colormap color
+              const t = depth / maxDepth;
               const cmapCol = getColormapColor(t, currentColormap);
-              // blend: wood base mixed with cmap color to preserve wood feel
               const mixed1 = mixColors(woodRgb, blackRgb, t*0.6);
               const finalCol = mixColors(mixed1, cmapCol, 0.35);
               const idx = (y*tw + x)*4;
@@ -1425,7 +1454,7 @@
           return;
         }
 
-        // accumulate depths from gcode points
+        // accumulate depths from gcode points (map mm->pixel)
         for (let i=0;i<points.length;i++) {
           const p = points[i];
           if (typeof p.x === 'undefined') continue;
@@ -1434,7 +1463,7 @@
           const depth = Math.min(Math.abs(p.z), maxDepth);
           const idx = coords.y * tw + coords.x;
           depthMap[idx] = Math.max(depthMap[idx], depth);
-          const spread = 2;
+          const spread = 1; // keep spread small for performance
           for (let oy=-spread; oy<=spread; oy++) {
             for (let ox=-spread; ox<=spread; ox++) {
               const nx = coords.x + ox, ny = coords.y + oy;
@@ -1451,7 +1480,7 @@
           for (let x=0;x<tw;x++) {
             const idx = y*tw + x;
             const d = Math.min(depthMap[idx], maxDepth);
-            const t = (maxDepth === 0) ? 0 : (d / maxDepth); // 0..1
+            const t = (maxDepth === 0) ? 0 : (d / maxDepth);
             const cmapCol = getColormapColor(t, currentColormap);
             const mixed1 = mixColors(woodRgb, blackRgb, t*0.6);
             const finalCol = mixColors(mixed1, cmapCol, 0.35);
@@ -1464,7 +1493,6 @@
         }
         ctx.putImageData(imgData, 0, 0);
 
-        // draw legend gradient for current colormap
         drawTopLegend(currentColormap);
 
       } catch (e) {
@@ -1475,7 +1503,6 @@
     function drawTopLegend(map) {
       try {
         const legend = document.getElementById('topLegend');
-        // create simple gradient css from colormap: sample t=0..1
         const steps = 6;
         const stops = [];
         for (let i=0;i<=steps;i++){
@@ -1511,7 +1538,7 @@
         }
       });
 
-      // colormap buttons binding
+      // colormap buttons binding (shared)
       document.querySelectorAll('#colormapButtons button').forEach(btn=>{
         btn.addEventListener('click', ()=>{
           document.querySelectorAll('#colormapButtons button').forEach(b=>b.classList.remove('active'));
@@ -1519,10 +1546,14 @@
           currentColormap = btn.dataset.map;
           // update heatmap & topview
           renderHeatmap();
-          if (lastGeneratedGcode) renderTopViewFromGcode(lastGeneratedGcode);
+          renderTopViewFromGcode();
           showToast('تم تغيير نموذج الألوان إلى ' + currentColormap);
         });
       });
+
+      // set initial state of TopView canvas placeholder
+      const top = document.getElementById('topView');
+      top.width = 600; top.height = 400;
     });
 
     // resize three renderer & topView on window resize
@@ -1533,12 +1564,13 @@
         camera.updateProjectionMatrix();
         renderer.setSize(container.clientWidth, container.clientHeight);
       }
-      try {
-        const top = document.getElementById('topView');
-        if (previewCanvas && top) {
-          top.width = previewCanvas.width; top.height = previewCanvas.height;
-        }
-      } catch(e){}
+      // topView size will be dynamically computed on render
+    });
+
+    // cleanup when leaving page
+    window.addEventListener('beforeunload', () => {
+      try { cleanupMats(); } catch(e){}
+      try { disposeThree(); } catch(e){}
     });
 
   </script>
