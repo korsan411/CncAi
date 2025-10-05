@@ -627,71 +627,61 @@
       downloadGcode(lastGeneratedGcode, ext);
     });
 
-    // get Z (mm) from grayMat at pixel x,y for Router; scale to maxDepth
+    // ================= دالة Z من خريطة الارتفاعات (مصححة) =================
     function getZfromHeatmap(px, py){
       if (!grayMat) return 0;
       const w = grayMat.cols, h = grayMat.rows;
       const x = Math.max(0, Math.min(w-1, Math.round(px)));
       const y = Math.max(0, Math.min(h-1, Math.round(py)));
-      const v = grayMat.data[y*w + x]; // 0..255 (0 black)
+      const v = grayMat.data[y * w + x]; // 0..255 (0 = أسود = أعمق)
       const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3.0;
-      const z_mm = -((255 - v)/255.0) * maxDepth; // negative for cutting
-      return z_mm;
+      
+      // Z من خريطة الارتفاعات: الأسود = أعمق، الأبيض = سطح
+      const normalizedDepth = (255 - v) / 255.0; // 0-1 (0 = سطح, 1 = أعمق)
+      const z_mm = -normalizedDepth * maxDepth; // سالب للقطع تحت السطح
+      
+      return Math.min(0, z_mm); // التأكد من أنه لا يزيد عن الصفر
     }
 
-    // ================= Generate Raster G-code (bounded by contour) =================
+    // ================= التحقق من النقاط داخل الكونتور (محسنة) =================
+    function isPointInsideMainContour(px, py){
+      try {
+        if (!contoursArr || contoursArr.length === 0) return true; // إذا لا يوجد كونتور، اعتبر كل النقاط داخلية
+        
+        const main = contoursArr[0];
+        if (!main || !main.points || main.points.length < 3) return true;
+        
+        // خوارزمية ray-casting
+        let inside = false;
+        const pts = main.points;
+        
+        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+          const xi = pts[i].x, yi = pts[i].y;
+          const xj = pts[j].x, yj = pts[j].y;
+          
+          const intersect = ((yi > py) !== (yj > py)) && 
+                           (px < (xj - xi) * (py - yi) / (yj - yi + 1e-10) + xi);
+          
+          if (intersect) inside = !inside;
+        }
+        
+        return inside;
+      } catch(e){ 
+        console.warn('isPointInsideMainContour error', e);
+        return true; // في حالة الخطأ، اعتبر النقطة داخلية للسلامة
+      }
+    }
+
+    // ================= Generate Raster G-code (مصحح بالكامل) =================
     function generateRasterGCode(){
       if (machineMode === 'laser') {
-        // Laser raster unchanged
+        // Laser raster - مصحح
         if (!laserMapPrepared || !laserMap){ showToast('لم تُحضّر خريطة الليزر. اضغط "استخدم لخريطة الليزر"'); return ''; }
         const w = laserMapW, h = laserMapH;
         const workWidth = cmToMm(document.getElementById('workWidth').value || 30);
         const workHeight = cmToMm(document.getElementById('workHeight').value || 20);
-        const scaleX = workWidth / w, scaleY = workHeight / h;
-        const exposureScale = parseFloat(document.getElementById('laserExposureScale').value) || 1.0;
-        const basePower = parseFloat(document.getElementById('laserPower').value) || 60;
-        const feed = Math.max(100, Math.round((parseFloat(document.getElementById('laserDpi').value)||300)/2));
-        const lines = [];
-        lines.push('; Laser Raster G-code');
-        lines.push('G21 G90');
-        for (let row=0; row<h; row++){
-          const y_mm = (row * scaleY);
-          const leftToRight = (row % 2 === 0);
-          const xStart = leftToRight ? 0 : w-1;
-          const xEnd = leftToRight ? w-1 : 0;
-          lines.push(`G0 X${formatNumber(xStart*scaleX,3)} Y${formatNumber(y_mm,3)} F${feed}`);
-          let x = xStart;
-          while(true){
-            const intensity = laserMap[row*w + x];
-            const power = Math.round(Math.min(1000, intensity * basePower * exposureScale * 10));
-            lines.push(`M3 S${power}`);
-            lines.push(`G1 X${formatNumber(x*scaleX,3)} Y${formatNumber(y_mm,3)} F${feed}`);
-            if (x === xEnd) break;
-            x = leftToRight ? x+1 : x-1;
-          }
-          lines.push('M5');
-        }
-        lines.push('M5','M30');
-        const g = lines.join('\n');
-        lastGeneratedGcode = g; document.getElementById('gcodeOut').value = g;
-        showToast('تم توليد G-code للّيزر (Raster)');
-        renderTopViewFromGcode();
-        return g;
-      } else {
-        // Router raster: limit to bounding box of main contour if exists
-        if (!grayMat){ showToast('لا توجد بيانات كافية للـ Router'); return ''; }
-        const w = grayMat.cols, h = grayMat.rows;
-        const workWidth = cmToMm(document.getElementById('workWidth').value || 30);
-        const workHeight = cmToMm(document.getElementById('workHeight').value || 20);
-        const scaleX = workWidth / w, scaleY = workHeight / h;
-        const stepOver_mm = parseFloat(document.getElementById('stepOver').value) || 5;
-        // step in pixels derived from scaleY (mm per pixel)
-        const pixelsPerMmY = h / workHeight;
-        const stepPixels = Math.max(1, Math.round(stepOver_mm * pixelsPerMmY));
-        const feed = parseFloat(document.getElementById('feedRate').value) || 800;
-        const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
-
-        // bounding box: default full image
+        
+        // حساب bounding box للليزر أيضاً
         let xMin = 0, yMin = 0, boxW = w, boxH = h;
         try {
           if (contour) {
@@ -703,91 +693,216 @@
           }
         } catch(e){ console.warn('boundingRect error', e); }
 
-        const xMax = xMin + boxW - 1;
-        const yMax = yMin + boxH - 1;
+        const xMax = Math.min(w-1, xMin + boxW - 1);
+        const yMax = Math.min(h-1, yMin + boxH - 1);
+        
+        const boxScaleX = workWidth / boxW;
+        const boxScaleY = workHeight / boxH;
+        const exposureScale = parseFloat(document.getElementById('laserExposureScale').value) || 1.0;
+        const basePower = parseFloat(document.getElementById('laserPower').value) || 60;
+        const feed = Math.max(100, Math.round((parseFloat(document.getElementById('laserDpi').value)||300)/2));
+        
+        const lines = [];
+        lines.push('; Laser Raster G-code (Bounded)');
+        lines.push('G21 G90');
+        
+        for (let row = yMin; row <= yMax; row++) {
+          const relativeY = row - yMin;
+          const y_mm = relativeY * boxScaleY;
+          const leftToRight = (row % 2 === 0);
+          const xStart = leftToRight ? xMin : xMax;
+          const xEnd = leftToRight ? xMax : xMin;
+          
+          lines.push(`G0 X${formatNumber((xStart - xMin) * boxScaleX, 3)} Y${formatNumber(y_mm, 3)} F${feed}`);
+          
+          // تشغيل الليزر مرة واحدة لكل صف
+          const intensity = laserMap[row * w + xStart];
+          const power = Math.round(Math.min(1000, intensity * basePower * exposureScale * 10));
+          lines.push(`M3 S${power}`);
+          
+          let x = xStart;
+          while(true) {
+            const relativeX = x - xMin;
+            const x_mm = relativeX * boxScaleX;
+            lines.push(`G1 X${formatNumber(x_mm, 3)} Y${formatNumber(y_mm, 3)} F${feed}`);
+            
+            if (x === xEnd) break;
+            x = leftToRight ? x + 1 : x - 1;
+          }
+          lines.push('M5');
+        }
+        lines.push('M5', 'M30');
+        const g = lines.join('\n');
+        lastGeneratedGcode = g; 
+        document.getElementById('gcodeOut').value = g;
+        showToast('تم توليد G-code للّيزر (Raster) داخل حدود التصميم');
+        renderTopViewFromGcode();
+        return g;
+      } else {
+        // Router raster - مصحح بالكامل
+        if (!grayMat){ showToast('لا توجد بيانات كافية للـ Router'); return ''; }
+        const w = grayMat.cols, h = grayMat.rows;
+        const workWidth = cmToMm(document.getElementById('workWidth').value || 30);
+        const workHeight = cmToMm(document.getElementById('workHeight').value || 20);
+        const stepOver_mm = parseFloat(document.getElementById('stepOver').value) || 5;
+        
+        // حساب bounding box
+        let xMin = 0, yMin = 0, boxW = w, boxH = h;
+        try {
+          if (contour) {
+            const rect = cv.boundingRect(contour);
+            xMin = Math.max(0, rect.x);
+            yMin = Math.max(0, rect.y);
+            boxW = Math.max(1, rect.width);
+            boxH = Math.max(1, rect.height);
+          }
+        } catch(e){ console.warn('boundingRect error', e); }
 
-        const lines = []; lines.push('; Router Raster G-code (bounded)'); lines.push('G21 G90'); lines.push(`G0 Z${formatNumber(safeZ,2)}`);
+        const xMax = Math.min(w-1, xMin + boxW - 1);
+        const yMax = Math.min(h-1, yMin + boxH - 1);
+        
+        // المقياس بناءً على BBOX وليس الصورة الكاملة
+        const boxScaleX = workWidth / boxW;
+        const boxScaleY = workHeight / boxH;
+        
+        // حساب الخطوات بناءً على BBOX
+        const pixelsPerMmY = boxH / workHeight;
+        const stepPixels = Math.max(1, Math.round(stepOver_mm * pixelsPerMmY));
+        
+        const feed = parseFloat(document.getElementById('feedRate').value) || 800;
+        const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
+
+        const lines = []; 
+        lines.push('; Router Raster G-code (Bounded by Design)');
+        lines.push('G21 G90');
+        lines.push(`G0 Z${formatNumber(safeZ, 2)}`);
+        
         for (let y = yMin; y <= yMax; y += stepPixels) {
           const rowIndex = Math.round((y - yMin) / stepPixels);
           const leftToRight = (rowIndex % 2 === 0);
           const startX = leftToRight ? xMin : xMax;
           const endX = leftToRight ? xMax : xMin;
-          const y_mm = y * (workHeight / h);
-          // Rapid to start
-          lines.push(`G0 X${formatNumber(startX * (workWidth / w),3)} Y${formatNumber(y_mm,3)} Z${formatNumber(safeZ,2)}`);
-          lines.push(`G1 F${feed}`);
+          
+          // حساب Y النسبي من BBOX
+          const relativeY = y - yMin;
+          const y_mm = relativeY * boxScaleY;
+          
+          // Rapid إلى نقطة البداية
+          const startX_mm = (startX - xMin) * boxScaleX;
+          lines.push(`G0 X${formatNumber(startX_mm, 3)} Y${formatNumber(y_mm, 3)} Z${formatNumber(safeZ, 2)} F${feed * 2}`);
+          
           let x = startX;
-          while(true){
-            // check if (x,y) is inside contour polygon: if outside, skip Z cutting (move rapid) or set Z=safeZ
+          let firstPoint = true;
+          
+          while(true) {
+            // حساب X النسبي من BBOX
+            const relativeX = x - xMin;
+            const x_mm = relativeX * boxScaleX;
+            
+            // التحقق إذا كانت النقطة داخل الكونتور الرئيسي
             const inside = isPointInsideMainContour(x, y);
             const z = inside ? getZfromHeatmap(x, y) : safeZ;
-            const x_mm = x * (workWidth / w);
-            lines.push(`G1 X${formatNumber(x_mm,3)} Y${formatNumber(y_mm,3)} Z${formatNumber(z,3)}`);
+            
+            if (firstPoint) {
+              // للنقطة الأولى: حركة Z أولاً ثم XY
+              lines.push(`G1 Z${formatNumber(z, 3)} F${feed / 3}`);
+              lines.push(`G1 X${formatNumber(x_mm, 3)} Y${formatNumber(y_mm, 3)} F${feed}`);
+              firstPoint = false;
+            } else {
+              // للنقاط التالية: حركة XYZ معاً
+              lines.push(`G1 X${formatNumber(x_mm, 3)} Y${formatNumber(y_mm, 3)} Z${formatNumber(z, 3)} F${feed}`);
+            }
+            
             if (x === endX) break;
-            x = leftToRight ? x+1 : x-1;
+            x = leftToRight ? x + 1 : x - 1;
           }
-          lines.push(`G0 Z${formatNumber(safeZ,2)}`);
+          
+          // رفع الأداة بعد انتهاء الصف
+          lines.push(`G0 Z${formatNumber(safeZ, 2)}`);
         }
-        lines.push('M5','M30');
+        
+        lines.push('M5', 'M30');
         const g = lines.join('\n');
-        lastGeneratedGcode = g; document.getElementById('gcodeOut').value = g;
+        lastGeneratedGcode = g; 
+        document.getElementById('gcodeOut').value = g;
         showToast('تم توليد G-code للـ Router (Raster) داخل حدود التصميم');
         renderTopViewFromGcode();
         return g;
       }
     }
 
-    // helper: test if pixel (px,py) lies inside main contour polygon (uses contoursArr[0])
-    function isPointInsideMainContour(px, py){
-      try {
-        if (!contoursArr || contoursArr.length === 0) return false;
-        const main = contoursArr[0];
-        if (!main || !main.points || main.points.length===0) return false;
-        // ray-casting algorithm
-        let inside = false;
-        const pts = main.points;
-        for (let i=0, j=pts.length-1; i<pts.length; j=i++){
-          const xi = pts[i].x, yi = pts[i].y;
-          const xj = pts[j].x, yj = pts[j].y;
-          const intersect = ((yi>py)!=(yj>py)) && (px < (xj - xi) * (py - yi) / (yj - yi + 0.0) + xi);
-          if (intersect) inside = !inside;
-        }
-        return inside;
-      } catch(e){ return false; }
-    }
-
-    // ================= Generate Contour G-code =================
-    function generateContourGCode(outerOnly=false){
+    // ================= Generate Contour G-code (مصحح) =================
+    function generateContourGCode(outerOnly = false){
       if (!contoursArr || contoursArr.length === 0){ showToast('⚠️ لم يتم اكتشاف الحواف بعد'); return ''; }
       const cols = grayMat ? grayMat.cols : (laserMapW || 0);
       const rows = grayMat ? grayMat.rows : (laserMapH || 0);
       if (cols === 0 || rows === 0) { showToast('لا توجد بيانات مساحة'); return ''; }
+      
       const workWidth = cmToMm(document.getElementById('workWidth').value || 30);
       const workHeight = cmToMm(document.getElementById('workHeight').value || 20);
-      const scaleX = workWidth / cols, scaleY = workHeight / rows;
       const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
       const feed = parseFloat(document.getElementById('feedRate').value) || 800;
+      
+      // حساب BBOX للكونتورات
+      let designMinX = Infinity, designMinY = Infinity, designMaxX = 0, designMaxY = 0;
       const list = outerOnly ? [contoursArr[0]] : contoursArr.slice();
-      const lines = []; lines.push('; Contour G-code'); lines.push('G21 G90');
-      for (let ci=0; ci<list.length; ci++){
+      
+      list.forEach(contour => {
+        contour.points.forEach(p => {
+          designMinX = Math.min(designMinX, p.x);
+          designMinY = Math.min(designMinY, p.y);
+          designMaxX = Math.max(designMaxX, p.x);
+          designMaxY = Math.max(designMaxY, p.y);
+        });
+      });
+      
+      const designWidth = designMaxX - designMinX;
+      const designHeight = designMaxY - designMinY;
+      const scaleX = workWidth / designWidth;
+      const scaleY = workHeight / designHeight;
+      
+      const lines = []; 
+      lines.push('; Contour G-code (Scaled to Design)');
+      lines.push('G21 G90');
+      
+      for (let ci = 0; ci < list.length; ci++){
         const c = list[ci];
-        if (!c || !c.points || c.points.length===0) continue;
+        if (!c || !c.points || c.points.length === 0) continue;
+        
         lines.push(`(Contour ${ci} — area ${Math.round(c.area)})`);
+        
+        // النقطة الأولى
         const p0 = c.points[0];
-        lines.push(`G0 X${formatNumber(p0.x*scaleX,3)} Y${formatNumber(p0.y*scaleY,3)} Z${formatNumber(safeZ,2)}`);
+        const x0_mm = (p0.x - designMinX) * scaleX;
+        const y0_mm = (p0.y - designMinY) * scaleY;
+        
+        lines.push(`G0 X${formatNumber(x0_mm, 3)} Y${formatNumber(y0_mm, 3)} Z${formatNumber(safeZ, 2)}`);
+        lines.push(`G1 Z${formatNumber(0, 3)} F${feed / 3}`); // نزول بطيء
         lines.push(`G1 F${feed}`);
-        for (let j=0;j<c.points.length;j++){
+        
+        for (let j = 0; j < c.points.length; j++){
           const p = c.points[j];
+          const x_mm = (p.x - designMinX) * scaleX;
+          const y_mm = (p.y - designMinY) * scaleY;
           let zVal = 0;
-          if (machineMode === 'router') zVal = getZfromHeatmap(p.x, p.y);
-          lines.push(`G1 X${formatNumber(p.x*scaleX,3)} Y${formatNumber(p.y*scaleY,3)} Z${formatNumber(zVal,3)} F${feed}`);
+          
+          if (machineMode === 'router') {
+            zVal = getZfromHeatmap(p.x, p.y);
+          }
+          
+          lines.push(`G1 X${formatNumber(x_mm, 3)} Y${formatNumber(y_mm, 3)} Z${formatNumber(zVal, 3)} F${feed}`);
         }
-        lines.push(`G0 Z${formatNumber(safeZ,2)}`);
+        
+        // إغلاق الكونتور
+        lines.push(`G1 X${formatNumber(x0_mm, 3)} Y${formatNumber(y0_mm, 3)} Z${formatNumber(0, 3)} F${feed}`);
+        lines.push(`G0 Z${formatNumber(safeZ, 2)}`);
       }
-      lines.push('M5','M30');
+      
+      lines.push('M5', 'M30');
       const g = lines.join('\n');
-      lastGeneratedGcode = g; document.getElementById('gcodeOut').value = g;
-      showToast('تم توليد G-code للحواف (Contour)');
+      lastGeneratedGcode = g; 
+      document.getElementById('gcodeOut').value = g;
+      showToast('تم توليد G-code للحواف (Contour) بمقياس التصميم');
       renderTopViewFromGcode();
       return g;
     }
