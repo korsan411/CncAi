@@ -1,0 +1,802 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>CncAi v2.3 — Stable Loader + Laser Enhanced + G-code (Raster & Contour)</title>
+
+  <!-- OpenCV (متزامن، كما في النسخة 2.1 المستقرة) -->
+  <script src="https://docs.opencv.org/4.8.0/opencv.js"></script>
+
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Tahoma,Arial,Segoe UI,system-ui;background:#041423;color:#e6eef6}
+    .app{max-width:1280px;margin:14px auto;padding:14px}
+    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #123}
+    .status-bar{position:fixed;left:50%;transform:translateX(-50%);top:10px;background:#1a3140;color:#e6eef6;padding:6px 12px;border-radius:10px;border:1px solid #153042;z-index:9999;box-shadow:0 6px 18px rgba(0,0,0,0.5)}
+    .status-bar.ready{background:#1f4f2f;border-color:#2a7a2a}
+    .topbar{display:flex;gap:10px;align-items:center;margin-bottom:10px}
+    .colormap-group{display:flex;gap:6px;align-items:center}
+    .cmap-btn{width:34px;height:34px;border-radius:50%;border:2px solid #123;background:#222;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+    .cmap-btn.active{outline:3px solid rgba(6,182,212,0.18)}
+    .cmap-label{font-size:13px;color:#9bb0c8;margin-left:6px}
+    .grid{display:grid;grid-template-columns:1fr 520px;gap:14px}
+    @media(max-width:1000px){.grid{grid-template-columns:1fr}}
+    .panel{background:#081623;padding:14px;border-radius:10px;border:1px solid #18343f}
+    .tab-buttons{display:flex;gap:6px;margin-top:8px;background:rgba(8,15,20,0.45);padding:6px;border-radius:8px}
+    .tab-buttons button{flex:1;border:none;padding:8px;border-radius:6px;background:transparent;color:#9bb0c8;cursor:pointer}
+    .tab-buttons button.active{background:#0f2b37;color:#e6eef6;box-shadow:inset 0 -3px 0 #06b6d4}
+    .tab-content{display:none;margin-top:12px}
+    .tab-content.active{display:block}
+    .canvas-placeholder{width:100%;min-height:220px;background:#021018;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#8fb7c5;border:1px solid #243b45}
+    canvas{max-width:100%;border-radius:6px;background:#000;display:block;border:1px solid #233a44}
+    label{display:block;margin-top:10px;color:#cfeaf2;font-weight:600}
+    input,select,textarea,button{font-size:.95rem}
+    input,select{width:100%;padding:8px;border-radius:6px;border:1px solid #123540;background:#07262d;color:#e6eef6;margin-top:6px}
+    .heatmap-toolbar{display:flex;gap:6px;align-items:center;margin-bottom:10px}
+    .small-meta{font-size:12px;color:#9bb0c8;margin-top:6px}
+    .controls-row{display:flex;gap:8px;align-items:center}
+    .controls-row > *{flex:1}
+    .btn-row{display:flex;gap:8px;margin-top:12px}
+    button.primary{background:#06b6d4;color:#021;padding:10px;border-radius:8px;border:none;cursor:pointer}
+    button.secondary{background:#12353f;color:#cfeaf2;padding:10px;border-radius:8px;border:none;cursor:pointer}
+    #toast{position:fixed;left:16px;bottom:16px;background:rgba(0,0,0,0.85);color:#fff;padding:8px 12px;border-radius:8px;display:none;z-index:10000}
+    .meta-small{font-size:12px;color:#95b7c1}
+    .row{display:flex;gap:8px}
+    .row > *{flex:1}
+    .checkbox-inline{display:inline-flex;gap:8px;align-items:center}
+    /* small tweak for file input label */
+    #fileInput{display:none}
+    .upload-btn{display:inline-block;padding:8px 12px;background:#0f2b34;border-radius:6px;color:#e6eef6;cursor:pointer;border:1px dashed #234a52}
+    .gcode-options{margin-top:12px;display:flex;gap:8px;align-items:center}
+    .small-note{font-size:12px;color:#9bb0c8}
+  </style>
+</head>
+<body>
+  <div class="status-bar" id="cvStatus">🧠 جاري تحميل مكتبة OpenCV...</div>
+
+  <div class="app">
+    <header>
+      <h2>CncAi v2.3 — Stable Loader + Laser Enhanced</h2>
+      <div id="cvStateSmall"><small style="opacity:.8">النسخة مع توليد Raster & Contour</small></div>
+    </header>
+
+    <div class="topbar" style="margin-bottom:6px">
+      <label class="upload-btn" id="btnUpload">📁 رفع صورة جديدة</label>
+      <input id="fileInput" type="file" accept="image/*"/>
+      <div style="flex:1"></div>
+      <div class="colormap-group" title="اختيار خريطة الألوان يؤثر على كل المعاينات">
+        <div class="cmap-btn" id="cmap-jet" data-map="jet" style="background:linear-gradient(90deg,#0040ff,#00ffff,#00ff00,#ffff00,#ff0000)"></div>
+        <div class="cmap-btn" id="cmap-hot" data-map="hot" style="background:linear-gradient(90deg,#000000,#800000,#ff0000,#ffff00,#ffffff)"></div>
+        <div class="cmap-btn" id="cmap-cool" data-map="cool" style="background:linear-gradient(90deg,#0000ff,#00ffff,#ffffff)"></div>
+        <div class="cmap-btn" id="cmap-gray" data-map="gray" style="background:linear-gradient(90deg,#000000,#777777,#ffffff)"></div>
+        <div class="cmap-label">Colormap</div>
+      </div>
+      <div style="width:8px"></div>
+      <div class="checkbox-inline">
+        <label style="color:#9bb0c8">حفظ الألوان</label>
+        <input id="saveCmap" type="checkbox" style="width:18px;height:18px;margin-right:6px">
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- LEFT -->
+      <div class="panel">
+        <div style="display:flex;gap:8px;align-items:center">
+          <label style="font-weight:normal;color:#9bb0c8;margin:0 6px">Edge Mode:</label>
+          <select id="edgeMode" style="width:140px">
+            <option value="auto">Canny</option>
+            <option value="sobel">Sobel</option>
+            <option value="laplace">Laplacian</option>
+          </select>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+          <label style="margin:0;color:#9bb0c8">حساسية الحواف:</label>
+          <input id="edgeSensitivity" type="range" min="0.05" max="1.0" step="0.05" value="0.33" style="flex:1">
+          <div id="edgeValue" style="min-width:44px;text-align:center;color:#cfeaf2">0.33</div>
+        </div>
+
+        <div style="display:flex;gap:8px;align-items:center;margin-top:10px">
+          <label style="font-weight:normal;color:#9bb0c8;margin:0 6px">نوع الماكينة:</label>
+          <select id="machineType" style="width:220px">
+            <option value="router" selected>🪵 CNC Router</option>
+            <option value="laser">🔥 Laser Engraving</option>
+          </select>
+        </div>
+
+        <div class="tab-buttons" role="tablist">
+          <button data-tab="original" class="active">🖼️ الأصلية</button>
+          <button data-tab="heatmap">🔥 Heatmap</button>
+          <button data-tab="contour">📐 Contours</button>
+          <button data-tab="edgedetail">🔎 تفاصيل الحواف</button>
+          <button data-tab="laserDetail">🔬 Laser Detail</button>
+          <button data-tab="topview">🔝 Top View</button>
+        </div>
+
+        <div id="original" class="tab-content active">
+          <div class="canvas-placeholder" id="originalPlaceholder">الصورة الأصلية ستظهر هنا</div>
+          <canvas id="canvasOriginal" style="display:none"></canvas>
+        </div>
+
+        <div id="heatmap" class="tab-content">
+          <div class="canvas-placeholder" id="heatmapPlaceholder">Heatmap ستظهر هنا</div>
+          <canvas id="canvasHeatmap" style="display:none"></canvas>
+          <div class="small-meta">تغيير Colormap يؤثر على كل المعاينات.</div>
+        </div>
+
+        <div id="contour" class="tab-content">
+          <div class="canvas-placeholder" id="contourPlaceholder">Contours ستظهر هنا</div>
+          <canvas id="canvasContour" style="display:none"></canvas>
+        </div>
+
+        <div id="edgedetail" class="tab-content">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+            <label style="font-weight:normal"><input id="edgeAdaptive" type="checkbox"> استخدام Adaptive Threshold</label>
+            <button id="edgeContrast" class="secondary" style="padding:6px 8px">تحسين التباين</button>
+            <button id="edgeReAnalyze" class="secondary" style="padding:6px 8px">🔄 إعادة التحليل</button>
+          </div>
+          <div class="canvas-placeholder" id="edgeDetailPlaceholder">تفاصيل الحواف ستظهر هنا</div>
+          <canvas id="canvasEdgeDetail" style="display:none"></canvas>
+        </div>
+
+        <div id="laserDetail" class="tab-content">
+          <div class="canvas-placeholder" id="laserDetailPlaceholder">خريطة الليزر (Smooth Depth Map) ستظهر هنا</div>
+          <canvas id="canvasLaserDetail" style="display:none"></canvas>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+            <label style="font-weight:normal;color:#9bb0c8">نعومة المنحنى:</label>
+            <input id="laserSmoothness" type="range" min="0" max="8" step="0.5" value="3" style="flex:1">
+            <div id="laserSmoothVal" style="min-width:36px;text-align:center;color:#cfeaf2">3.0</div>
+            <button id="useLaserMap" class="primary" style="margin-left:8px">استخدم لخريطة الليزر</button>
+          </div>
+          <div class="small-meta">خريطة ملساء لتوليد موحد للطاقة — مهم للّيزر</div>
+        </div>
+
+        <div id="topview" class="tab-content">
+          <div class="canvas-placeholder" id="topPlaceholder">
+            <canvas id="topView" width="600" height="300"></canvas>
+          </div>
+          <div id="topLegend" style="height:14px;margin-top:6px;border-radius:6px;border:1px solid #2b3844;background:linear-gradient(90deg,#ddd,#333)"></div>
+        </div>
+      </div>
+
+      <!-- RIGHT -->
+      <div class="panel">
+        <h3>⚙️ إعدادات عامة</h3>
+
+        <div id="routerSettings" class="router-block">
+          <label>عرض العمل (سم)</label>
+          <input id="workWidth" type="number" value="30" step="0.1">
+          <label>ارتفاع العمل (سم)</label>
+          <input id="workHeight" type="number" value="20" step="0.1">
+          <label>خطوة المسح (مم)</label>
+          <input id="stepOver" type="number" value="5" step="0.1">
+          <label>أقصى عمق (مم)</label>
+          <input id="maxDepth" type="number" value="3.0" step="0.1">
+          <label>سرعة التغذية (مم/د)</label>
+          <input id="feedRate" type="number" value="800">
+          <label>ارتفاع الأمان (مم)</label>
+          <input id="safeZ" type="number" value="5">
+        </div>
+
+        <div id="laserSettings" class="laser-block" style="display:none">
+          <label>قوة الليزر (مرجعية)</label>
+          <input id="laserPower" type="number" value="60" min="1" max="100">
+          <label>دقة النقش (DPI)</label>
+          <input id="laserDpi" type="number" value="300" min="50" max="2400">
+          <label>مقياس التعرض</label>
+          <input id="laserExposureScale" type="range" min="0.1" max="3" step="0.1" value="1">
+        </div>
+
+        <div class="gcode-options">
+          <label style="margin:0;color:#cfeaf2">نوع التوليد:</label>
+          <select id="gcodeMode" style="width:220px">
+            <option value="raster">Raster (نقش خطوط متتابعة)</option>
+            <option value="contour_all">Contour — كل الحواف</option>
+            <option value="contour_outer">Contour — الحافة الخارجية فقط</option>
+          </select>
+        </div>
+
+        <div class="btn-row" style="margin-top:10px">
+          <button id="btnGen" class="primary">⚡ توليد G-code</button>
+          <button id="btnDownload" class="secondary">💾 تحميل G-code</button>
+        </div>
+
+        <div id="estTime" style="margin-top:12px;color:#9bb0c8;text-align:center;padding:8px;background:#072a30;border-radius:6px"></div>
+
+        <label style="margin-top:12px">📄 مخرجات G-code</label>
+        <textarea id="gcodeOut" readonly style="height:200px;background:#021024;color:#cfeaf2;border-radius:8px;padding:10px"></textarea>
+        <div class="meta-small" style="margin-top:8px">الحفظ: تحقق من إعدادات الأمان قبل التشغيل على الماكينة الفعلية.</div>
+      </div>
+    </div>
+
+    <div id="toast"></div>
+  </div>
+
+  <script>
+    // ================= State =================
+    let cvReady = false;
+    let previewCanvas = null;
+    let previewCtx = null;
+    let grayMat = null;
+    let contour = null;
+    let additionalContours = [];
+    let contoursArr = []; // extracted JS-friendly contours [{points:[{x,y}], area}]
+    let currentColormap = localStorage.getItem('cnc_cmap') || 'jet';
+    let laserMap = null, laserMapW = 0, laserMapH = 0, laserMapPrepared = false;
+    let machineMode = 'router';
+    let pendingImage = null;
+    let lastGeneratedGcode = '';
+
+    // ================= UI helpers =================
+    function showToast(txt, ms = 2000) {
+      const t = document.getElementById('toast'); t.textContent = txt; t.style.display = 'block';
+      clearTimeout(t._t); t._t = setTimeout(()=> t.style.display = 'none', ms);
+      console.log('[toast]', txt);
+    }
+    function formatNumber(v, d=3){ return Number.parseFloat(v).toFixed(d); }
+
+    // ================= OpenCV ready handler =================
+    if (typeof cv !== 'undefined') {
+      cv['onRuntimeInitialized'] = function() {
+        cvReady = true;
+        const sb = document.getElementById('cvStatus');
+        if(sb){ sb.innerText = '✅ OpenCV جاهزة'; sb.classList.add('ready'); }
+        showToast('✅ تم تحميل مكتبة OpenCV');
+        if (pendingImage) { processPendingImage(); }
+      };
+    } else {
+      (function waitCv(){
+        if (typeof cv !== 'undefined' && cv['onRuntimeInitialized']) {
+          cv['onRuntimeInitialized']();
+        } else setTimeout(waitCv, 120);
+      })();
+    }
+
+    window.addEventListener('error', e=>{
+      if (e && e.target && e.target.tagName === 'SCRIPT' && e.target.src && e.target.src.includes('opencv')) {
+        alert('⚠️ فشل تحميل مكتبة OpenCV. تحقق من اتصال الإنترنت ثم أعد تحميل الصفحة.');
+      }
+    }, true);
+
+    // ================= Utilities =================
+    function cmToMm(cm){ return (parseFloat(cm)||0) * 10; }
+    function clamp(v,a=0,b=1){ return Math.max(a, Math.min(b, v)); }
+
+    // ================= Persistent colormap UI =================
+    function setActiveCmapBtn(map) {
+      document.querySelectorAll('.cmap-btn').forEach(b=>b.classList.remove('active'));
+      const el = document.querySelector(`.cmap-btn[data-map="${map}"]`) || document.getElementById('cmap-'+map);
+      if(el) el.classList.add('active');
+      currentColormap = map;
+      if(document.getElementById('saveCmap').checked) localStorage.setItem('cnc_cmap', map); else localStorage.removeItem('cnc_cmap');
+      renderHeatmap(); renderEdgeDetail(); renderLaserMapPreview(); renderTopViewFromGcode();
+    }
+
+    document.querySelectorAll('.cmap-btn').forEach(b=>{
+      const map = b.dataset.map || b.id.replace('cmap-','');
+      b.setAttribute('data-map', map);
+      b.addEventListener('click', ()=> setActiveCmapBtn(map));
+    });
+    document.getElementById('saveCmap').checked = !!localStorage.getItem('cnc_cmap');
+    setTimeout(()=> setActiveCmapBtn(currentColormap), 100);
+
+    // ================= Tabs =================
+    document.querySelectorAll('.tab-buttons button').forEach(btn=>{
+      btn.addEventListener('click', ()=> {
+        document.querySelectorAll('.tab-buttons button').forEach(b=>b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.tab).classList.add('active');
+      });
+    });
+
+    // ================= Machine Mode =================
+    const machineSelect = document.getElementById('machineType');
+    machineSelect.addEventListener('change', applyMachineMode);
+    function clearPreviews(){
+      ['canvasHeatmap','canvasContour','canvasEdgeDetail','canvasLaserDetail'].forEach(id=>{
+        const el=document.getElementById(id); if(el) el.style.display='none';
+      });
+      laserMap = null; laserMapW = laserMapH = 0; laserMapPrepared = false;
+      document.getElementById('gcodeOut').value = ''; document.getElementById('estTime').innerText = '';
+      const top = document.getElementById('topView'); if(top){ const ctx=top.getContext('2d'); ctx.clearRect(0,0,top.width,top.height); }
+    }
+    function applyMachineMode(){
+      clearPreviews();
+      machineMode = machineSelect.value;
+      document.getElementById('laserSettings').style.display = (machineMode === 'laser') ? 'block' : 'none';
+      document.getElementById('routerSettings').style.display = (machineMode === 'router') ? 'block' : 'none';
+      showToast('الوضع: ' + (machineMode === 'laser' ? 'Laser Engraving' : 'CNC Router'), 900);
+    }
+    applyMachineMode();
+
+    // ================= File Load (robust) =================
+    document.getElementById('btnUpload').addEventListener('click', ()=> document.getElementById('fileInput').click());
+
+    document.getElementById('fileInput').addEventListener('change', async (e) => {
+      const f = e.target.files && e.target.files[0]; if(!f) return;
+      if(!f.type.match('image.*')) { showToast('الرجاء اختيار ملف صورة'); return; }
+      try {
+        cleanupMats();
+        const img = new Image();
+        img.src = URL.createObjectURL(f);
+        await img.decode();
+        previewCanvas = document.getElementById('canvasOriginal');
+        previewCtx = previewCanvas.getContext('2d');
+        const maxPixels = 1024*1024; let w = img.width, h = img.height;
+        if (w*h > maxPixels) { const ratio = Math.sqrt(maxPixels/(w*h)); w = Math.floor(w*ratio); h = Math.floor(h*ratio); showToast('تم تقليل دقة المعاينة للأداء'); }
+        previewCanvas.width = w; previewCanvas.height = h;
+        previewCtx.drawImage(img, 0, 0, w, h);
+        document.getElementById('originalPlaceholder').style.display = 'none'; previewCanvas.style.display = 'block';
+        if (!cvReady) {
+          pendingImage = {img, w, h}; 
+          showToast('⏳ جارٍ تحميل OpenCV... سيتم تحليل الصورة تلقائيًا بعد جاهزيتها', 3000);
+          return;
+        }
+        await detectContours();
+      } catch(err){
+        console.error(err); showToast('خطأ في تحميل الصورة');
+      }
+    });
+
+    function processPendingImage(){
+      if(!pendingImage) return;
+      try {
+        previewCanvas = document.getElementById('canvasOriginal');
+        previewCtx = previewCanvas.getContext('2d');
+        const {img, w, h} = pendingImage;
+        previewCanvas.width = w; previewCanvas.height = h;
+        previewCtx.drawImage(img, 0, 0, w, h);
+        document.getElementById('originalPlaceholder').style.display = 'none'; previewCanvas.style.display = 'block';
+        pendingImage = null;
+        detectContours();
+      } catch(e){ console.error('processPendingImage', e); }
+    }
+
+    // ================= Cleanup =================
+    function cleanupMats(){
+      try{ if(grayMat && !grayMat.isDeleted){ grayMat.delete(); grayMat = null; } }catch(e){}
+      try{ if(contour && !contour.isDeleted && contour.delete){ contour.delete(); contour = null; } }catch(e){}
+      try{ additionalContours.forEach(c=>{ if(c.contour && !c.contour.isDeleted) c.contour.delete(); }); }catch(e){}
+      additionalContours = []; contoursArr = []; laserMap = null; laserMapPrepared = false; laserMapW = laserMapH = 0;
+    }
+
+    // ================= Image Helpers =================
+    function contrastStretchMat(src) {
+      try {
+        const dst = new cv.Mat(); const mm = cv.minMaxLoc(src);
+        const minV = mm.minVal, maxV = mm.maxVal;
+        if (maxV <= minV) { src.copyTo(dst); return dst; }
+        const alpha = 255.0 / (maxV - minV); const beta = -minV * alpha;
+        src.convertTo(dst, cv.CV_8U, alpha, beta); return dst;
+      } catch(e){ console.warn('contrastStretch error', e); const d = new cv.Mat(); src.copyTo(d); return d; }
+    }
+
+    // ================= Edge Detection / Contours =================
+    async function detectContours(){
+      if (!cvReady || !previewCanvas) return;
+      try {
+        const src = cv.imread(previewCanvas);
+        const gray = new cv.Mat(); cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+        const stretched = contrastStretchMat(gray);
+        const blurred = new cv.Mat(); cv.GaussianBlur(stretched, blurred, new cv.Size(5,5), 0);
+
+        const sens = parseFloat(document.getElementById('edgeSensitivity').value) || 0.33;
+        const median = cv.mean(blurred)[0];
+        const low = Math.max(0, (1.0 - sens) * median);
+        const high = Math.min(255, (1.0 + sens) * median);
+
+        const mode = document.getElementById('edgeMode').value || 'auto';
+        const useAdaptive = document.getElementById('edgeAdaptive').checked;
+
+        let edges = new cv.Mat();
+        if (useAdaptive) {
+          try {
+            const tmpStr = contrastStretchMat(gray);
+            const adapt = new cv.Mat();
+            cv.adaptiveThreshold(tmpStr, adapt, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
+            cv.Canny(blurred, edges, low*0.7, high*1.1);
+            cv.bitwise_or(edges, adapt, edges);
+            adapt.delete(); tmpStr.delete();
+          } catch(e) { cv.Canny(blurred, edges, low, high); }
+        } else {
+          if (mode === 'sobel') {
+            const gx = new cv.Mat(), gy = new cv.Mat();
+            cv.Sobel(blurred, gx, cv.CV_16S, 1, 0); cv.Sobel(blurred, gy, cv.CV_16S, 0, 1);
+            cv.convertScaleAbs(gx, gx); cv.convertScaleAbs(gy, gy);
+            cv.addWeighted(gx, 0.5, gy, 0.5, 0, edges); gx.delete(); gy.delete();
+          } else if (mode === 'laplace') {
+            cv.Laplacian(blurred, edges, cv.CV_16S); cv.convertScaleAbs(edges, edges);
+          } else {
+            cv.Canny(blurred, edges, low, high);
+          }
+        }
+
+        const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3,3));
+        cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel);
+        cv.morphologyEx(edges, edges, cv.MORPH_OPEN, kernel);
+
+        // find contours (retain hierarchy? use RETR_LIST as before)
+        const contours = new cv.MatVector(), hierarchy = new cv.Mat();
+        cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+
+        const minArea = (stretched.cols * stretched.rows) * 0.001;
+        const valid = [];
+        for (let i=0;i<contours.size();i++){
+          const cnt = contours.get(i); const area = cv.contourArea(cnt);
+          if (area > minArea) valid.push({contour:cnt, area}); else try{ cnt.delete(); }catch(e){}
+        }
+
+        if (valid.length > 0) {
+          valid.sort((a,b)=>b.area - a.area);
+          // keep the largest as 'contour' and rest as additionalContours
+          contour = valid[0].contour;
+          additionalContours = valid.slice(1).map(v=>({contour:v.contour, area:v.area}));
+          showToast('تم كشف ' + valid.length + ' كونتور');
+        } else { contour = null; additionalContours = []; showToast('لم يتم العثور على حواف كافية'); }
+
+        if (grayMat) try{ grayMat.delete(); } catch(e){}
+        grayMat = stretched.clone();
+
+        // extract JS-friendly contours for G-code use
+        extractContoursForGcode();
+
+        // render previews
+        renderHeatmap(); renderContour(); renderEdgeDetail(); renderLaserMapPreview();
+
+        // cleanup temps
+        src.delete(); gray.delete(); blurred.delete(); edges.delete(); kernel.delete(); contours.delete(); hierarchy.delete(); stretched.delete();
+      } catch(err) { console.error('detectContours error', err); showToast('خطأ في كشف الحواف'); }
+    }
+
+    // extract contours into contoursArr = [{points:[{x,y}], area}]
+    function extractContoursForGcode(){
+      contoursArr = [];
+      try {
+        if (!contour) return;
+        function matToPoints(cntMat){
+          const pts = [];
+          const d = cntMat.data32S;
+          for (let i=0;i<d.length;i+=2) pts.push({x: d[i], y: d[i+1]});
+          return pts;
+        }
+        // main contour
+        if (contour) contoursArr.push({points: matToPoints(contour), area: cv.contourArea(contour)});
+        // additional
+        additionalContours.forEach(c=>{ try{ contoursArr.push({points: matToPoints(c.contour), area: c.area}); }catch(e){} });
+      } catch(e){ console.warn('extractContoursForGcode', e); }
+    }
+
+    // ================= Colormap =================
+    function getColormapColor(t, map) {
+      t = clamp(t);
+      if (map === 'hot') {
+        if (t < 0.33) return {r: Math.round(t/0.33*128), g:0, b:0};
+        if (t < 0.66) return {r: Math.round(128 + (t-0.33)/0.33*127), g: Math.round((t-0.33)/0.33*128), b:0};
+        return { r:255, g: Math.round(128 + (t-0.66)/0.34*127), b: Math.round((t-0.66)/0.34*127) };
+      } else if (map === 'cool') {
+        return { r: Math.round(255*t), g: Math.round(255*(1-t)), b:255 };
+      } else if (map === 'gray') {
+        const v = Math.round(255*t); return { r:v,g:v,b:v };
+      } else {
+        const r = Math.round(255 * clamp(1.5 - Math.abs(1.0 - 4.0*(t-0.5)), 0, 1));
+        const g = Math.round(255 * clamp(1.5 - Math.abs(0.5 - 4.0*(t-0.25)), 0, 1));
+        const b = Math.round(255 * clamp(1.5 - Math.abs(0.5 - 4.0*(t)), 0, 1));
+        return { r, g, b };
+      }
+    }
+
+    // ================= Render Heatmap =================
+    function renderHeatmap() {
+      if (!grayMat || !previewCanvas) return;
+      const c = document.getElementById('canvasHeatmap'), ctx = c.getContext('2d');
+      c.width = grayMat.cols; c.height = grayMat.rows;
+      const img = ctx.createImageData(c.width, c.height); const data = grayMat.data;
+      for (let i=0;i<data.length;i++){
+        const v = data[i]; const t = v/255.0; const col = getColormapColor(t, currentColormap); const idx = i*4;
+        img.data[idx]=col.r; img.data[idx+1]=col.g; img.data[idx+2]=col.b; img.data[idx+3]=255;
+      }
+      ctx.putImageData(img,0,0); document.getElementById('heatmapPlaceholder').style.display='none'; c.style.display='block';
+    }
+
+    // ================= Render Contour =================
+    function renderContour(){
+      if(!grayMat) return;
+      const c=document.getElementById('canvasContour'), ctx=c.getContext('2d');
+      c.width=grayMat.cols; c.height=grayMat.rows;
+      try{ ctx.drawImage(document.getElementById('canvasHeatmap'),0,0); }catch(e){ ctx.fillStyle='#111'; ctx.fillRect(0,0,c.width,c.height); }
+      if(contour){
+        ctx.strokeStyle='#00ff88'; ctx.lineWidth=2; ctx.beginPath();
+        const d=contour.data32S; for(let i=0;i<d.length;i+=2){ const x=d[i], y=d[i+1]; if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); } ctx.closePath(); ctx.stroke();
+      }
+      additionalContours.forEach(ci=>{ try{ ctx.strokeStyle='#ffd24d'; ctx.lineWidth=1; ctx.beginPath(); const d=ci.contour.data32S; for(let i=0;i<d.length;i+=2){ if(i===0) ctx.moveTo(d[i],d[i+1]); else ctx.lineTo(d[i],d[i+1]); } ctx.closePath(); ctx.stroke(); }catch(e){} });
+      document.getElementById('contourPlaceholder').style.display='none'; c.style.display='block';
+    }
+
+    // ================= Edge Detail =================
+    function renderEdgeDetail(){
+      const canvas = document.getElementById('canvasEdgeDetail'), ph=document.getElementById('edgeDetailPlaceholder');
+      if(!grayMat || !previewCanvas){ ph.style.display='flex'; canvas.style.display='none'; return; }
+      ph.style.display='none'; canvas.style.display='block';
+      const tmp=new cv.Mat();
+      try{
+        const useAdaptive = document.getElementById('edgeAdaptive').checked;
+        if(useAdaptive){
+          const stretched=contrastStretchMat(grayMat);
+          const adapt=new cv.Mat(); cv.adaptiveThreshold(stretched, adapt, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
+          cv.Canny(stretched, tmp, 40, 120); cv.bitwise_and(tmp, adapt, tmp); adapt.delete(); stretched.delete();
+        } else {
+          cv.Canny(grayMat, tmp, 50, 150);
+        }
+        const w=tmp.cols,h=tmp.rows; canvas.width=w; canvas.height=h;
+        const ctx=canvas.getContext('2d'), img=ctx.createImageData(w,h);
+        for(let y=0;y<h;y++){ for(let x=0;x<w;x++){ const v=tmp.ucharPtr(y,x)[0]/255.0; const col=getColormapColor(v,currentColormap); const idx=(y*w+x)*4; img.data[idx]=col.r; img.data[idx+1]=col.g; img.data[idx+2]=col.b; img.data[idx+3]=255; } }
+        ctx.putImageData(img,0,0);
+      } catch(e){ console.warn('renderEdgeDetail',e); }
+      finally{ try{ tmp.delete(); }catch(e){} }
+    }
+
+    // ================= Laser Map (Gaussian blur + contrast) =================
+    function generateLaserMap(smoothness=3.0){
+      if(!grayMat || !previewCanvas) return null;
+      const w = grayMat.cols, h = grayMat.rows;
+      try {
+        const srcMat = grayMat.clone();
+        const stretched = contrastStretchMat(srcMat);
+        const k = Math.max(1, Math.round(smoothness) * 2 + 1);
+        const blurred = new cv.Mat();
+        cv.GaussianBlur(stretched, blurred, new cv.Size(k,k), smoothness);
+        const map = new Float32Array(w*h);
+        for(let i=0;i<w*h;i++){ map[i] = (255 - blurred.data[i]) / 255.0; }
+        srcMat.delete(); stretched.delete(); blurred.delete();
+        laserMap = map; laserMapW = w; laserMapH = h; laserMapPrepared = true;
+        return {map, w, h};
+      } catch(e){
+        console.error('generateLaserMap error', e);
+        const fallback = new Float32Array(w*h); for(let i=0;i<w*h;i++) fallback[i] = (255 - grayMat.data[i])/255.0;
+        laserMap = fallback; laserMapW = w; laserMapH = h; laserMapPrepared = true;
+        return {map: fallback, w, h};
+      }
+    }
+
+    function renderLaserMapPreview(){
+      const res = generateLaserMap(parseFloat(document.getElementById('laserSmoothness').value) || 3.0);
+      const canvas = document.getElementById('canvasLaserDetail'), ph = document.getElementById('laserDetailPlaceholder');
+      if(!res){ ph.style.display='flex'; canvas.style.display='none'; return; }
+      ph.style.display='none'; canvas.style.display='block';
+      const w=res.w,h=res.h; canvas.width=w; canvas.height=h;
+      const ctx=canvas.getContext('2d'); const img=ctx.createImageData(w,h);
+      const previewMode = document.getElementById('laserPreviewMode') ? document.getElementById('laserPreviewMode').value : 'gray';
+      for(let y=0;y<h;y++){
+        for(let x=0;x<w;x++){
+          const v = res.map[y*w + x];
+          let col;
+          if(previewMode==='gray') { const g = Math.round(255*(1-v)); col={r:g,g:g,b:g}; } else col=getColormapColor(v,currentColormap);
+          const idx=(y*w+x)*4; img.data[idx]=col.r; img.data[idx+1]=col.g; img.data[idx+2]=col.b; img.data[idx+3]=255;
+        }
+      }
+      ctx.putImageData(img,0,0);
+    }
+
+    // ================= G-code helpers =================
+    function downloadGcode(text, filename='cnc_output.gcode'){
+      lastGeneratedGcode = text;
+      document.getElementById('gcodeOut').value = text;
+      const blob = new Blob([text], {type:'text/plain'}); const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+      showToast('تم تحميل G-code');
+    }
+    document.getElementById('btnDownload').addEventListener('click', ()=>{
+      if (!lastGeneratedGcode) { showToast('لا يوجد G-code لتحميله'); return; }
+      downloadGcode(lastGeneratedGcode, 'cnc_output.gcode');
+    });
+
+    // get Z (mm) from grayMat at pixel x,y for Router; scale to maxDepth
+    function getZfromHeatmap(px, py){
+      if (!grayMat) return 0;
+      const w = grayMat.cols, h = grayMat.rows;
+      const x = Math.max(0, Math.min(w-1, Math.round(px)));
+      const y = Math.max(0, Math.min(h-1, Math.round(py)));
+      const v = grayMat.data[y*w + x]; // 0..255 (0 black)
+      const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3.0;
+      const invert = false; // keep original behavior (darker => deeper)
+      const z_mm = -((255 - v)/255.0) * maxDepth; // negative for cutting
+      return z_mm;
+    }
+
+    // ================= Generate Raster G-code =================
+    function generateRasterGCode(){
+      if (machineMode === 'laser') {
+        // use laserMap (intensity -> power), but convert to raster movements for laser
+        if (!laserMapPrepared || !laserMap) { showToast('لم تُحضّر خريطة الليزر. اضغط "استخدم لخريطة الليزر"'); return ''; }
+        const w = laserMapW, h = laserMapH;
+        const workWidth = cmToMm(document.getElementById('workWidth').value || 30);
+        const workHeight = cmToMm(document.getElementById('workHeight').value || 20);
+        const scaleX = workWidth / w, scaleY = workHeight / h;
+        const exposureScale = parseFloat(document.getElementById('laserExposureScale').value) || 1.0;
+        const basePower = parseFloat(document.getElementById('laserPower').value) || 60;
+        const feed = Math.max(100, Math.round((parseFloat(document.getElementById('laserDpi').value)||300)/2));
+        const lines = [];
+        lines.push('; Laser Mode Raster G-code');
+        lines.push('G21 G90');
+        for (let row=0; row<h; row++){
+          const y_mm = (row * scaleY);
+          const leftToRight = (row % 2 === 0);
+          const xStart = leftToRight ? 0 : w-1;
+          const xEnd = leftToRight ? w-1 : 0;
+          lines.push(`G0 X${formatNumber(xStart*scaleX,3)} Y${formatNumber(y_mm,3)} F${feed}`);
+          let x = xStart;
+          while(true){
+            const intensity = laserMap[row*w + x];
+            const power = Math.round(Math.min(1000, intensity * basePower * exposureScale * 10));
+            lines.push(`M3 S${power}`);
+            lines.push(`G1 X${formatNumber(x*scaleX,3)} Y${formatNumber(y_mm,3)} F${feed}`);
+            if (x === xEnd) break;
+            x = leftToRight ? x+1 : x-1;
+          }
+          lines.push('M5');
+        }
+        lines.push('M5','M30');
+        const g = lines.join('\n');
+        lastGeneratedGcode = g; document.getElementById('gcodeOut').value = g;
+        showToast('تم توليد G-code للّيزر (Raster)');
+        renderTopViewFromGcode();
+        return g;
+      } else {
+        // Router raster: sample from heatmap (grayMat) with step = stepOver(mm) converted to pixels
+        if (!grayMat) { showToast('لا توجد بيانات كافية للـ Router'); return ''; }
+        const w = grayMat.cols, h = grayMat.rows;
+        const workWidth = cmToMm(document.getElementById('workWidth').value || 30);
+        const workHeight = cmToMm(document.getElementById('workHeight').value || 20);
+        const scaleX = workWidth / w, scaleY = workHeight / h;
+        // determine step pixels based on stepOver (mm) relative to scaleY
+        const stepOver_mm = parseFloat(document.getElementById('stepOver').value) || 5;
+        const stepPixels = Math.max(1, Math.round(stepOver_mm / scaleY));
+        const feed = parseFloat(document.getElementById('feedRate').value) || 800;
+        const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
+        const lines = [];
+        lines.push('; Router Raster G-code');
+        lines.push('G21 G90');
+        lines.push(`G0 Z${formatNumber(safeZ,2)}`);
+        let totalLen = 0;
+        for (let y=0; y<h; y+=stepPixels) {
+          const leftToRight = ((y/stepPixels) % 2 === 0);
+          const xStart = leftToRight ? 0 : w-1;
+          const xEnd = leftToRight ? w-1 : 0;
+          let x = xStart;
+          // rapid to line start
+          const startX_mm = xStart * scaleX, y_mm = y * scaleY;
+          lines.push(`G0 X${formatNumber(startX_mm,3)} Y${formatNumber(y_mm,3)} Z${formatNumber(safeZ,2)}`);
+          lines.push(`G1 F${feed}`);
+          while(true){
+            const v = grayMat.data[y*w + x];
+            const z = -((255 - v)/255.0) * (parseFloat(document.getElementById('maxDepth').value) || 3.0);
+            const x_mm = x * scaleX;
+            lines.push(`G1 X${formatNumber(x_mm,3)} Y${formatNumber(y_mm,3)} Z${formatNumber(z,3)}`);
+            if (x === xEnd) break;
+            x = leftToRight ? x+1 : x-1;
+          }
+          lines.push(`G0 Z${formatNumber(safeZ,2)}`);
+        }
+        lines.push('M5','M30');
+        const g = lines.join('\n');
+        lastGeneratedGcode = g; document.getElementById('gcodeOut').value = g;
+        showToast('تم توليد G-code للـ Router (Raster)');
+        renderTopViewFromGcode();
+        return g;
+      }
+    }
+
+    // ================= Generate Contour G-code =================
+    function generateContourGCode(outerOnly=false){
+      // ensure contoursArr populated
+      if (!contoursArr || contoursArr.length === 0){ showToast('⚠️ لم يتم اكتشاف الحواف بعد'); return ''; }
+      const workWidth = cmToMm(document.getElementById('workWidth').value || 30);
+      const workHeight = cmToMm(document.getElementById('workHeight').value || 20);
+      const cols = grayMat ? grayMat.cols : (laserMapW || 0);
+      const rows = grayMat ? grayMat.rows : (laserMapH || 0);
+      if (cols === 0 || rows === 0) { showToast('لا توجد بيانات مساحة'); return ''; }
+      const scaleX = workWidth / cols, scaleY = workHeight / rows;
+      const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
+      const feed = parseFloat(document.getElementById('feedRate').value) || 800;
+      const lines = []; lines.push('; Contour G-code');
+      lines.push('G21 G90');
+      // choose which contours to include
+      let list = contoursArr.slice();
+      if (outerOnly) {
+        // outerOnly -> use the largest by area (first)
+        list = [contoursArr[0]];
+      }
+      for (let ci=0; ci<list.length; ci++){
+        const c = list[ci];
+        if (!c || !c.points || c.points.length===0) continue;
+        lines.push(`(Contour ${ci} — area ${Math.round(c.area)})`);
+        // go to first point
+        const p0 = c.points[0];
+        lines.push(`G0 X${formatNumber(p0.x*scaleX,3)} Y${formatNumber(p0.y*scaleY,3)} Z${formatNumber(safeZ,2)}`);
+        lines.push(`G1 F${feed}`);
+        for (let j=0;j<c.points.length;j++){
+          const p = c.points[j];
+          // z from heatmap for router, for laser we keep Z = safeZ and power variations handled separately
+          let zVal = 0;
+          if (machineMode === 'router') zVal = getZfromHeatmap(p.x, p.y);
+          else zVal = 0;
+          lines.push(`G1 X${formatNumber(p.x*scaleX,3)} Y${formatNumber(p.y*scaleY,3)} Z${formatNumber(zVal,3)} F${feed}`);
+        }
+        lines.push(`G0 Z${formatNumber(safeZ,2)}`);
+      }
+      lines.push('M5','M30');
+      const g = lines.join('\n');
+      lastGeneratedGcode = g; document.getElementById('gcodeOut').value = g;
+      showToast('تم توليد G-code للحواف (Contour)');
+      renderTopViewFromGcode();
+      return g;
+    }
+
+    // ================= Top View Rendering =================
+    function renderTopViewFromGcode(){
+      const top=document.getElementById('topView'); if(!top || !previewCanvas) return;
+      const ctx=top.getContext('2d'); const w=previewCanvas.width, h=previewCanvas.height; top.width=w; top.height=h;
+      const img=ctx.createImageData(w,h);
+      if(machineMode==='laser' && laserMapPrepared && laserMap){
+        const previewMode = document.getElementById('laserPreviewMode') ? document.getElementById('laserPreviewMode').value : 'gray';
+        for(let y=0;y<h;y++){
+          for(let x=0;x<w;x++){
+            const v = laserMap[y*w + x] || 0;
+            let col;
+            if(previewMode === 'gray'){ const g = Math.round(255*(1-v)); col={r:g,g:g,b:g}; } else col=getColormapColor(v,currentColormap);
+            const idx=(y*w + x)*4; img.data[idx]=col.r; img.data[idx+1]=col.g; img.data[idx+2]=col.b; img.data[idx+3]=255;
+          }
+        }
+      } else if(grayMat){
+        for(let i=0;i<grayMat.data.length;i++){ const t = grayMat.data[i]/255.0; const col = getColormapColor(t,currentColormap); const idx = i*4; img.data[idx]=col.r; img.data[idx+1]=col.g; img.data[idx+2]=col.b; img.data[idx+3]=255; }
+      }
+      ctx.putImageData(img,0,0); drawTopLegend(currentColormap);
+    }
+    function drawTopLegend(map){
+      try {
+        const legend=document.getElementById('topLegend'); const steps=6; const stops=[];
+        for(let i=0;i<=steps;i++){ const t=i/steps; const c=getColormapColor(t,map); stops.push(`rgb(${c.r},${c.g},${c.b}) ${Math.round((i/steps)*100)}%`); }
+        legend.style.background = `linear-gradient(90deg, ${stops.join(',')})`;
+      } catch(e){}
+    }
+
+    // ================= UI Bindings =================
+    document.getElementById('laserSmoothness').addEventListener('input',(e)=>{ document.getElementById('laserSmoothVal').innerText = parseFloat(e.target.value).toFixed(1); renderLaserMapPreview(); });
+    document.getElementById('useLaserMap').addEventListener('click', ()=>{ generateLaserMap(parseFloat(document.getElementById('laserSmoothness').value)||3.0); renderLaserMapPreview(); showToast('تم تفعيل خريطة الليزر للاستخدام عند التوليد'); });
+
+    document.getElementById('edgeSensitivity').addEventListener('input', (e)=>{ document.getElementById('edgeValue').textContent = parseFloat(e.target.value).toFixed(2); if(previewCanvas && cvReady) detectContours(); });
+    document.getElementById('edgeReAnalyze').addEventListener('click', ()=> detectContours());
+    document.getElementById('edgeContrast').addEventListener('click', ()=>{ if(previewCanvas) detectContours(); showToast('تم تحسين التباين وإعادة التحليل'); });
+
+    document.querySelectorAll('.cmap-btn').forEach(b=>{ b.addEventListener('click', ()=> { const m=b.dataset.map; setActiveCmapBtn(m); }); });
+
+    document.getElementById('btnGen').addEventListener('click', ()=>{
+      const mode = document.getElementById('gcodeMode').value;
+      let g = '';
+      if (mode === 'raster') {
+        g = generateRasterGCode();
+      } else if (mode === 'contour_all') {
+        g = generateContourGCode(false);
+      } else {
+        g = generateContourGCode(true);
+      }
+      // show in output area is handled by generation functions
+    });
+
+    document.addEventListener('keydown', (e)=>{ if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='g'){ e.preventDefault(); document.getElementById('btnGen').click(); } });
+
+    // ================= Initial boot =================
+    (function init(){
+      ['canvasHeatmap','canvasContour','canvasEdgeDetail','canvasLaserDetail','canvasOriginal'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
+      const saved = localStorage.getItem('cnc_cmap'); if(saved) setActiveCmapBtn(saved);
+      setTimeout(()=>{ if(cvReady){ const sb=document.getElementById('cvStatus'); if(sb){ sb.innerText='✅ OpenCV جاهزة'; sb.classList.add('ready'); } showToast('جاهز للاختبار'); } else showToast('OpenCV لا يزال يتحمل — انتظر ثواني'); }, 700);
+    })();
+
+    // ================= Cleanup on unload =================
+    window.addEventListener('beforeunload', ()=>{ try{ cleanupMats(); }catch(e){} });
+
+  </script>
+</body>
+</html>
