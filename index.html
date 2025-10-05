@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>CNC AI — Heatmap Colormaps + Edge Sensitivity + Colored TopView</title>
+  <title>CNC AI — Path Optimization Prototype</title>
 
   <!-- مكتبات -->
   <script src="https://docs.opencv.org/4.8.0/opencv.js" async></script>
@@ -18,7 +18,6 @@
     .grid { display:grid; grid-template-columns:1fr 520px; gap:16px }
     @media (max-width:1100px){ .grid{ grid-template-columns:1fr } }
     .panel { background:#0b1320; padding:16px; border-radius:10px; border:1px solid #1e293b }
-    /* tabs improved */
     .tab-buttons { display:flex; gap:8px; margin-top:12px; background: rgba(14,23,33,0.6); padding:6px; border-radius:8px }
     .tab-buttons button { flex:1; border:none; padding:8px 10px; border-radius:6px; background:transparent; color:#9bb0c8; cursor:pointer }
     .tab-buttons button.active { background:#0f172a; color:#e6eef6; box-shadow: inset 0 -3px 0 #06b6d4; }
@@ -35,79 +34,8 @@
     button.primary { background:#06b6d4; color:#021; font-weight:bold }
     button.secondary { background:#334155; }
     #toast { position:fixed; left:16px; bottom:16px; background:rgba(0,0,0,0.85); color:#fff; padding:10px 14px; border-radius:8px; display:none; z-index:10000 }
-    .canvas-placeholder { width:100%; min-height:260px; background:#000; border-radius:6px; display:flex; align-items:center; justify-content:center; color:#9bb0c8; border:1px solid #334155; flex-direction: column; gap: 15px; }
+    .canvas-placeholder { width:100%; min-height:260px; background:#000; border-radius:6px; display:flex; align-items:center; justify-content:center; color:#9bb0c8; border:1px solid #334155 }
     .small-meta { font-size:12px; color:#9bb0c8; margin-top:6px }
-
-    /* مؤشرات التحميل الجديدة */
-    .loading-spinner {
-      width: 40px;
-      height: 40px;
-      border: 4px solid rgba(6, 182, 212, 0.2);
-      border-top: 4px solid #06b6d4;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-    
-    .loading-spinner.small {
-      width: 20px;
-      height: 20px;
-      border-width: 2px;
-    }
-    
-    .loading-pulse {
-      display: inline-block;
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: #06b6d4;
-      animation: pulse 1.5s infinite;
-    }
-    
-    @keyframes pulse {
-      0% { transform: scale(0.8); opacity: 0.8; }
-      50% { transform: scale(1.2); opacity: 1; }
-      100% { transform: scale(0.8); opacity: 0.8; }
-    }
-    
-    .progress-bar {
-      width: 100%;
-      height: 6px;
-      background: rgba(30, 41, 59, 0.5);
-      border-radius: 3px;
-      overflow: hidden;
-      margin-top: 10px;
-    }
-    
-    .progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #06b6d4, #3b82f6);
-      border-radius: 3px;
-      width: 0%;
-      transition: width 0.5s ease;
-    }
-    
-    .status-indicator {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 12px;
-      border-radius: 20px;
-      font-size: 0.85rem;
-      background: rgba(15, 23, 42, 0.5);
-      border: 1px solid rgba(30, 41, 59, 0.3);
-    }
-    
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #9bb0c8;
-      animation: pulse 2s infinite;
-    }
-    
-    .status-dot.ready { background: #10b981; }
-    .status-dot.loading { background: #f59e0b; }
-    .status-dot.error { background: #ef4444; }
 
     /* Debug overlay */
     #debugOverlay {
@@ -144,11 +72,6 @@
     .dbg-meta { opacity:0.75; font-size:11px; margin-top:6px; color:#9bb0c8; }
     #debugFooter { padding:6px 10px; border-top:1px solid rgba(255,255,255,0.02); text-align:right; font-size:12px; color:#9bb0c8; background:rgba(0,0,0,0.03); display:flex; justify-content:space-between; align-items:center; }
 
-    /* Simulation controls */
-    .sim-controls { position:absolute; top:10px; left:10px; z-index:120; display:flex; gap:8px; align-items:center; background:rgba(0,0,0,0.35); padding:6px;border-radius:6px }
-    .sim-controls button { background:rgba(0,0,0,0.55); color:white; border:1px solid #06b6d4; border-radius:4px; padding:6px 8px; cursor:pointer; font-size:0.9rem }
-    .sim-progress { position:absolute; bottom:10px; left:10px; z-index:120; background:rgba(0,0,0,0.35); padding:6px 8px;border-radius:6px; color:#cfeaf2; font-size:12px }
-
     /* Top view + legend */
     #topViewContainer { margin-top:12px; display:flex; flex-direction:column; gap:6px; align-items:center; }
     #topView { width:100%; height:200px; background:#0d1722; border-radius:6px; border:1px solid #334155; display:block }
@@ -159,17 +82,19 @@
     .colormap-buttons button { background:#141b22; color:#cfeaf2; border:1px solid #26343f; padding:6px 8px; border-radius:6px; cursor:pointer; font-size:12px }
     .colormap-buttons button.active { background:#06b6d4; color:#021; border-color:#06b6d4; }
 
+    .opt-controls { display:flex; gap:8px; align-items:center; margin-top:12px; flex-wrap:wrap }
+    .opt-controls label { font-weight:normal; color:#cfeaf2; display:flex; gap:6px; align-items:center; }
+
     @keyframes spin { 0%{transform:rotate(0)}100%{transform:rotate(360deg)} }
   </style>
 </head>
 <body>
   <div class="app">
     <header>
-      <h1>CNC AI — Heatmap Colormaps + Edge Sensitivity</h1>
-      <div class="status-indicator" id="cvState">
-        <div class="status-dot loading"></div>
-        <span>جاري تحميل OpenCV...</span>
-        <div class="loading-spinner small"></div>
+      <h1>CNC AI — Path Optimization Prototype</h1>
+      <div id="cvState">
+        <span class="loading" style="display:inline-block;width:16px;height:16px;border:3px solid #f3f3f3;border-top:3px solid #06b6d4;border-radius:50%;animation:spin 1s linear infinite;margin-left:8px;"></span>
+        جاري تحميل OpenCV...
       </div>
     </header>
 
@@ -205,20 +130,12 @@
         </div>
 
         <div id="original" class="tab-content active">
-          <div class="canvas-placeholder" id="originalPlaceholder">
-            <div class="loading-spinner"></div>
-            <div>الصورة الأصلية ستظهر هنا</div>
-            <div class="small-meta">قم بتحميل صورة لبدء المعالجة</div>
-          </div>
+          <div class="canvas-placeholder" id="originalPlaceholder">الصورة الأصلية ستظهر هنا</div>
           <canvas id="canvasOriginal" style="display:none;"></canvas>
         </div>
 
         <div id="heatmap" class="tab-content">
-          <div class="canvas-placeholder" id="heatmapPlaceholder">
-            <div class="loading-spinner"></div>
-            <div>Heatmap ستظهر هنا</div>
-            <div class="small-meta">سيتم إنشاء خريطة الحرارة بعد تحميل الصورة</div>
-          </div>
+          <div class="canvas-placeholder" id="heatmapPlaceholder">Heatmap ستظهر هنا</div>
           <canvas id="canvasHeatmap" style="display:none;"></canvas>
 
           <!-- colormap buttons under heatmap -->
@@ -233,35 +150,22 @@
         </div>
 
         <div id="contour" class="tab-content">
-          <div class="canvas-placeholder" id="contourPlaceholder">
-            <div class="loading-spinner"></div>
-            <div>Contours ستظهر هنا</div>
-            <div class="small-meta">سيتم اكتشاف الحواف بعد تحميل الصورة</div>
-          </div>
+          <div class="canvas-placeholder" id="contourPlaceholder">Contours ستظهر هنا</div>
           <canvas id="canvasContour" style="display:none;"></canvas>
           <div class="small-meta">تبديل وضع كشف الحواف أو تحريك حساسية الحواف يحدث إعادة معالجة تلقائية</div>
         </div>
 
         <div id="topview" class="tab-content">
           <div id="topViewContainer">
-            <div class="canvas-placeholder" id="topViewPlaceholder">
-              <div class="loading-spinner"></div>
-              <div>Top View ستظهر هنا</div>
-              <div class="small-meta">سيتم إنشاء العرض العلوي بعد توليد G-code</div>
-            </div>
-            <canvas id="topView" style="display:none;"></canvas>
-            <div id="topLegend" title="عمق النقش — الألوان فقط" style="display:none;"></div>
+            <canvas id="topView"></canvas>
+            <div id="topLegend" title="عمق النقش — الألوان فقط"></div>
           </div>
           <div class="small-meta">معاينة من الأعلى للعمق المتوقع بعد تنفيذ G-code (الألوان تتبع اختيار Colormap)</div>
         </div>
 
         <div id="simulation" class="tab-content">
           <div id="threeContainer">
-            <div class="canvas-placeholder" id="simulationPlaceholder">
-              <div class="loading-spinner"></div>
-              <div>المحاكاة ستظهر هنا</div>
-              <div class="small-meta">سيتم تحميل المحاكاة بعد توليد G-code</div>
-            </div>
+            <div class="canvas-placeholder" id="simulationPlaceholder">المحاكاة ستظهر هنا بعد توليد G-code</div>
           </div>
         </div>
       </div>
@@ -341,6 +245,13 @@
           </select>
         </div>
 
+        <!-- Optimization controls (prototype) -->
+        <div class="opt-controls">
+          <label><input id="optPath" type="checkbox"> Optimize Path (Contour)</label>
+          <label><input id="optDynamicFeed" type="checkbox"> Dynamic Feed (Depth based)</label>
+          <label title="مسافة القرب بالملم لتجنب الرفع">Proximity(mm): <input id="optProximity" type="number" value="10" min="0" step="1" style="width:80px"/></label>
+        </div>
+
         <div class="button-group">
           <div class="button-row">
             <button id="btnGen" class="primary">⚡ توليد G-code (Raster)</button>
@@ -406,56 +317,6 @@
     // Simulation / Three
     let scene, camera, renderer, controls;
     let simulation = { isPlaying: false, animationFrame: null, tool: null, toolPath: null, pathPoints: [], index: 0, speed: 1 };
-
-    // ================= دوال مؤشرات التحميل =================
-    function showLoading(elementId, message = "جاري التحميل...") {
-      const element = document.getElementById(elementId);
-      if (element) {
-        element.innerHTML = `
-          <div class="loading-spinner"></div>
-          <div>${message}</div>
-          <div class="progress-bar">
-            <div class="progress-fill" id="${elementId}-progress"></div>
-          </div>
-        `;
-        element.style.display = 'flex';
-        
-        // محاكاة تقدم التحميل
-        let progress = 0;
-        const interval = setInterval(() => {
-          progress += Math.random() * 10;
-          const progressBar = document.getElementById(`${elementId}-progress`);
-          if (progressBar) {
-            progressBar.style.width = Math.min(progress, 90) + '%';
-          }
-          if (progress >= 90) {
-            clearInterval(interval);
-          }
-        }, 200);
-      }
-    }
-
-    function hideLoading(elementId, showCanvasId = null) {
-      const element = document.getElementById(elementId);
-      if (element) {
-        element.style.display = 'none';
-      }
-      if (showCanvasId) {
-        const canvas = document.getElementById(showCanvasId);
-        if (canvas) {
-          canvas.style.display = 'block';
-        }
-      }
-    }
-
-    function showElement(elementId, hidePlaceholderId) {
-      const element = document.getElementById(elementId);
-      const placeholder = document.getElementById(hidePlaceholderId);
-      if (element && placeholder) {
-        element.style.display = 'block';
-        placeholder.style.display = 'none';
-      }
-    }
 
     // ================= Debug overlay system =================
     (function initDebugOverlay(){
@@ -547,6 +408,9 @@
         try { addEntry('error', 'UnhandledRejection: ' + (ev.reason && ev.reason.message ? ev.reason.message : String(ev.reason)), ev.reason && ev.reason.stack ? ev.reason.stack : ''); } catch(e){}
       });
 
+      // expose a function for other code to log easily
+      window.debugLog = function(msg) { try { addEntry('info', msg); } catch(e){} };
+
     })();
 
     // ================= Helper UI funcs =================
@@ -569,15 +433,20 @@
       document.getElementById('heightMm').textContent = cmToMm(heightCm).toFixed(1) + ' مم';
     }
 
+    function showElement(elementId, hidePlaceholderId) {
+      const element = document.getElementById(elementId);
+      const placeholder = document.getElementById(hidePlaceholderId);
+      if (element && placeholder) {
+        element.style.display = 'block';
+        placeholder.style.display = 'none';
+      }
+    }
+
     // ================= OpenCV readiness =================
     function waitForCv() {
       if (typeof cv !== 'undefined' && cv.getBuildInformation) {
         cvReady = true;
-        const cvState = document.getElementById('cvState');
-        cvState.innerHTML = `
-          <div class="status-dot ready"></div>
-          <span>✅ OpenCV جاهز</span>
-        `;
+        document.getElementById('cvState').innerHTML = '✅ OpenCV جاهز';
         showToast('تم تحميل OpenCV بنجاح', 1400);
       } else {
         setTimeout(waitForCv, 100);
@@ -630,50 +499,37 @@
       }
       try {
         cleanupMats();
-        showLoading('originalPlaceholder', 'جاري تحميل الصورة...');
-        
         const img = new Image();
         img.src = URL.createObjectURL(file);
-        
-        img.onload = async function() {
-          previewCanvas = document.getElementById('canvasOriginal');
-          const ctx = previewCanvas.getContext('2d');
+        await img.decode();
 
-          const maxPixels = 1024 * 1024; // 1MP
-          let w = img.width, h = img.height;
-          const currentPixels = w * h;
-          if (currentPixels > maxPixels) {
-            const ratio = Math.sqrt(maxPixels / currentPixels);
-            w = Math.floor(w * ratio);
-            h = Math.floor(h * ratio);
-            showToast('تم تحسين حجم الصورة للأداء الأفضل');
-          }
+        previewCanvas = document.getElementById('canvasOriginal');
+        const ctx = previewCanvas.getContext('2d');
 
-          previewCanvas.width = w;
-          previewCanvas.height = h;
-          ctx.drawImage(img, 0, 0, w, h);
-          
-          setTimeout(() => {
-            hideLoading('originalPlaceholder', 'canvasOriginal');
-          }, 500);
+        const maxPixels = 1024 * 1024; // 1MP
+        let w = img.width, h = img.height;
+        const currentPixels = w * h;
+        if (currentPixels > maxPixels) {
+          const ratio = Math.sqrt(maxPixels / currentPixels);
+          w = Math.floor(w * ratio);
+          h = Math.floor(h * ratio);
+          showToast('تم تحسين حجم الصورة للأداء الأفضل');
+        }
 
-          if (cvReady) {
-            await detectContours();
-          } else {
-            showToast('في انتظار OpenCV...');
-            setTimeout(async () => { if (cvReady) await detectContours(); }, 800);
-          }
-        };
-        
-        img.onerror = function() {
-          showToast('فشل في تحميل الصورة');
-          hideLoading('originalPlaceholder');
-        };
-        
+        previewCanvas.width = w;
+        previewCanvas.height = h;
+        ctx.drawImage(img, 0, 0, w, h);
+        showElement('canvasOriginal', 'originalPlaceholder');
+
+        if (cvReady) {
+          await detectContours();
+        } else {
+          showToast('في انتظار OpenCV...');
+          setTimeout(async () => { if (cvReady) await detectContours(); }, 800);
+        }
       } catch (error) {
         console.error('image load error', error);
         showToast('فشل في تحميل الصورة');
-        hideLoading('originalPlaceholder');
       }
     });
 
@@ -684,9 +540,6 @@
         return;
       }
       try {
-        showLoading('heatmapPlaceholder', 'جاري إنشاء Heatmap...');
-        showLoading('contourPlaceholder', 'جاري اكتشاف الحواف...');
-        
         const src = cv.imread(previewCanvas);
         const gray = new cv.Mat();
         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
@@ -760,16 +613,9 @@
         src.delete(); blurred.delete(); edges.delete(); hierarchy.delete(); contours.delete(); kernel.delete();
         gray.delete();
 
-        setTimeout(() => {
-          hideLoading('heatmapPlaceholder', 'canvasHeatmap');
-          hideLoading('contourPlaceholder', 'canvasContour');
-        }, 500);
-
       } catch (err) {
         console.error('detectContours error', err);
         showToast('فشل في تحليل الصورة');
-        hideLoading('heatmapPlaceholder');
-        hideLoading('contourPlaceholder');
       }
     }
 
@@ -790,28 +636,18 @@
       // t in [0,1]
       t = clamp(t);
       if (map === 'hot') {
-        // hot: black->red->yellow->white
         if (t < 0.33) return { r: Math.round(t/0.33*128), g: 0, b: 0 };
         if (t < 0.66) return { r: Math.round(128 + (t-0.33)/0.33*127), g: Math.round((t-0.33)/0.33*128), b: 0 };
         return { r: 255, g: Math.round(128 + (t-0.66)/0.34*127), b: Math.round((t-0.66)/0.34*127) };
       } else if (map === 'cool') {
-        // cool: cyan -> magenta-ish
         return { r: Math.round(255 * t), g: Math.round(255 * (1 - t)), b: 255 };
       } else if (map === 'gray') {
         const v = Math.round(255 * t);
         return { r: v, g: v, b: v };
       } else {
-        // jet-like approximation: blue->cyan->yellow->red
         const r = Math.round(255 * clamp(1.5 - Math.abs(1.0 - 4.0*(t-0.5)), 0, 1));
         const g = Math.round(255 * clamp(1.5 - Math.abs(0.5 - 4.0*(t-0.25)), 0, 1));
         const b = Math.round(255 * clamp(1.5 - Math.abs(0.5 - 4.0*(t)), 0, 1));
-        // fallback simpler jet:
-        if (!r && !g && !b) {
-          const jr = Math.round(255 * clamp(1.5 - Math.abs(1 - 4*(t-0.5))));
-          const jg = Math.round(255 * clamp(1.5 - Math.abs(0.5 - 4*(t-0.25))));
-          const jb = Math.round(255 * clamp(1.5 - Math.abs(0.5 - 4*t)));
-          return { r: jr, g: jg, b: jb };
-        }
         return { r, g, b };
       }
     }
@@ -867,14 +703,7 @@
       contourCanvas.width = gray.cols;
       contourCanvas.height = gray.rows;
       const heatCanvas = document.getElementById('canvasHeatmap');
-      // draw heatmap first (so contours overlay on top)
-      try {
-        ctx.drawImage(heatCanvas, 0, 0);
-      } catch(e) {
-        // fallback: fill with gray
-        ctx.fillStyle = '#222';
-        ctx.fillRect(0,0,contourCanvas.width, contourCanvas.height);
-      }
+      try { ctx.drawImage(heatCanvas, 0, 0); } catch(e) { ctx.fillStyle='#222'; ctx.fillRect(0,0,contourCanvas.width,contourCanvas.height); }
       if (mainContour) {
         ctx.strokeStyle = '#00ff00';
         ctx.lineWidth = 2;
@@ -923,7 +752,7 @@
       return Math.round(v0 * (1 - sy) + v1 * sy);
     }
 
-    // ================= Raster helpers =================
+    // ================= Raster helpers (with dynamic feed support) =================
     function addSegmentPoints(rowPoints, startX, endX, y, scaleX, scaleY, originX, originY, maxDepth, invertZ, useFixedZ, fixedZValue) {
       for (let x = startX; x <= endX; x += 2) {
         const pv = sampleGrayAt(x, y);
@@ -936,14 +765,23 @@
         if (invertZ) z = -z;
         const scaledX = (x * scaleX) + originX;
         const scaledY = (y * scaleY) + originY;
-        rowPoints.push({ x: scaledX, y: scaledY, z });
+        rowPoints.push({ x: scaledX, y: scaledY, z, rawGray: pv });
       }
     }
 
-    function processRowPoints(rowPoints, lines, feed, safeZ, reverse) {
+    function processRowPoints(rowPoints, lines, feed, safeZ, reverse, useDynamicFeed, maxDepth) {
+      if (rowPoints.length === 0) return;
       if (reverse) rowPoints.reverse();
+      // compute avg depth for dynamic feed
+      let avgDepth = 0;
+      if (useDynamicFeed) {
+        let sum = 0;
+        for (let p of rowPoints) sum += Math.abs(p.z || 0);
+        avgDepth = sum / rowPoints.length;
+      }
+      const feedLocal = useDynamicFeed && maxDepth > 0 ? Math.max(50, feed * (1 - (avgDepth / maxDepth) * 0.5)) : feed;
       lines.push('G0 X' + rowPoints[0].x.toFixed(2) + ' Y' + rowPoints[0].y.toFixed(2) + ' Z' + safeZ.toFixed(2));
-      lines.push('G1 F' + feed.toFixed(0));
+      lines.push('G1 F' + feedLocal.toFixed(0));
       for (let i = 0; i < rowPoints.length; i++) {
         const p = rowPoints[i];
         lines.push('G1 X' + p.x.toFixed(2) + ' Y' + p.y.toFixed(2) + ' Z' + p.z.toFixed(3));
@@ -959,6 +797,54 @@
       return length;
     }
 
+    // ================= Utility: compute centroid of contour and first point =================
+    function contourInfoToXY(cnt, scaleX, scaleY, originX, originY) {
+      // use first point as representative start, and centroid for distance measure
+      const data = cnt.data32S;
+      if (!data || data.length < 2) return { start: {x:0,y:0}, centroid: {x:0,y:0} };
+      const x0 = data[0], y0 = data[1];
+      // compute centroid
+      let sx=0, sy=0, n=0;
+      for (let i=0;i<data.length;i+=2){ sx+=data[i]; sy+=data[i+1]; n++; }
+      const cx = sx / n, cy = sy / n;
+      return {
+        start: { x: x0*scaleX + originX, y: y0*scaleY + originY },
+        centroid: { x: cx*scaleX + originX, y: cy*scaleY + originY }
+      };
+    }
+
+    // ================= Ordering contours (nearest-first) =================
+    function orderContoursNearest(contoursArray, scaleX, scaleY, originX, originY) {
+      // contoursArray: array of cv.Mat (data32S)
+      const list = contoursArray.map(c=> {
+        const info = contourInfoToXY(c, scaleX, scaleY, originX, originY);
+        return { cnt: c, start: info.start, centroid: info.centroid, used:false };
+      });
+      const ordered = [];
+      if (list.length === 0) return ordered;
+      // start from the largest contour's start if available
+      let cur = list[0];
+      // choose initial as the one with leftmost or just index 0
+      cur.used = true;
+      ordered.push(cur.cnt);
+      let lastPos = cur.start;
+      // greedy nearest by centroid
+      for (let k=1;k<list.length;k++){
+        let bestIdx = -1, bestDist = Infinity;
+        for (let i=0;i<list.length;i++){
+          if (list[i].used) continue;
+          const dx = list[i].centroid.x - lastPos.x, dy = list[i].centroid.y - lastPos.y;
+          const d = Math.hypot(dx,dy);
+          if (d < bestDist) { bestDist = d; bestIdx = i; }
+        }
+        if (bestIdx === -1) break;
+        list[bestIdx].used = true;
+        ordered.push(list[bestIdx].cnt);
+        lastPos = list[bestIdx].start;
+      }
+      return ordered;
+    }
+
     // ================= Generate Raster G-code =================
     function generateRasterGcode(scaleDown = false) {
       if (!grayMat || !contour) {
@@ -966,8 +852,6 @@
         return "";
       }
       try {
-        showLoading('simulationPlaceholder', 'جاري توليد G-code...');
-        
         const dir = document.getElementById('scanDir').value;
         lastScanDir = dir;
         const stepOver = parseFloat(document.getElementById('stepOver').value) || 5;
@@ -978,6 +862,8 @@
         const useFixedZ = document.getElementById('fixedZ').checked;
         const fixedZValue = parseFloat(document.getElementById('fixedZValue').value) || -1.0;
         const invertZ = document.getElementById('invertZ').checked;
+
+        const useDynamicFeed = document.getElementById('optDynamicFeed').checked;
 
         const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30);
         const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20);
@@ -1009,7 +895,7 @@
             }
             if (inContour) addSegmentPoints(rowPoints, segmentStart, previewCanvas.width - 1, y, scaleX, scaleY, originX, originY, maxDepth, invertZ, useFixedZ, fixedZValue);
             if (rowPoints.length > 1) {
-              processRowPoints(rowPoints, lines, feed, safeZ, (y / step) % 2 !== 0);
+              processRowPoints(rowPoints, lines, feed, safeZ, (y / step) % 2 !== 0, useDynamicFeed, maxDepth);
               totalLen += calculateRowLength(rowPoints);
             }
           }
@@ -1029,7 +915,7 @@
             }
             if (inContour) addSegmentPoints(colPoints, x, x, previewCanvas.height - 1, scaleX, scaleY, originX, originY, maxDepth, invertZ, useFixedZ, fixedZValue);
             if (colPoints.length > 1) {
-              processRowPoints(colPoints, lines, feed, safeZ, (x / step) % 2 !== 0);
+              processRowPoints(colPoints, lines, feed, safeZ, (x / step) % 2 !== 0, useDynamicFeed, maxDepth);
               totalLen += calculateRowLength(colPoints);
             }
           }
@@ -1042,28 +928,21 @@
         const timeMin = (totalLen / (feed || 1)) + ((Math.max(0, safeZ) / 50) * (totalLen / 1000));
         document.getElementById('estTime').innerHTML = "⏱️ تقدير الوقت: " + timeMin.toFixed(1) + " دقيقة";
 
-        setTimeout(() => {
-          hideLoading('simulationPlaceholder');
-        }, 500);
-
         return lines.join('\n');
       } catch (error) {
         console.error('generateRasterGcode error', error);
         showToast('فشل في توليد G-code (Raster)');
-        hideLoading('simulationPlaceholder');
         return "";
       }
     }
 
-    // ================= Generate Contour G-code =================
+    // ================= Generate Contour G-code (with path optimization) =================
     function generateContourGcode() {
       if (!grayMat || !contour) {
         showToast("لا توجد بيانات حواف لتوليد الكود");
         return "";
       }
       try {
-        showLoading('simulationPlaceholder', 'جاري توليد G-code...');
-        
         const mode = document.getElementById('contourMode').value || 'outer';
         lastScanDir = 'contour';
         const feed = parseFloat(document.getElementById('feedRate').value) || 800;
@@ -1073,6 +952,10 @@
         const useFixedZ = document.getElementById('fixedZ').checked;
         const fixedZValue = parseFloat(document.getElementById('fixedZValue').value) || -1.0;
         const invertZ = document.getElementById('invertZ').checked;
+
+        const useDynamicFeed = document.getElementById('optDynamicFeed').checked;
+        const useOptimizePath = document.getElementById('optPath').checked;
+        const proximity = parseFloat(document.getElementById('optProximity').value) || 10; // mm
 
         const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30);
         const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20);
@@ -1085,25 +968,60 @@
         lines.push('G21 G90 G17');
         lines.push('G0 Z' + safeZ.toFixed(2));
 
-        const contoursToUse = (mode === 'outer') ? [contour] : [contour, ...additionalContours.map(c => c.contour)];
+        // prepare contours array
+        let contoursToUse = (mode === 'outer') ? [contour] : [contour, ...additionalContours.map(c => c.contour)];
+
+        // optional ordering optimization
+        if (useOptimizePath && contoursToUse.length > 1) {
+          try {
+            contoursToUse = orderContoursNearest(contoursToUse, scaleX, scaleY, originX, originY);
+            debugLog('Path Optimization: contours reordered (nearest-first).');
+          } catch (e) { console.warn('orderContoursNearest error', e); }
+        }
+
         let totalLen = 0;
+        let currentPos = { x: originX, y: originY };
 
         for (const cnt of contoursToUse) {
           const data = cnt.data32S;
           if (!data || data.length < 4) continue;
 
           let x0 = data[0], y0 = data[1];
-          const startX = (x0 * scaleX + originX).toFixed(2);
-          const startY = (y0 * scaleY + originY).toFixed(2);
-          const startGray = sampleGrayAt(x0, y0);
+          const startX = (x0 * scaleX + originX);
+          const startY = (y0 * scaleY + originY);
 
+          // if proximity small, move without full lift (try reduce non-cutting)
+          const distToStart = Math.hypot(startX - currentPos.x, startY - currentPos.y);
+          if (distToStart > (proximity || 10)) {
+            lines.push(`G0 X${startX.toFixed(2)} Y${startY.toFixed(2)} Z${safeZ.toFixed(2)}`);
+          } else {
+            // small move -> do a gentle move at safeZ (still rapid)
+            lines.push(`G0 X${startX.toFixed(2)} Y${startY.toFixed(2)} Z${safeZ.toFixed(2)}`);
+            debugLog(`Short travel ${distToStart.toFixed(2)}mm — used short move`);
+          }
+
+          // determine starting depth
+          const startGray = sampleGrayAt(x0, y0);
           let zStart;
           if (useFixedZ) zStart = fixedZValue;
           else zStart = -((255 - startGray) / 255.0) * maxDepth;
           if (invertZ) zStart = -zStart;
 
-          lines.push(`G0 X${startX} Y${startY} Z${safeZ.toFixed(2)}`);
-          lines.push(`G1 F${feed.toFixed(0)}`);
+          // compute average depth along contour for dynamic feed
+          let avgDepth = 0;
+          if (useDynamicFeed) {
+            let sum = 0, count = 0;
+            for (let i = 0; i < data.length; i += 2) {
+              const px = data[i], py = data[i+1];
+              const v = sampleGrayAt(px, py);
+              sum += ((255 - v)/255.0) * maxDepth;
+              count++;
+            }
+            avgDepth = (count>0) ? (sum / count) : 0;
+          }
+          const feedLocal = useDynamicFeed && maxDepth>0 ? Math.max(50, feed * (1 - (avgDepth / maxDepth) * 0.5)) : feed;
+
+          lines.push(`G1 F${feedLocal.toFixed(0)}`);
           lines.push(`G1 Z${zStart.toFixed(3)}`);
 
           for (let i = 2; i < data.length; i += 2) {
@@ -1116,12 +1034,15 @@
             else zVal = -((255 - pv) / 255.0) * maxDepth;
             if (invertZ) zVal = -zVal;
             lines.push(`G1 X${px} Y${py} Z${zVal.toFixed(3)}`);
-            totalLen += Math.hypot(x - x0, y - y0);
+            totalLen += Math.hypot((x*scaleX)-x0, (y*scaleY)-y0);
             x0 = x; y0 = y;
           }
 
-          lines.push(`G1 X${startX} Y${startY} Z${zStart.toFixed(3)}`);
+          // close loop
+          lines.push(`G1 X${startX.toFixed(2)} Y${startY.toFixed(2)} Z${zStart.toFixed(3)}`);
           lines.push(`G0 Z${safeZ.toFixed(2)}`);
+
+          currentPos = { x: startX, y: startY };
         }
 
         lines.push('M5');
@@ -1130,16 +1051,11 @@
         const timeMin = totalLen / (parseFloat(document.getElementById('feedRate').value)||800);
         document.getElementById('estTime').innerHTML = "⏱️ تقدير الوقت (Contour): " + timeMin.toFixed(1) + " دقيقة";
 
-        setTimeout(() => {
-          hideLoading('simulationPlaceholder');
-        }, 500);
-
         return lines.join('\n');
 
       } catch (error) {
         console.error('generateContourGcode error', error);
         showToast('فشل في توليد G-code (Contour)');
-        hideLoading('simulationPlaceholder');
         return "";
       }
     }
@@ -1218,7 +1134,6 @@
     });
 
     // ================= Simulation 3D & Controls =================
-
     function parseGcodeForSimulation(gcode) {
       const lines = gcode.split('\n');
       const path = [];
@@ -1268,7 +1183,6 @@
       return group;
     }
 
-    // Simulation controls UI will be created inside the three container
     function addSimulationControls(container) {
       const old = container.querySelector('.sim-controls');
       if (old) old.remove();
@@ -1552,10 +1466,6 @@
 
         // draw legend gradient for current colormap
         drawTopLegend(currentColormap);
-
-        // إظهار العناصر المخفية
-        showElement('topView', 'topViewPlaceholder');
-        document.getElementById('topLegend').style.display = 'block';
 
       } catch (e) {
         console.error('renderTopViewFromGcode error', e);
