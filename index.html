@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>CncAi v2.3 — Stable Loader + Laser Enhanced + G-code (Raster & Contour)</title>
+  <title>CncAi_Stable_v2.3_FullGcode_ExtensionSelect</title>
 
-  <!-- OpenCV (متزامن، كما في النسخة 2.1 المستقرة) -->
+  <!-- OpenCV (متزامن كما في النسخة 2.1) -->
   <script src="https://docs.opencv.org/4.8.0/opencv.js"></script>
 
   <style>
     *{box-sizing:border-box}
     body{margin:0;font-family:Tahoma,Arial,Segoe UI,system-ui;background:#041423;color:#e6eef6}
-    .app{max-width:1280px;margin:14px auto;padding:14px}
-    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #123}
+    .app{max-width:1200px;margin:18px auto;padding:14px}
+    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #123}
     .status-bar{position:fixed;left:50%;transform:translateX(-50%);top:10px;background:#1a3140;color:#e6eef6;padding:6px 12px;border-radius:10px;border:1px solid #153042;z-index:9999;box-shadow:0 6px 18px rgba(0,0,0,0.5)}
     .status-bar.ready{background:#1f4f2f;border-color:#2a7a2a}
     .topbar{display:flex;gap:10px;align-items:center;margin-bottom:10px}
@@ -48,8 +48,23 @@
     /* small tweak for file input label */
     #fileInput{display:none}
     .upload-btn{display:inline-block;padding:8px 12px;background:#0f2b34;border-radius:6px;color:#e6eef6;cursor:pointer;border:1px dashed #234a52}
-    .gcode-options{margin-top:12px;display:flex;gap:8px;align-items:center}
-    .small-note{font-size:12px;color:#9bb0c8}
+    .gcode-controls{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      justify-content:flex-start;
+      padding:8px;
+      border-radius:8px;
+      border:1px solid #18343f;
+      background:linear-gradient(180deg,#071a1f,#051217);
+      margin-top:10px;
+    }
+    .gcode-controls label{color:#9bd3df;font-weight:700;margin:0 6px 0 0}
+    .gcode-controls select{width:auto;min-width:120px}
+    .gcode-controls .ext-select{min-width:110px}
+    .file-name-hint{font-size:12px;color:#87cfdc;margin-right:12px}
+    /* G-code output area styling */
+    #gcodeOut{width:100%;box-sizing:border-box}
   </style>
 </head>
 <body>
@@ -57,8 +72,8 @@
 
   <div class="app">
     <header>
-      <h2>CncAi v2.3 — Stable Loader + Laser Enhanced</h2>
-      <div id="cvStateSmall"><small style="opacity:.8">النسخة مع توليد Raster & Contour</small></div>
+      <h2>CncAi — v2.3 Stable (Full G-code + Extension Select)</h2>
+      <div id="cvStateSmall"><small style="opacity:.8">مستقر — دعم Laser & Router & Export</small></div>
     </header>
 
     <div class="topbar" style="margin-bottom:6px">
@@ -188,24 +203,35 @@
           <input id="laserExposureScale" type="range" min="0.1" max="3" step="0.1" value="1">
         </div>
 
-        <div class="gcode-options">
-          <label style="margin:0;color:#cfeaf2">نوع التوليد:</label>
-          <select id="gcodeMode" style="width:220px">
-            <option value="raster">Raster (نقش خطوط متتابعة)</option>
+        <!-- G-code controls (placed under settings, above G-code output) -->
+        <div class="gcode-controls" style="margin-top:12px;">
+          <span class="file-name-hint" id="fileNamePreview">اسم الملف: -</span>
+          <label>🛠️ نوع التوليد:</label>
+          <select id="gcodeMode">
+            <option value="raster">Raster (نقش خطوط)</option>
             <option value="contour_all">Contour — كل الحواف</option>
             <option value="contour_outer">Contour — الحافة الخارجية فقط</option>
           </select>
-        </div>
 
-        <div class="btn-row" style="margin-top:10px">
-          <button id="btnGen" class="primary">⚡ توليد G-code</button>
-          <button id="btnDownload" class="secondary">💾 تحميل G-code</button>
+          <label>💾 الامتداد:</label>
+          <select id="fileExtension" class="ext-select">
+            <option value="gcode">.gcode</option>
+            <option value="nc">.nc</option>
+            <option value="txt">.txt</option>
+            <option value="tap">.tap</option>
+          </select>
+
+          <button id="btnGen" class="primary" style="margin-left:auto">⚡ توليد الملف</button>
         </div>
 
         <div id="estTime" style="margin-top:12px;color:#9bb0c8;text-align:center;padding:8px;background:#072a30;border-radius:6px"></div>
 
         <label style="margin-top:12px">📄 مخرجات G-code</label>
-        <textarea id="gcodeOut" readonly style="height:200px;background:#021024;color:#cfeaf2;border-radius:8px;padding:10px"></textarea>
+        <textarea id="gcodeOut" readonly style="height:240px;background:#021024;color:#cfeaf2;border-radius:8px;padding:10px"></textarea>
+        <div class="btn-row" style="margin-top:8px">
+          <button id="btnDownload" class="secondary">💾 تحميل G-code</button>
+        </div>
+
         <div class="meta-small" style="margin-top:8px">الحفظ: تحقق من إعدادات الأمان قبل التشغيل على الماكينة الفعلية.</div>
       </div>
     </div>
@@ -221,7 +247,7 @@
     let grayMat = null;
     let contour = null;
     let additionalContours = [];
-    let contoursArr = []; // extracted JS-friendly contours [{points:[{x,y}], area}]
+    let contoursArr = []; // [{points:[{x,y}], area}]
     let currentColormap = localStorage.getItem('cnc_cmap') || 'jet';
     let laserMap = null, laserMapW = 0, laserMapH = 0, laserMapPrepared = false;
     let machineMode = 'router';
@@ -235,6 +261,8 @@
       console.log('[toast]', txt);
     }
     function formatNumber(v, d=3){ return Number.parseFloat(v).toFixed(d); }
+    function cmToMm(cm){ return (parseFloat(cm)||0) * 10; }
+    function clamp(v,a=0,b=1){ return Math.max(a, Math.min(b, v)); }
 
     // ================= OpenCV ready handler =================
     if (typeof cv !== 'undefined') {
@@ -244,6 +272,7 @@
         if(sb){ sb.innerText = '✅ OpenCV جاهزة'; sb.classList.add('ready'); }
         showToast('✅ تم تحميل مكتبة OpenCV');
         if (pendingImage) { processPendingImage(); }
+        updateFileNamePreview();
       };
     } else {
       (function waitCv(){
@@ -252,18 +281,13 @@
         } else setTimeout(waitCv, 120);
       })();
     }
-
     window.addEventListener('error', e=>{
       if (e && e.target && e.target.tagName === 'SCRIPT' && e.target.src && e.target.src.includes('opencv')) {
         alert('⚠️ فشل تحميل مكتبة OpenCV. تحقق من اتصال الإنترنت ثم أعد تحميل الصفحة.');
       }
     }, true);
 
-    // ================= Utilities =================
-    function cmToMm(cm){ return (parseFloat(cm)||0) * 10; }
-    function clamp(v,a=0,b=1){ return Math.max(a, Math.min(b, v)); }
-
-    // ================= Persistent colormap UI =================
+    // ================= Colormap UI =================
     function setActiveCmapBtn(map) {
       document.querySelectorAll('.cmap-btn').forEach(b=>b.classList.remove('active'));
       const el = document.querySelector(`.cmap-btn[data-map="${map}"]`) || document.getElementById('cmap-'+map);
@@ -272,14 +296,13 @@
       if(document.getElementById('saveCmap').checked) localStorage.setItem('cnc_cmap', map); else localStorage.removeItem('cnc_cmap');
       renderHeatmap(); renderEdgeDetail(); renderLaserMapPreview(); renderTopViewFromGcode();
     }
-
     document.querySelectorAll('.cmap-btn').forEach(b=>{
       const map = b.dataset.map || b.id.replace('cmap-','');
       b.setAttribute('data-map', map);
       b.addEventListener('click', ()=> setActiveCmapBtn(map));
     });
     document.getElementById('saveCmap').checked = !!localStorage.getItem('cnc_cmap');
-    setTimeout(()=> setActiveCmapBtn(currentColormap), 100);
+    setTimeout(()=> setActiveCmapBtn(currentColormap), 120);
 
     // ================= Tabs =================
     document.querySelectorAll('.tab-buttons button').forEach(btn=>{
@@ -308,12 +331,12 @@
       document.getElementById('laserSettings').style.display = (machineMode === 'laser') ? 'block' : 'none';
       document.getElementById('routerSettings').style.display = (machineMode === 'router') ? 'block' : 'none';
       showToast('الوضع: ' + (machineMode === 'laser' ? 'Laser Engraving' : 'CNC Router'), 900);
+      updateFileNamePreview();
     }
     applyMachineMode();
 
-    // ================= File Load (robust) =================
+    // ================= File load =================
     document.getElementById('btnUpload').addEventListener('click', ()=> document.getElementById('fileInput').click());
-
     document.getElementById('fileInput').addEventListener('change', async (e) => {
       const f = e.target.files && e.target.files[0]; if(!f) return;
       if(!f.type.match('image.*')) { showToast('الرجاء اختيار ملف صورة'); return; }
@@ -329,15 +352,10 @@
         previewCanvas.width = w; previewCanvas.height = h;
         previewCtx.drawImage(img, 0, 0, w, h);
         document.getElementById('originalPlaceholder').style.display = 'none'; previewCanvas.style.display = 'block';
-        if (!cvReady) {
-          pendingImage = {img, w, h}; 
-          showToast('⏳ جارٍ تحميل OpenCV... سيتم تحليل الصورة تلقائيًا بعد جاهزيتها', 3000);
-          return;
-        }
+        if (!cvReady) { pendingImage = {img, w, h}; showToast('⏳ جارٍ تحميل OpenCV... سيتم تحليل الصورة تلقائيًا بعد جاهزيتها', 3000); return; }
         await detectContours();
-      } catch(err){
-        console.error(err); showToast('خطأ في تحميل الصورة');
-      }
+        updateFileNamePreview();
+      } catch(err){ console.error(err); showToast('خطأ في تحميل الصورة'); }
     });
 
     function processPendingImage(){
@@ -351,6 +369,7 @@
         document.getElementById('originalPlaceholder').style.display = 'none'; previewCanvas.style.display = 'block';
         pendingImage = null;
         detectContours();
+        updateFileNamePreview();
       } catch(e){ console.error('processPendingImage', e); }
     }
 
@@ -362,7 +381,7 @@
       additionalContours = []; contoursArr = []; laserMap = null; laserMapPrepared = false; laserMapW = laserMapH = 0;
     }
 
-    // ================= Image Helpers =================
+    // ================= Image helpers =================
     function contrastStretchMat(src) {
       try {
         const dst = new cv.Mat(); const mm = cv.minMaxLoc(src);
@@ -373,7 +392,7 @@
       } catch(e){ console.warn('contrastStretch error', e); const d = new cv.Mat(); src.copyTo(d); return d; }
     }
 
-    // ================= Edge Detection / Contours =================
+    // ================= Edge detection / contours =================
     async function detectContours(){
       if (!cvReady || !previewCanvas) return;
       try {
@@ -417,7 +436,6 @@
         cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel);
         cv.morphologyEx(edges, edges, cv.MORPH_OPEN, kernel);
 
-        // find contours (retain hierarchy? use RETR_LIST as before)
         const contours = new cv.MatVector(), hierarchy = new cv.Mat();
         cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
 
@@ -430,7 +448,6 @@
 
         if (valid.length > 0) {
           valid.sort((a,b)=>b.area - a.area);
-          // keep the largest as 'contour' and rest as additionalContours
           contour = valid[0].contour;
           additionalContours = valid.slice(1).map(v=>({contour:v.contour, area:v.area}));
           showToast('تم كشف ' + valid.length + ' كونتور');
@@ -439,7 +456,7 @@
         if (grayMat) try{ grayMat.delete(); } catch(e){}
         grayMat = stretched.clone();
 
-        // extract JS-friendly contours for G-code use
+        // extract JS-friendly contours
         extractContoursForGcode();
 
         // render previews
@@ -450,7 +467,6 @@
       } catch(err) { console.error('detectContours error', err); showToast('خطأ في كشف الحواف'); }
     }
 
-    // extract contours into contoursArr = [{points:[{x,y}], area}]
     function extractContoursForGcode(){
       contoursArr = [];
       try {
@@ -461,14 +477,12 @@
           for (let i=0;i<d.length;i+=2) pts.push({x: d[i], y: d[i+1]});
           return pts;
         }
-        // main contour
         if (contour) contoursArr.push({points: matToPoints(contour), area: cv.contourArea(contour)});
-        // additional
         additionalContours.forEach(c=>{ try{ contoursArr.push({points: matToPoints(c.contour), area: c.area}); }catch(e){} });
       } catch(e){ console.warn('extractContoursForGcode', e); }
     }
 
-    // ================= Colormap =================
+    // ================= Colormap helper =================
     function getColormapColor(t, map) {
       t = clamp(t);
       if (map === 'hot') {
@@ -487,7 +501,7 @@
       }
     }
 
-    // ================= Render Heatmap =================
+    // ================= Render Heatmap / Contour / EdgeDetail / LaserPreview =================
     function renderHeatmap() {
       if (!grayMat || !previewCanvas) return;
       const c = document.getElementById('canvasHeatmap'), ctx = c.getContext('2d');
@@ -500,7 +514,6 @@
       ctx.putImageData(img,0,0); document.getElementById('heatmapPlaceholder').style.display='none'; c.style.display='block';
     }
 
-    // ================= Render Contour =================
     function renderContour(){
       if(!grayMat) return;
       const c=document.getElementById('canvasContour'), ctx=c.getContext('2d');
@@ -514,7 +527,6 @@
       document.getElementById('contourPlaceholder').style.display='none'; c.style.display='block';
     }
 
-    // ================= Edge Detail =================
     function renderEdgeDetail(){
       const canvas = document.getElementById('canvasEdgeDetail'), ph=document.getElementById('edgeDetailPlaceholder');
       if(!grayMat || !previewCanvas){ ph.style.display='flex'; canvas.style.display='none'; return; }
@@ -537,7 +549,6 @@
       finally{ try{ tmp.delete(); }catch(e){} }
     }
 
-    // ================= Laser Map (Gaussian blur + contrast) =================
     function generateLaserMap(smoothness=3.0){
       if(!grayMat || !previewCanvas) return null;
       const w = grayMat.cols, h = grayMat.rows;
@@ -579,37 +590,46 @@
       ctx.putImageData(img,0,0);
     }
 
-    // ================= G-code helpers =================
-    function downloadGcode(text, filename='cnc_output.gcode'){
+    // ================= G-code helpers & exporters =================
+    function makeFileName(ext){
+      const mode = document.getElementById('gcodeMode') ? document.getElementById('gcodeMode').value : 'raster';
+      const date = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+      return `CncAi_${mode}_${date}.${ext}`;
+    }
+
+    function downloadGcode(text, extension='gcode'){
+      if(!text || text.length===0){ showToast('لا يوجد محتوى لتحميله'); return; }
       lastGeneratedGcode = text;
       document.getElementById('gcodeOut').value = text;
-      const blob = new Blob([text], {type:'text/plain'}); const url = URL.createObjectURL(blob);
+      const filename = makeFileName(extension);
+      const blob = new Blob([text], {type:'text/plain'});
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-      showToast('تم تحميل G-code');
+      showToast('تم تحميل ' + filename);
+      updateFileNamePreview();
     }
+
     document.getElementById('btnDownload').addEventListener('click', ()=>{
       if (!lastGeneratedGcode) { showToast('لا يوجد G-code لتحميله'); return; }
-      downloadGcode(lastGeneratedGcode, 'cnc_output.gcode');
+      const ext = document.getElementById('fileExtension').value || 'gcode';
+      downloadGcode(lastGeneratedGcode, ext);
     });
 
-    // get Z (mm) from grayMat at pixel x,y for Router; scale to maxDepth
     function getZfromHeatmap(px, py){
       if (!grayMat) return 0;
       const w = grayMat.cols, h = grayMat.rows;
       const x = Math.max(0, Math.min(w-1, Math.round(px)));
       const y = Math.max(0, Math.min(h-1, Math.round(py)));
-      const v = grayMat.data[y*w + x]; // 0..255 (0 black)
+      const v = grayMat.data[y*w + x];
       const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3.0;
-      const invert = false; // keep original behavior (darker => deeper)
-      const z_mm = -((255 - v)/255.0) * maxDepth; // negative for cutting
+      const z_mm = -((255 - v)/255.0) * maxDepth;
       return z_mm;
     }
 
     // ================= Generate Raster G-code =================
     function generateRasterGCode(){
       if (machineMode === 'laser') {
-        // use laserMap (intensity -> power), but convert to raster movements for laser
-        if (!laserMapPrepared || !laserMap) { showToast('لم تُحضّر خريطة الليزر. اضغط "استخدم لخريطة الليزر"'); return ''; }
+        if (!laserMapPrepared || !laserMap){ showToast('لم تُحضّر خريطة الليزر. اضغط "استخدم لخريطة الليزر"'); return ''; }
         const w = laserMapW, h = laserMapH;
         const workWidth = cmToMm(document.getElementById('workWidth').value || 30);
         const workHeight = cmToMm(document.getElementById('workHeight').value || 20);
@@ -618,7 +638,7 @@
         const basePower = parseFloat(document.getElementById('laserPower').value) || 60;
         const feed = Math.max(100, Math.round((parseFloat(document.getElementById('laserDpi').value)||300)/2));
         const lines = [];
-        lines.push('; Laser Mode Raster G-code');
+        lines.push('; Laser Raster G-code');
         lines.push('G21 G90');
         for (let row=0; row<h; row++){
           const y_mm = (row * scaleY);
@@ -644,28 +664,21 @@
         renderTopViewFromGcode();
         return g;
       } else {
-        // Router raster: sample from heatmap (grayMat) with step = stepOver(mm) converted to pixels
-        if (!grayMat) { showToast('لا توجد بيانات كافية للـ Router'); return ''; }
+        if (!grayMat){ showToast('لا توجد بيانات كافية للـ Router'); return ''; }
         const w = grayMat.cols, h = grayMat.rows;
         const workWidth = cmToMm(document.getElementById('workWidth').value || 30);
         const workHeight = cmToMm(document.getElementById('workHeight').value || 20);
         const scaleX = workWidth / w, scaleY = workHeight / h;
-        // determine step pixels based on stepOver (mm) relative to scaleY
         const stepOver_mm = parseFloat(document.getElementById('stepOver').value) || 5;
         const stepPixels = Math.max(1, Math.round(stepOver_mm / scaleY));
         const feed = parseFloat(document.getElementById('feedRate').value) || 800;
         const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
-        const lines = [];
-        lines.push('; Router Raster G-code');
-        lines.push('G21 G90');
-        lines.push(`G0 Z${formatNumber(safeZ,2)}`);
-        let totalLen = 0;
+        const lines = []; lines.push('; Router Raster G-code'); lines.push('G21 G90'); lines.push(`G0 Z${formatNumber(safeZ,2)}`);
         for (let y=0; y<h; y+=stepPixels) {
           const leftToRight = ((y/stepPixels) % 2 === 0);
           const xStart = leftToRight ? 0 : w-1;
           const xEnd = leftToRight ? w-1 : 0;
           let x = xStart;
-          // rapid to line start
           const startX_mm = xStart * scaleX, y_mm = y * scaleY;
           lines.push(`G0 X${formatNumber(startX_mm,3)} Y${formatNumber(y_mm,3)} Z${formatNumber(safeZ,2)}`);
           lines.push(`G1 F${feed}`);
@@ -690,38 +703,28 @@
 
     // ================= Generate Contour G-code =================
     function generateContourGCode(outerOnly=false){
-      // ensure contoursArr populated
       if (!contoursArr || contoursArr.length === 0){ showToast('⚠️ لم يتم اكتشاف الحواف بعد'); return ''; }
-      const workWidth = cmToMm(document.getElementById('workWidth').value || 30);
-      const workHeight = cmToMm(document.getElementById('workHeight').value || 20);
       const cols = grayMat ? grayMat.cols : (laserMapW || 0);
       const rows = grayMat ? grayMat.rows : (laserMapH || 0);
       if (cols === 0 || rows === 0) { showToast('لا توجد بيانات مساحة'); return ''; }
+      const workWidth = cmToMm(document.getElementById('workWidth').value || 30);
+      const workHeight = cmToMm(document.getElementById('workHeight').value || 20);
       const scaleX = workWidth / cols, scaleY = workHeight / rows;
       const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
       const feed = parseFloat(document.getElementById('feedRate').value) || 800;
-      const lines = []; lines.push('; Contour G-code');
-      lines.push('G21 G90');
-      // choose which contours to include
-      let list = contoursArr.slice();
-      if (outerOnly) {
-        // outerOnly -> use the largest by area (first)
-        list = [contoursArr[0]];
-      }
+      const list = outerOnly ? [contoursArr[0]] : contoursArr.slice();
+      const lines = []; lines.push('; Contour G-code'); lines.push('G21 G90');
       for (let ci=0; ci<list.length; ci++){
         const c = list[ci];
         if (!c || !c.points || c.points.length===0) continue;
         lines.push(`(Contour ${ci} — area ${Math.round(c.area)})`);
-        // go to first point
         const p0 = c.points[0];
         lines.push(`G0 X${formatNumber(p0.x*scaleX,3)} Y${formatNumber(p0.y*scaleY,3)} Z${formatNumber(safeZ,2)}`);
         lines.push(`G1 F${feed}`);
         for (let j=0;j<c.points.length;j++){
           const p = c.points[j];
-          // z from heatmap for router, for laser we keep Z = safeZ and power variations handled separately
           let zVal = 0;
           if (machineMode === 'router') zVal = getZfromHeatmap(p.x, p.y);
-          else zVal = 0;
           lines.push(`G1 X${formatNumber(p.x*scaleX,3)} Y${formatNumber(p.y*scaleY,3)} Z${formatNumber(zVal,3)} F${feed}`);
         }
         lines.push(`G0 Z${formatNumber(safeZ,2)}`);
@@ -734,7 +737,7 @@
       return g;
     }
 
-    // ================= Top View Rendering =================
+    // ================= Top view rendering =================
     function renderTopViewFromGcode(){
       const top=document.getElementById('topView'); if(!top || !previewCanvas) return;
       const ctx=top.getContext('2d'); const w=previewCanvas.width, h=previewCanvas.height; top.width=w; top.height=h;
@@ -762,7 +765,7 @@
       } catch(e){}
     }
 
-    // ================= UI Bindings =================
+    // ================= UI bindings =================
     document.getElementById('laserSmoothness').addEventListener('input',(e)=>{ document.getElementById('laserSmoothVal').innerText = parseFloat(e.target.value).toFixed(1); renderLaserMapPreview(); });
     document.getElementById('useLaserMap').addEventListener('click', ()=>{ generateLaserMap(parseFloat(document.getElementById('laserSmoothness').value)||3.0); renderLaserMapPreview(); showToast('تم تفعيل خريطة الليزر للاستخدام عند التوليد'); });
 
@@ -772,26 +775,35 @@
 
     document.querySelectorAll('.cmap-btn').forEach(b=>{ b.addEventListener('click', ()=> { const m=b.dataset.map; setActiveCmapBtn(m); }); });
 
+    // main generate button (reads extension selection)
     document.getElementById('btnGen').addEventListener('click', ()=>{
       const mode = document.getElementById('gcodeMode').value;
+      const ext = document.getElementById('fileExtension').value || 'gcode';
       let g = '';
-      if (mode === 'raster') {
-        g = generateRasterGCode();
-      } else if (mode === 'contour_all') {
-        g = generateContourGCode(false);
-      } else {
-        g = generateContourGCode(true);
-      }
-      // show in output area is handled by generation functions
+      if (mode === 'raster') g = generateRasterGCode();
+      else if (mode === 'contour_all') g = generateContourGCode(false);
+      else g = generateContourGCode(true);
+      // if g returned, auto-download with chosen extension
+      if (g && g.length>0) downloadGcode(g, ext);
+      updateFileNamePreview();
     });
 
     document.addEventListener('keydown', (e)=>{ if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='g'){ e.preventDefault(); document.getElementById('btnGen').click(); } });
+
+    // update filename preview
+    function updateFileNamePreview(){
+      const ext = document.getElementById('fileExtension') ? document.getElementById('fileExtension').value : 'gcode';
+      const fname = makeFileName(ext);
+      const el = document.getElementById('fileNamePreview'); if(el) el.innerText = 'اسم الملف: ' + fname;
+    }
+    document.getElementById('fileExtension').addEventListener('change', updateFileNamePreview);
+    document.getElementById('gcodeMode').addEventListener('change', updateFileNamePreview);
 
     // ================= Initial boot =================
     (function init(){
       ['canvasHeatmap','canvasContour','canvasEdgeDetail','canvasLaserDetail','canvasOriginal'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
       const saved = localStorage.getItem('cnc_cmap'); if(saved) setActiveCmapBtn(saved);
-      setTimeout(()=>{ if(cvReady){ const sb=document.getElementById('cvStatus'); if(sb){ sb.innerText='✅ OpenCV جاهزة'; sb.classList.add('ready'); } showToast('جاهز للاختبار'); } else showToast('OpenCV لا يزال يتحمل — انتظر ثواني'); }, 700);
+      setTimeout(()=>{ if(cvReady){ const sb=document.getElementById('cvStatus'); if(sb){ sb.innerText='✅ OpenCV جاهزة'; sb.classList.add('ready'); } showToast('جاهز للاختبار'); } else showToast('OpenCV لا يزال يتحمل — انتظر ثواني'); updateFileNamePreview(); }, 700);
     })();
 
     // ================= Cleanup on unload =================
