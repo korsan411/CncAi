@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>CncAi_Stable_v2.3_FullGcode_ExtensionSelect</title>
+  <title>CncAi_Stable_v2.4_RouterPrecision_HeatmapSync</title>
 
   <!-- OpenCV (متزامن كما في النسخة 2.1) -->
   <script src="https://docs.opencv.org/4.8.0/opencv.js"></script>
@@ -18,7 +18,7 @@
     .topbar{display:flex;gap:10px;align-items:center;margin-bottom:10px}
     .colormap-group{display:flex;gap:6px;align-items:center}
     .cmap-btn{width:34px;height:34px;border-radius:50%;border:2px solid #123;background:#222;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
-    .cmap-btn.active{outline:3px solid rgba(6,182,212,0.18)}
+    .cmap-btn.active{box-shadow:0 0 0 3px rgba(6,182,212,0.12); transform:scale(1.03)}
     .cmap-label{font-size:13px;color:#9bb0c8;margin-left:6px}
     .grid{display:grid;grid-template-columns:1fr 520px;gap:14px}
     @media(max-width:1000px){.grid{grid-template-columns:1fr}}
@@ -63,7 +63,6 @@
     .gcode-controls select{width:auto;min-width:120px}
     .gcode-controls .ext-select{min-width:110px}
     .file-name-hint{font-size:12px;color:#87cfdc;margin-right:12px}
-    /* G-code output area styling */
     #gcodeOut{width:100%;box-sizing:border-box}
   </style>
 </head>
@@ -72,14 +71,15 @@
 
   <div class="app">
     <header>
-      <h2>CncAi — v2.3 Stable (Full G-code + Extension Select)</h2>
-      <div id="cvStateSmall"><small style="opacity:.8">مستقر — دعم Laser & Router & Export</small></div>
+      <h2>CncAi — v2.4 Router Precision & Heatmap Sync</h2>
+      <div id="cvStateSmall"><small style="opacity:.8">التعديلات: حدود التصميم لـ Router + Colormap متزامن</small></div>
     </header>
 
     <div class="topbar" style="margin-bottom:6px">
       <label class="upload-btn" id="btnUpload">📁 رفع صورة جديدة</label>
       <input id="fileInput" type="file" accept="image/*"/>
       <div style="flex:1"></div>
+
       <div class="colormap-group" title="اختيار خريطة الألوان يؤثر على كل المعاينات">
         <div class="cmap-btn" id="cmap-jet" data-map="jet" style="background:linear-gradient(90deg,#0040ff,#00ffff,#00ff00,#ffff00,#ff0000)"></div>
         <div class="cmap-btn" id="cmap-hot" data-map="hot" style="background:linear-gradient(90deg,#000000,#800000,#ff0000,#ffff00,#ffffff)"></div>
@@ -87,6 +87,7 @@
         <div class="cmap-btn" id="cmap-gray" data-map="gray" style="background:linear-gradient(90deg,#000000,#777777,#ffffff)"></div>
         <div class="cmap-label">Colormap</div>
       </div>
+
       <div style="width:8px"></div>
       <div class="checkbox-inline">
         <label style="color:#9bb0c8">حفظ الألوان</label>
@@ -287,15 +288,25 @@
       }
     }, true);
 
-    // ================= Colormap UI =================
+    // ================= Colormap =================
+    function applyColormapToAll(map){
+      currentColormap = map;
+      // re-render all visual parts that depend on colormap
+      renderHeatmap();
+      renderEdgeDetail();
+      renderLaserMapPreview();
+      renderContour();
+      renderTopViewFromGcode();
+      if(document.getElementById('saveCmap').checked) localStorage.setItem('cnc_cmap', map);
+    }
+
     function setActiveCmapBtn(map) {
       document.querySelectorAll('.cmap-btn').forEach(b=>b.classList.remove('active'));
       const el = document.querySelector(`.cmap-btn[data-map="${map}"]`) || document.getElementById('cmap-'+map);
       if(el) el.classList.add('active');
-      currentColormap = map;
-      if(document.getElementById('saveCmap').checked) localStorage.setItem('cnc_cmap', map); else localStorage.removeItem('cnc_cmap');
-      renderHeatmap(); renderEdgeDetail(); renderLaserMapPreview(); renderTopViewFromGcode();
+      applyColormapToAll(map);
     }
+
     document.querySelectorAll('.cmap-btn').forEach(b=>{
       const map = b.dataset.map || b.id.replace('cmap-','');
       b.setAttribute('data-map', map);
@@ -448,6 +459,7 @@
 
         if (valid.length > 0) {
           valid.sort((a,b)=>b.area - a.area);
+          // keep the largest as 'contour' and rest as additionalContours
           contour = valid[0].contour;
           additionalContours = valid.slice(1).map(v=>({contour:v.contour, area:v.area}));
           showToast('تم كشف ' + valid.length + ' كونتور');
@@ -615,20 +627,22 @@
       downloadGcode(lastGeneratedGcode, ext);
     });
 
+    // get Z (mm) from grayMat at pixel x,y for Router; scale to maxDepth
     function getZfromHeatmap(px, py){
       if (!grayMat) return 0;
       const w = grayMat.cols, h = grayMat.rows;
       const x = Math.max(0, Math.min(w-1, Math.round(px)));
       const y = Math.max(0, Math.min(h-1, Math.round(py)));
-      const v = grayMat.data[y*w + x];
+      const v = grayMat.data[y*w + x]; // 0..255 (0 black)
       const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3.0;
-      const z_mm = -((255 - v)/255.0) * maxDepth;
+      const z_mm = -((255 - v)/255.0) * maxDepth; // negative for cutting
       return z_mm;
     }
 
-    // ================= Generate Raster G-code =================
+    // ================= Generate Raster G-code (bounded by contour) =================
     function generateRasterGCode(){
       if (machineMode === 'laser') {
+        // Laser raster unchanged
         if (!laserMapPrepared || !laserMap){ showToast('لم تُحضّر خريطة الليزر. اضغط "استخدم لخريطة الليزر"'); return ''; }
         const w = laserMapW, h = laserMapH;
         const workWidth = cmToMm(document.getElementById('workWidth').value || 30);
@@ -664,30 +678,52 @@
         renderTopViewFromGcode();
         return g;
       } else {
+        // Router raster: limit to bounding box of main contour if exists
         if (!grayMat){ showToast('لا توجد بيانات كافية للـ Router'); return ''; }
         const w = grayMat.cols, h = grayMat.rows;
         const workWidth = cmToMm(document.getElementById('workWidth').value || 30);
         const workHeight = cmToMm(document.getElementById('workHeight').value || 20);
         const scaleX = workWidth / w, scaleY = workHeight / h;
         const stepOver_mm = parseFloat(document.getElementById('stepOver').value) || 5;
-        const stepPixels = Math.max(1, Math.round(stepOver_mm / scaleY));
+        // step in pixels derived from scaleY (mm per pixel)
+        const pixelsPerMmY = h / workHeight;
+        const stepPixels = Math.max(1, Math.round(stepOver_mm * pixelsPerMmY));
         const feed = parseFloat(document.getElementById('feedRate').value) || 800;
         const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
-        const lines = []; lines.push('; Router Raster G-code'); lines.push('G21 G90'); lines.push(`G0 Z${formatNumber(safeZ,2)}`);
-        for (let y=0; y<h; y+=stepPixels) {
-          const leftToRight = ((y/stepPixels) % 2 === 0);
-          const xStart = leftToRight ? 0 : w-1;
-          const xEnd = leftToRight ? w-1 : 0;
-          let x = xStart;
-          const startX_mm = xStart * scaleX, y_mm = y * scaleY;
-          lines.push(`G0 X${formatNumber(startX_mm,3)} Y${formatNumber(y_mm,3)} Z${formatNumber(safeZ,2)}`);
+
+        // bounding box: default full image
+        let xMin = 0, yMin = 0, boxW = w, boxH = h;
+        try {
+          if (contour) {
+            const rect = cv.boundingRect(contour);
+            xMin = Math.max(0, rect.x);
+            yMin = Math.max(0, rect.y);
+            boxW = Math.max(1, rect.width);
+            boxH = Math.max(1, rect.height);
+          }
+        } catch(e){ console.warn('boundingRect error', e); }
+
+        const xMax = xMin + boxW - 1;
+        const yMax = yMin + boxH - 1;
+
+        const lines = []; lines.push('; Router Raster G-code (bounded)'); lines.push('G21 G90'); lines.push(`G0 Z${formatNumber(safeZ,2)}`);
+        for (let y = yMin; y <= yMax; y += stepPixels) {
+          const rowIndex = Math.round((y - yMin) / stepPixels);
+          const leftToRight = (rowIndex % 2 === 0);
+          const startX = leftToRight ? xMin : xMax;
+          const endX = leftToRight ? xMax : xMin;
+          const y_mm = y * (workHeight / h);
+          // Rapid to start
+          lines.push(`G0 X${formatNumber(startX * (workWidth / w),3)} Y${formatNumber(y_mm,3)} Z${formatNumber(safeZ,2)}`);
           lines.push(`G1 F${feed}`);
+          let x = startX;
           while(true){
-            const v = grayMat.data[y*w + x];
-            const z = -((255 - v)/255.0) * (parseFloat(document.getElementById('maxDepth').value) || 3.0);
-            const x_mm = x * scaleX;
+            // check if (x,y) is inside contour polygon: if outside, skip Z cutting (move rapid) or set Z=safeZ
+            const inside = isPointInsideMainContour(x, y);
+            const z = inside ? getZfromHeatmap(x, y) : safeZ;
+            const x_mm = x * (workWidth / w);
             lines.push(`G1 X${formatNumber(x_mm,3)} Y${formatNumber(y_mm,3)} Z${formatNumber(z,3)}`);
-            if (x === xEnd) break;
+            if (x === endX) break;
             x = leftToRight ? x+1 : x-1;
           }
           lines.push(`G0 Z${formatNumber(safeZ,2)}`);
@@ -695,10 +731,29 @@
         lines.push('M5','M30');
         const g = lines.join('\n');
         lastGeneratedGcode = g; document.getElementById('gcodeOut').value = g;
-        showToast('تم توليد G-code للـ Router (Raster)');
+        showToast('تم توليد G-code للـ Router (Raster) داخل حدود التصميم');
         renderTopViewFromGcode();
         return g;
       }
+    }
+
+    // helper: test if pixel (px,py) lies inside main contour polygon (uses contoursArr[0])
+    function isPointInsideMainContour(px, py){
+      try {
+        if (!contoursArr || contoursArr.length === 0) return false;
+        const main = contoursArr[0];
+        if (!main || !main.points || main.points.length===0) return false;
+        // ray-casting algorithm
+        let inside = false;
+        const pts = main.points;
+        for (let i=0, j=pts.length-1; i<pts.length; j=i++){
+          const xi = pts[i].x, yi = pts[i].y;
+          const xj = pts[j].x, yj = pts[j].y;
+          const intersect = ((yi>py)!=(yj>py)) && (px < (xj - xi) * (py - yi) / (yj - yi + 0.0) + xi);
+          if (intersect) inside = !inside;
+        }
+        return inside;
+      } catch(e){ return false; }
     }
 
     // ================= Generate Contour G-code =================
@@ -783,7 +838,6 @@
       if (mode === 'raster') g = generateRasterGCode();
       else if (mode === 'contour_all') g = generateContourGCode(false);
       else g = generateContourGCode(true);
-      // if g returned, auto-download with chosen extension
       if (g && g.length>0) downloadGcode(g, ext);
       updateFileNamePreview();
     });
