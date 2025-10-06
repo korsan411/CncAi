@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CncAi — النسخة المستقرة 2.1</title>
+<style>
+:root {
+  --bg-color: #f5f5f5;
+  --header-color: #333;
+  --btn-color: #007bff;
+  --btn-hover: #0056b3;
+  --canvas-bg: #ffffff;
+  --text-color: #222;
+  --legend-bg: #eee;
+}
+body { margin:0; font-family:sans-serif; background:var(--bg-color); color:var(--text-color);}
+header { background:var(--header-color); color:#fff; padding:10px 20px; display:flex; justify-content:space-between; align-items:center;}
+header h1 { margin:0; font-size:1.2em;}
+button { margin:0 5px; padding:5px 10px; border:none; border-radius:4px; background:var(--btn-color); color:#fff; cursor:pointer; }
+button:hover { background:var(--btn-hover);}
+#controls { padding:10px; display:flex; flex-wrap:wrap; align-items:center; }
+#controls label { margin:0 5px; }
+canvas { background:var(--canvas-bg); margin:10px 0; border:1px solid #ccc; display:block; }
+#legend { margin:10px 0; padding:5px; background:var(--legend-bg); display:flex; justify-content:space-between; font-size:0.9em;}
+#debugOverlay { position:fixed; bottom:10px; right:10px; width:300px; max-height:200px; overflow:auto; background:#222; color:#fff; font-size:12px; padding:10px; border-radius:6px;}
+#tabs { display:flex; margin:10px 0; }
+.tab { padding:5px 10px; cursor:pointer; border:1px solid #ccc; margin-left:-1px; background:#fff;}
+.tab.active { background:#eee; font-weight:bold; }
+#tabContent > div { display:none; }
+#tabContent > div.active { display:block; }
+input[type="range"] { cursor:pointer; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>CncAi — النسخة المستقرة 2.1</h1>
+  <div>
+    <button id="toggleTheme">تبديل الثيم</button>
+    <input type="file" id="imageLoader" accept="image/*"/>
+  </div>
+</header>
+
+<div id="controls">
+  <label>Edge Sensitivity: <span id="edgeValue">50</span></label>
+  <input type="range" id="edgeRange" min="0" max="100" value="50">
+  <label>Colormap:</label>
+  <select id="colormap">
+    <option value="jet">Jet</option>
+    <option value="hot">Hot</option>
+    <option value="cool">Cool</option>
+    <option value="gray">Gray</option>
+  </select>
+  <button id="generateGcode">توليد G-code</button>
+</div>
+
+<div id="tabs">
+  <div class="tab active" data-tab="original">الأصلية</div>
+  <div class="tab" data-tab="heatmap">Heatmap</div>
+  <div class="tab" data-tab="topview">Top View</div>
+  <div class="tab" data-tab="3d">3D</div>
+</div>
+
+<div id="tabContent">
+  <div id="original" class="active">
+    <canvas id="canvasOriginal" width="600" height="400"></canvas>
+  </div>
+  <div id="heatmap">
+    <canvas id="canvasHeatmap" width="600" height="400"></canvas>
+  </div>
+  <div id="topview">
+    <canvas id="canvasTop" width="600" height="400"></canvas>
+    <div id="legend">0 — 255</div>
+  </div>
+  <div id="3d">
+    <canvas id="canvas3D" width="600" height="400"></canvas>
+  </div>
+</div>
+
+<div id="debugOverlay">Debug log...</div>
+
+<script>
+const edgeRange = document.getElementById('edgeRange');
+const edgeValue = document.getElementById('edgeValue');
+const colormapSelect = document.getElementById('colormap');
+const imageLoader = document.getElementById('imageLoader');
+const generateGcodeBtn = document.getElementById('generateGcode');
+const debugOverlay = document.getElementById('debugOverlay');
+
+let img = new Image();
+let width, height;
+let edgeSensitivity = 50;
+let colormap = 'jet';
+
+// Tabs
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+    document.querySelectorAll('#tabContent > div').forEach(c=>c.classList.remove('active'));
+    document.getElementById(tab.dataset.tab).classList.add('active');
+  });
+});
+
+// Theme toggle
+document.getElementById('toggleTheme').addEventListener('click', ()=>{
+  document.body.classList.toggle('dark');
+  document.body.style.background = document.body.classList.contains('dark') ? '#222' : '#f5f5f5';
+});
+
+// Edge sensitivity
+edgeRange.addEventListener('input', ()=>{
+  edgeSensitivity = edgeRange.value;
+  edgeValue.textContent = edgeSensitivity;
+  if(img.src) processImage();
+});
+
+// Colormap
+colormapSelect.addEventListener('change', ()=>{
+  colormap = colormapSelect.value;
+  if(img.src) processImage();
+});
+
+// Image load
+imageLoader.addEventListener('change', function(e){
+  const reader = new FileReader();
+  reader.onload = function(event){
+    img.onload = function(){
+      width = img.width;
+      height = img.height;
+      drawOriginal();
+      processImage();
+    }
+    img.src = event.target.result;
+  }
+  reader.readAsDataURL(e.target.files[0]);
+});
+
+// Draw original image
+function drawOriginal(){
+  const ctx = document.getElementById('canvasOriginal').getContext('2d');
+  ctx.clearRect(0,0,width,height);
+  ctx.drawImage(img,0,0,width,height);
+}
+
+// Process image: Edge detection + Heatmap + Top View + 3D
+function processImage(){
+  const canvasH = document.getElementById('canvasHeatmap');
+  const ctxH = canvasH.getContext('2d');
+  canvasH.width = width;
+  canvasH.height = height;
+  ctxH.drawImage(img,0,0,width,height);
+  let image = ctxH.getImageData(0,0,width,height);
+  let data = image.data;
+
+  // Convert to grayscale
+  for(let i=0;i<data.length;i+=4){
+    let avg = 0.299*data[i]+0.587*data[i+1]+0.114*data[i+2];
+    data[i] = data[i+1] = data[i+2] = avg;
+  }
+
+  // Edge detection (Sobel simplified)
+  let edgeData = new Uint8ClampedArray(data);
+  for(let y=1;y<height-1;y++){
+    for(let x=1;x<width-1;x++){
+      let i = (y*width + x)*4;
+      let gx = (data[i-4]-data[i+4]);
+      let gy = (data[i-width*4]-data[i+width*4]);
+      let g = Math.sqrt(gx*gx + gy*gy);
+      let val = g > edgeSensitivity ? 255 : 0;
+      edgeData[i] = edgeData[i+1] = edgeData[i+2] = val;
+    }
+  }
+  ctxH.putImageData(new ImageData(edgeData,width,height),0,0);
+
+  // Top View
+  const canvasT = document.getElementById('canvasTop');
+  const ctxT = canvasT.getContext('2d');
+  canvasT.width = width;
+  canvasT.height = height;
+  ctxT.clearRect(0,0,width,height);
+  ctxT.putImageData(new ImageData(edgeData,width,height),0,0);
+
+  // 3D (placeholder, full 3D يمكن تطويرها لاحقًا)
+  const canvas3D = document.getElementById('canvas3D');
+  const ctx3D = canvas3D.getContext('2d');
+  canvas3D.width = width;
+  canvas3D.height = height;
+  ctx3D.clearRect(0,0,width,height);
+  ctx3D.putImageData(new ImageData(edgeData,width,height),0,0);
+
+  debugOverlay.textContent = 'Image processed. Width: '+width+' Height: '+height;
+}
+
+// Generate G-code
+generateGcodeBtn.addEventListener('click', ()=>{
+  if(!img.src){ alert('ارفع صورة أولاً'); return; }
+  let gcode = [];
+  const canvasH = document.getElementById('canvasHeatmap');
+  const ctxH = canvasH.getContext('2d');
+  const image = ctxH.getImageData(0,0,width,height);
+  const data = image.data;
+
+  for(let y=0;y<height;y+=2){
+    let row = (y%2===0)? [...Array(width).keys()] : [...Array(width).keys()].reverse();
+    for(let x of row){
+      let i = (y*width + x)*4;
+      let z = 255 - data[i];
+      gcode.push(`G1 X${x} Y${y} Z${z}`);
+    }
+  }
+  debugOverlay.textContent = 'G-code generated:\n'+gcode.slice(0,20).join('\n')+'\n...';
+});
+</script>
+
+</body>
+</html>
