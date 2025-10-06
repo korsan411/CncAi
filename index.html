@@ -336,9 +336,10 @@
           <div class="button-group">
             <div class="button-row">
               <button id="btnLaserEngrave" class="primary" style="background:#ff4444; display:none;">⚡ توليد كود ليزر (نقش)</button>
-              <button id="btnLaserCut" class="secondary" style="display:none;">✂️ توليد كود ليزر (قص)</button>
+              <button id="btnLaserQuick" class="secondary" style="display:none;">🧪 نقش سريع</button>
             </div>
             <div class="button-row">
+              <button id="btnLaserCut" class="secondary" style="display:none;">✂️ توليد كود ليزر (قص)</button>
               <button id="btnLaserDownload" class="secondary" style="display:none;">💾 تحميل كود الليزر</button>
             </div>
           </div>
@@ -583,6 +584,7 @@
       const contourBtn = document.getElementById('btnContour');
       const quickBtn = document.getElementById('btnQuick');
       const laserEngraveBtn = document.getElementById('btnLaserEngrave');
+      const laserQuickBtn = document.getElementById('btnLaserQuick');
       const laserCutBtn = document.getElementById('btnLaserCut');
       const laserDownloadBtn = document.getElementById('btnLaserDownload');
       
@@ -591,6 +593,7 @@
         contourBtn.style.display = 'none';
         quickBtn.style.display = 'none';
         laserEngraveBtn.style.display = 'block';
+        laserQuickBtn.style.display = 'block';
         laserCutBtn.style.display = 'block';
         laserDownloadBtn.style.display = 'block';
       } else {
@@ -598,6 +601,7 @@
         contourBtn.style.display = 'block';
         quickBtn.style.display = 'block';
         laserEngraveBtn.style.display = 'none';
+        laserQuickBtn.style.display = 'none';
         laserCutBtn.style.display = 'none';
         laserDownloadBtn.style.display = 'none';
       }
@@ -668,6 +672,12 @@
         showToast('OpenCV غير جاهز بعد');
         return;
       }
+      
+      // تحقق إضافي من حجم الصورة علشان الليزر
+      if (previewCanvas && (previewCanvas.width > 800 || previewCanvas.height > 600)) {
+        showToast('جاري معالجة الصورة... قد يستغرق بعض الوقت');
+      }
+      
       try {
         const src = cv.imread(previewCanvas);
         const gray = new cv.Mat();
@@ -1131,8 +1141,8 @@
         const scaleX = workWidth / previewCanvas.width;
         const scaleY = workHeight / previewCanvas.height;
         
-        // مسح خطي للليزر
-        const stepOver = 0.2; // خطوة دقيقة للليزر
+        // نزيد stepOver علشان نخفف الضغط
+        const stepOver = 1.0; // كان 0.2 - نخفف علشان المتصفح
         let totalLen = 0;
 
         for (let pass = 0; pass < laserPasses; pass++) {
@@ -1141,7 +1151,7 @@
             let inContour = false;
             let segmentStart = -1;
             
-            for (let x = 0; x < previewCanvas.width; x += 1) {
+            for (let x = 0; x < previewCanvas.width; x += 2) { // كان 1 - نخفف
               const pt = new cv.Point(x, y);
               const inside = cv.pointPolygonTest(contour, pt, false) >= 0;
               
@@ -1151,7 +1161,7 @@
               }
               else if (!inside && inContour) {
                 // إضافة نقاط القطعة
-                for (let sx = segmentStart; sx < x; sx += 1) {
+                for (let sx = segmentStart; sx < x; sx += 2) { // نخفف العينات
                   const pv = sampleGrayAt(sx, y);
                   const power = dynamicPower ? Math.round((pv / 255) * laserPower) : laserPower;
                   const scaledX = (sx * scaleX) + originX;
@@ -1163,7 +1173,7 @@
             }
             
             if (inContour) {
-              for (let sx = segmentStart; sx < previewCanvas.width; sx += 1) {
+              for (let sx = segmentStart; sx < previewCanvas.width; sx += 2) { // نخفف العينات
                 const pv = sampleGrayAt(sx, y);
                 const power = dynamicPower ? Math.round((pv / 255) * laserPower) : laserPower;
                 const scaledX = (sx * scaleX) + originX;
@@ -1190,6 +1200,90 @@
       } catch (error) {
         console.error('generateLaserEngraveGcode error', error);
         showToast('فشل في توليد كود الليزر');
+        return "";
+      }
+    }
+
+    function generateLaserQuickGcode() {
+      if (!grayMat || !contour) {
+        showToast("لا توجد صورة جاهزة للمعالجة");
+        return "";
+      }
+
+      try {
+        const laserPower = 80; // ثابت علشان السرعه
+        const laserSpeed = 3000; // أسرع
+        const dynamicPower = true; // مفعل علشان النتائج أحسن
+
+        const workWidth = cmToMm(parseFloat(document.getElementById('laserWorkWidth').value) || 30);
+        const workHeight = cmToMm(parseFloat(document.getElementById('laserWorkHeight').value) || 20);
+        const originX = cmToMm(parseFloat(document.getElementById('laserOriginX').value) || 0);
+        const originY = cmToMm(parseFloat(document.getElementById('laserOriginY').value) || 0);
+
+        const lines = [];
+        lines.push('G21 G90');
+        lines.push('M8'); // Air Assist مفعل
+        
+        const scaleX = workWidth / previewCanvas.width;
+        const scaleY = workHeight / previewCanvas.height;
+        
+        // إعدادات خفيفة علشان السرعه
+        const stepOver = 2.0; // خطوات أكبر
+        let totalLen = 0;
+
+        for (let y = 0; y < previewCanvas.height; y += stepOver) {
+          const rowPoints = [];
+          let inContour = false;
+          let segmentStart = -1;
+          
+          for (let x = 0; x < previewCanvas.width; x += 3) { // خطوات أكبر
+            const pt = new cv.Point(x, y);
+            const inside = cv.pointPolygonTest(contour, pt, false) >= 0;
+            
+            if (inside && !inContour) { 
+              segmentStart = x; 
+              inContour = true; 
+            }
+            else if (!inside && inContour) {
+              // نأخذ عينات أقل
+              for (let sx = segmentStart; sx < x; sx += 3) {
+                const pv = sampleGrayAt(sx, y);
+                const power = dynamicPower ? Math.round((pv / 255) * laserPower) : laserPower;
+                const scaledX = (sx * scaleX) + originX;
+                const scaledY = (y * scaleY) + originY;
+                rowPoints.push({ x: scaledX, y: scaledY, power });
+              }
+              inContour = false;
+            }
+          }
+          
+          if (inContour) {
+            for (let sx = segmentStart; sx < previewCanvas.width; sx += 3) {
+              const pv = sampleGrayAt(sx, y);
+              const power = dynamicPower ? Math.round((pv / 255) * laserPower) : laserPower;
+              const scaledX = (sx * scaleX) + originX;
+              const scaledY = (y * scaleY) + originY;
+              rowPoints.push({ x: scaledX, y: scaledY, power });
+            }
+          }
+          
+          if (rowPoints.length > 1) {
+            processLaserRow(rowPoints, lines, laserSpeed, (y / stepOver) % 2 !== 0);
+            totalLen += calculateRowLength(rowPoints);
+          }
+        }
+
+        lines.push('M9');
+        lines.push('M5');
+        lines.push('M30');
+
+        const timeMin = totalLen / laserSpeed;
+        document.getElementById('estTime').innerHTML = "⏱️ تقدير وقت الليزر (سريع): " + timeMin.toFixed(1) + " دقيقة";
+
+        return lines.join('\n');
+      } catch (error) {
+        console.error('generateLaserQuickGcode error', error);
+        showToast('فشل في توليد كود الليزر السريع');
         return "";
       }
     }
@@ -1327,6 +1421,17 @@
       }
     });
 
+    document.getElementById('btnLaserQuick').addEventListener('click', () => {
+      const gcode = generateLaserQuickGcode();
+      document.getElementById('gcodeOut').value = gcode;
+      lastGeneratedGcode = gcode;
+      if (gcode) {
+        showToast("تم توليد كود الليزر السريع");
+        renderTopViewFromGcode(gcode);
+        document.querySelector('.tab-buttons button[data-tab="simulation"]').click();
+      }
+    });
+
     document.getElementById('btnLaserCut').addEventListener('click', () => {
       const gcode = generateLaserCutGcode();
       document.getElementById('gcodeOut').value = gcode;
@@ -1381,7 +1486,13 @@
               document.getElementById('btnGen').click();
             }
             break;
-          case 'r': e.preventDefault(); document.getElementById('btnQuick').click(); break;
+          case 'r': e.preventDefault(); 
+            if (document.getElementById('machineCategory').value === 'laser') {
+              document.getElementById('btnLaserQuick').click();
+            } else {
+              document.getElementById('btnQuick').click();
+            }
+            break;
           case 'd': e.preventDefault(); document.getElementById('btnDownload').click(); break;
           case '`': e.preventDefault(); document.getElementById('dbgToggleSize').click(); break;
         }
