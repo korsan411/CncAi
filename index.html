@@ -784,13 +784,27 @@
     document.getElementById('fileInput').addEventListener('change', async function (e) {
       const file = e.target.files[0];
       if (!file) return;
+      
+      // تحقق من نوع الملف
       if (!file.type.match('image.*')) {
-        showToast('الرجاء اختيار ملف صورة فقط');
+        showToast('الرجاء اختيار ملف صورة فقط (JPEG, PNG, etc.)');
         return;
       }
+      
+      // تحقق من حجم الملف (اختياري)
+      if (file.size > 10 * 1024 * 1024) { // 10MB
+        showToast('حجم الملف كبير جداً. الرجاء اختيار صورة أصغر');
+        return;
+      }
+      
       try {
         cleanupMats();
         const img = new Image();
+        
+        img.onerror = function() {
+          showToast('فشل في تحميل الصورة. تأكد من أن الملف صالح');
+        };
+        
         img.src = URL.createObjectURL(file);
         await img.decode();
 
@@ -851,7 +865,7 @@
         return;
       }
       
-      let src, gray, blurred, edges, hierarchy, contours, kernel;
+      let src = null, gray = null, blurred = null, edges = null, hierarchy = null, contours = null, kernel = null;
       
       try {
         src = cv.imread(previewCanvas);
@@ -973,7 +987,7 @@
       
       showToast('جاري كشف حواف الليزر...');
       
-      let src, gray, edges, hierarchy, contours;
+      let src = null, gray = null, edges = null, hierarchy = null, contours = null;
       
       try {
         src = cv.imread(previewCanvas);
@@ -991,20 +1005,17 @@
         edges = new cv.Mat();
         
         if (mode === 'adaptive') {
-          // Adaptive Threshold - ممتاز للصور ذات الإضاءة غير المتجانسة
           const adaptive = new cv.Mat();
           const blockSize = Math.max(3, 2 * Math.floor(detailLevel) + 1);
           cv.adaptiveThreshold(gray, adaptive, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, blockSize, 2);
           
-          // تحسين الحواف
           const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(3, 3));
           cv.morphologyEx(adaptive, edges, cv.MORPH_CLOSE, kernel);
           
-          adaptive.delete();
-          kernel.delete();
+          safeMatDelete(adaptive);
+          safeMatDelete(kernel);
           
         } else if (mode === 'morphological') {
-          // Morphological Gradient - لحواف دقيقة وناعمة
           const blurred = new cv.Mat();
           cv.GaussianBlur(gray, blurred, new cv.Size(3, 3), 0);
           
@@ -1016,13 +1027,14 @@
           cv.erode(blurred, eroded, kernel);
           cv.subtract(dilated, eroded, edges);
           
-          // تطبيع
           cv.normalize(edges, edges, 0, 255, cv.NORM_MINMAX);
           
-          blurred.delete(); kernel.delete(); dilated.delete(); eroded.delete();
+          safeMatDelete(blurred);
+          safeMatDelete(kernel);
+          safeMatDelete(dilated);
+          safeMatDelete(eroded);
           
         } else if (mode === 'gradient') {
-          // Gradient-Based - للتدرجات اللونية
           const blurred = new cv.Mat();
           cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
           
@@ -1038,35 +1050,35 @@
           cv.convertScaleAbs(gradY, absGradY);
           cv.addWeighted(absGradX, 0.5, absGradY, 0.5, 0, edges);
           
-          // تحسين
           const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(2, 2));
           cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel);
           
-          blurred.delete(); gradX.delete(); gradY.delete(); 
-          absGradX.delete(); absGradY.delete(); kernel.delete();
+          safeMatDelete(blurred);
+          safeMatDelete(gradX);
+          safeMatDelete(gradY);
+          safeMatDelete(absGradX);
+          safeMatDelete(absGradY);
+          safeMatDelete(kernel);
           
         } else {
-          // Canny العادي
           const blurred = new cv.Mat();
           cv.GaussianBlur(gray, blurred, new cv.Size(3, 3), 0);
           cv.Canny(blurred, edges, 50, 150);
-          blurred.delete();
+          safeMatDelete(blurred);
         }
 
-        // تحسين نهائي بناء على مستوى الدقة
         if (detailLevel > 5) {
           const kernelSize = Math.min(3, Math.floor(detailLevel / 3));
           const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(kernelSize, kernelSize));
           cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel);
-          kernel.delete();
+          safeMatDelete(kernel);
         }
 
         contours = new cv.MatVector();
         hierarchy = new cv.Mat();
         cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
 
-        // معايير مختلفة للليزر - نحتاج حواف أكثر
-        const minArea = (gray.cols * gray.rows) * 0.002; // 0.2% - أقل من الراوتر
+        const minArea = (gray.cols * gray.rows) * 0.002;
         const validContours = [];
         
         for (let i = 0; i < contours.size(); i++) {
@@ -1075,7 +1087,7 @@
           if (area > minArea) {
             validContours.push({ contour: cnt, area });
           } else {
-            try { cnt.delete(); } catch (e) {}
+            safeMatDelete(cnt);
           }
         }
 
@@ -1086,6 +1098,7 @@
           showToast(`تم كشف ${validContours.length} كونتور للليزر`);
         } else {
           showToast('لم يتم العثور على حواف مناسبة للليزر');
+          // تنظيف قبل الخروج
           safeMatDelete(src);
           safeMatDelete(edges);
           safeMatDelete(hierarchy);
@@ -1094,7 +1107,9 @@
           return;
         }
 
-        if (grayMat) { try { grayMat.delete(); } catch(e){} }
+        if (grayMat) { 
+          safeMatDelete(grayMat);
+        }
         grayMat = gray.clone();
 
         renderHeatmap();
@@ -1868,14 +1883,14 @@
     // إضافة تحقق من تحميل المكتبات
     function checkThreeJSLoaded() {
       if (typeof THREE === 'undefined') {
-        showToast('جاري تحميل المكتبات ثلاثية الأبعاد...');
+        console.warn('THREE.js not loaded yet');
         return false;
       }
       
       // التحقق من OrbitControls
       if (typeof THREE.OrbitControls === 'undefined') {
-        showToast('OrbitControls غير محمل. جاري استخدام تحكم بديل...');
-        return true; // نستمر ولكن بدون OrbitControls
+        console.warn('OrbitControls not loaded');
+        // نستمر ولكن بدون OrbitControls
       }
       
       return true;
@@ -1961,6 +1976,37 @@
       group.add(lens);
       group.scale.set(1.2,1.2,1.2);
       return group;
+    }
+
+    // دالة مساعدة لتنظيف المحاكاة
+    function cleanupSimulation() {
+      simulation.isPlaying = false;
+      simulation.animationFrame && cancelAnimationFrame(simulation.animationFrame);
+      simulation.animationFrame = null;
+      simulation.index = 0;
+      simulation.pathPoints = [];
+      
+      if (controls) {
+        controls.dispose();
+        controls = null;
+      }
+      
+      if (renderer) {
+        try {
+          if (renderer.domElement && renderer.domElement.parentNode) {
+            renderer.domElement.parentNode.removeChild(renderer.domElement);
+          }
+          renderer.dispose();
+          renderer = null;
+        } catch (e) {
+          console.warn('Error disposing renderer:', e);
+        }
+      }
+      
+      scene = null;
+      camera = null;
+      simulation.tool = null;
+      simulation.toolPath = null;
     }
 
     // Simulation controls UI will be created inside the three container
@@ -2064,59 +2110,47 @@
         return;
       }
       
-      // تنظيف المحاكاة السابقة
-      if (renderer) {
-        try { 
-          if (renderer.domElement && container.contains(renderer.domElement)) {
-            container.removeChild(renderer.domElement); 
-          }
-          renderer.dispose(); 
-          scene = null;
-          camera = null;
-          controls = null;
-          simulation.tool = null;
-          simulation.toolPath = null;
-          simulation.pathPoints = [];
-          simulation.index = 0;
-        } catch(e){
-          console.warn('Error cleaning previous simulation:', e);
-        }
-      }
+      // تنظيف المحاكاة السابقة بشكل كامل
+      cleanupSimulation();
       
       const placeholder = document.getElementById('simulationPlaceholder');
       if (placeholder) placeholder.style.display = 'none';
 
       try {
         const gcode = document.getElementById('gcodeOut').value;
-        if (!gcode) {
+        if (!gcode || gcode.trim().length === 0) {
           showToast('لا يوجد G-code للمحاكاة');
           if (placeholder) placeholder.style.display = 'flex';
           return;
         }
 
-        // تحقق من حجم G-code
-        if (gcode.length > 100000) {
-          showToast('كود G-code كبير جداً، جاري تبسيط المحاكاة...');
-        }
-
+        // إنشاء المشهد
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x081224);
 
-        const containerW = container.clientWidth, containerH = container.clientHeight;
+        const containerW = container.clientWidth || 800;
+        const containerH = container.clientHeight || 400;
+        
         camera = new THREE.PerspectiveCamera(60, containerW / containerH, 0.1, 2000);
         camera.position.set(100, 100, 100);
         camera.lookAt(0, 0, 0);
 
-        renderer = new THREE.WebGLRenderer({ antialias: false });
+        renderer = new THREE.WebGLRenderer({ 
+          antialias: false,
+          preserveDrawingBuffer: true // للمساعدة في الأداء
+        });
         renderer.setSize(containerW, containerH);
         container.appendChild(renderer.domElement);
 
         // استخدام OrbitControls إذا كان متاحاً
         if (typeof THREE.OrbitControls !== 'undefined') {
-          controls = new THREE.OrbitControls(camera, renderer.domElement);
-          controls.enableDamping = false;
-        } else {
-          console.warn('OrbitControls not available, using basic camera');
+          try {
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = false;
+            controls.screenSpacePanning = true;
+          } catch (e) {
+            console.warn('Failed to initialize OrbitControls:', e);
+          }
         }
 
         // إضاءة مبسطة
