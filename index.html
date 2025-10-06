@@ -477,7 +477,14 @@
 
     // Simulation / Three
     let scene, camera, renderer, controls;
-    let simulation = { isPlaying: false, animationFrame: null, tool: null, toolPath: null, pathPoints: [], index: 0, speed: 1 };
+    let simulation = { isPlaying: false, animationFrame: null
+
+    // Simulation global scale (Three.js units) - changeable
+    const SIM_SCALE = 0.1; // 1 Three.js unit = 0.1 mm (adjust if needed)
+
+    // simulation defaults
+    simulation.maxPoints = 2000; // default limit for simulation points (can be changed at runtime)
+, tool: null, toolPath: null, pathPoints: [], index: 0, speed: 1 };
 
     // ================= Debug overlay system =================
     (function initDebugOverlay(){
@@ -1403,7 +1410,9 @@
 
         // improved estimate
         const timeMin = (totalLen / (feed || 1)) + ((Math.max(0, safeZ) / 50) * (totalLen / 1000));
-        document.getElementById('estTime').innerHTML = "⏱️ تقدير الوقت: " + timeMin.toFixed(1) + " دقيقة";
+        const minutes = Math.floor(timeMin);
+        const seconds = Math.round((timeMin - minutes) * 60);
+        document.getElementById('estTime').innerHTML = `⏱️ الوقت التقديري: ${minutes} دقيقة ${seconds} ثانية`;
 
         return lines.join('\n');
       } catch (error) {
@@ -1414,86 +1423,89 @@
     }
 
     // ================= Generate Contour G-code للراوتر =================
-    function generateContourGcode() {
+    
+function generateContourGcode() {
       if (!grayMat || !contour) {
-        showToast("لا توجد بيانات حواف لتوليد الكود");
+        showToast("لا توجد صورة أو كونتور جاهز للمعالجة");
         return "";
       }
       try {
-        const mode = document.getElementById('contourMode').value || 'outer';
-        lastScanDir = 'contour';
         const feed = parseFloat(document.getElementById('feedRate').value) || 800;
         const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
         const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3;
-
         const useFixedZ = document.getElementById('fixedZ').checked;
         const fixedZValue = parseFloat(document.getElementById('fixedZValue').value) || -1.0;
         const invertZ = document.getElementById('invertZ').checked;
-
         const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30);
         const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20);
         const originX = cmToMm(parseFloat(document.getElementById('originX').value) || 0);
         const originY = cmToMm(parseFloat(document.getElementById('originY').value) || 0);
-        const scaleX = workWidth / previewCanvas.width;
-        const scaleY = workHeight / previewCanvas.height;
 
         const lines = [];
         lines.push('G21 G90 G17');
         lines.push('G0 Z' + safeZ.toFixed(2));
 
-        const contoursToUse = (mode === 'outer') ? [contour] : [contour, ...additionalContours.map(c => c.contour)];
-        let totalLen = 0;
+        const scaleX = workWidth / previewCanvas.width;
+        const scaleY = workHeight / previewCanvas.height;
 
-        for (const cnt of contoursToUse) {
-          const data = cnt.data32S;
-          if (!data || data.length < 4) continue;
-
-          let x0 = data[0], y0 = data[1];
-          const startX = (x0 * scaleX + originX).toFixed(2);
-          const startY = (y0 * scaleY + originY).toFixed(2);
-          const startGray = sampleGrayAt(x0, y0);
-
-          let zStart;
-          if (useFixedZ) zStart = fixedZValue;
-          else zStart = -((255 - startGray) / 255.0) * maxDepth;
-          if (invertZ) zStart = -zStart;
-
-          lines.push(`G0 X${startX} Y${startY} Z${safeZ.toFixed(2)}`);
-          lines.push(`G1 F${feed.toFixed(0)}`);
-          lines.push(`G1 Z${zStart.toFixed(3)}`);
-
-          for (let i = 2; i < data.length; i += 2) {
-            const x = data[i], y = data[i + 1];
-            const px = (x * scaleX + originX).toFixed(2);
-            const py = (y * scaleY + originY).toFixed(2);
-            const pv = sampleGrayAt(x, y);
-            let zVal;
-            if (useFixedZ) zVal = fixedZValue;
-            else zVal = -((255 - pv) / 255.0) * maxDepth;
-            if (invertZ) zVal = -zVal;
-            lines.push(`G1 X${px} Y${py} Z${zVal.toFixed(3)}`);
-            totalLen += Math.hypot(x - x0, y - y0);
-            x0 = x; y0 = y;
-          }
-
-          lines.push(`G1 X${startX} Y${startY} Z${zStart.toFixed(3)}`);
-          lines.push(`G0 Z${safeZ.toFixed(2)}`);
+        // obtain main contour data
+        const data = contour.data32S;
+        if (!data || data.length < 6) {
+          showToast('الكونتور صغير أو غير صالح');
+          return "";
         }
 
+        // starting point
+        const startX = data[0], startY = data[1];
+        let x0 = startX, y0 = startY;
+        // compute initial Z from first point
+        const firstGray = sampleGrayAt(startX, startY);
+        let zStart = useFixedZ ? fixedZValue : -((255 - firstGray) / 255.0) * maxDepth;
+        if (invertZ) zStart = -zStart;
+
+        // move to start
+        lines.push(`G0 X${(startX * scaleX + originX).toFixed(2)} Y${(startY * scaleY + originY).toFixed(2)} Z${safeZ.toFixed(2)}`);
+        lines.push(`G1 F${feed.toFixed(0)}`);
+        lines.push(`G1 Z${zStart.toFixed(3)}`);
+
+        let totalLen = 0;
+        // iterate contour points and emit linear moves
+        for (let i = 2; i < data.length; i += 2) {
+          const x = data[i], y = data[i+1];
+          const px = (x * scaleX + originX).toFixed(2);
+          const py = (y * scaleY + originY).toFixed(2);
+          const grayVal = sampleGrayAt(x, y);
+          let zP = useFixedZ ? fixedZValue : -((255 - grayVal) / 255.0) * maxDepth;
+          if (invertZ) zP = -zP;
+          lines.push(`G1 X${px} Y${py} Z${zP.toFixed(3)}`);
+          totalLen += Math.hypot(x - x0, y - y0);
+          x0 = x; y0 = y;
+        }
+
+        // close contour: return to start if not already
+        if (x0 !== startX || y0 !== startY) {
+          lines.push(`G1 X${(startX * scaleX + originX).toFixed(2)} Y${(startY * scaleY + originY).toFixed(2)} Z${zStart.toFixed(3)}`);
+        }
+
+        // retract and finish
+        lines.push('G0 Z' + safeZ.toFixed(2));
         lines.push('M5');
         lines.push('M30');
 
-        const timeMin = totalLen / (parseFloat(document.getElementById('feedRate').value)||800);
-        document.getElementById('estTime').innerHTML = "⏱️ تقدير الوقت (Contour): " + timeMin.toFixed(1) + " دقيقة";
+        // estimate time (simple)
+        const timeMin = (totalLen / (feed || 1)) + ((Math.max(0, safeZ) / 50) * (totalLen / 1000));
+        const minutes = Math.floor(timeMin);
+        const seconds = Math.round((timeMin - minutes) * 60);
+        document.getElementById('estTime').innerHTML = `⏱️ الوقت التقديري: ${minutes} دقيقة ${seconds} ثانية`;
 
         return lines.join('\n');
-
-      } catch (error) {
-        console.error('generateContourGcode error', error);
-        showToast('فشل في توليد G-code (Contour)');
+      } catch (err) {
+        console.error('generateContourGcode error', err);
+        showToast('فشل في توليد G-code للمحيط');
         return "";
       }
     }
+
 
     // ================= Laser G-code Generation =================
     function generateLaserEngraveGcode() {
@@ -1903,7 +1915,7 @@
       const path = [];
       let pos = { x: 0, y: 0, z: 0 };
       let pointCount = 0;
-      const maxPoints = 2000; // تقليل الحد الأقصى للأداء
+      const maxPoints = simulation.maxPoints || 2000; // تقليل الحد الأقصى للأداء
       
       for (let line of lines) {
         if (pointCount >= maxPoints) break;
@@ -1933,7 +1945,7 @@
 
     function createToolPathVisualization(pathPoints, dir) {
       if (!pathPoints || pathPoints.length < 2) return null;
-      const points = pathPoints.map(p => new THREE.Vector3(p.x / 10, -p.z, p.y / 10));
+      const points = pathPoints.map(p => new THREE.Vector3((p.x * SIM_SCALE), -p.z, (p.y * SIM_SCALE)));
       const geometry = new THREE.BufferGeometry().setFromPoints(points);
       let color = 0x10b981; // x
       if (dir === 'y') color = 0x3b82f6;
@@ -2097,7 +2109,7 @@
       const i = Math.floor(index);
       const p = simulation.pathPoints[i];
       if (!p) return;
-      simulation.tool.position.set(p.x / 10, -p.z, p.y / 10);
+      simulation.tool.position.set((p.x * SIM_SCALE), -p.z, (p.y * SIM_SCALE));
     }
 
     function initSimulation() {
@@ -2193,7 +2205,7 @@
         // إنشاء مسار مرئي مبسط
         if (simulation.pathPoints.length > 1) {
           const points = simulation.pathPoints.map(p => 
-            new THREE.Vector3(p.x / 10, -p.z, p.y / 10)
+            new THREE.Vector3((p.x * SIM_SCALE), -p.z, (p.y * SIM_SCALE))
           );
           const geometry = new THREE.BufferGeometry().setFromPoints(points);
           const material = new THREE.LineBasicMaterial({ 
