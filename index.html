@@ -6,7 +6,7 @@
   <title>CNC AI — CNC Router & Laser Engraving</title>
 
   <!-- مكتبات -->
-  <script async src="https://rawcdn.githack.com/opencv/opencv/4.x/samples/js/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
+  <script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
 
@@ -129,6 +129,25 @@
       line-height: 1.3;
     }
 
+    .loading-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: rgba(6, 182, 212, 0.1);
+      border-radius: 6px;
+      border: 1px solid rgba(6, 182, 212, 0.3);
+    }
+
+    .loading-spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #06b6d4;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
     @keyframes spin { 0%{transform:rotate(0)}100%{transform:rotate(360deg)} }
   </style>
 </head>
@@ -136,9 +155,9 @@
   <div class="app">
     <header>
       <h1>CNC AI — CNC Router & Laser Engraving</h1>
-      <div id="cvState">
-        <span class="loading" style="display:inline-block;width:16px;height:16px;border:3px solid #f3f3f3;border-top:3px solid #06b6d4;border-radius:50%;animation:spin 1s linear infinite;margin-left:8px;"></span>
-        جاري تحميل OpenCV...
+      <div id="cvState" class="loading-indicator">
+        <div class="loading-spinner"></div>
+        <span>جاري تحميل OpenCV...</span>
       </div>
     </header>
 
@@ -477,14 +496,71 @@
 
     // Simulation / Three
     let scene, camera, renderer, controls;
-    let simulation = { isPlaying: false, animationFrame: null
+    let simulation = { 
+      isPlaying: false, 
+      animationFrame: null,
+      tool: null, 
+      toolPath: null, 
+      pathPoints: [], 
+      index: 0, 
+      speed: 1,
+      maxPoints: 2000
+    };
 
     // Simulation global scale (Three.js units) - changeable
     const SIM_SCALE = 0.1; // 1 Three.js unit = 0.1 mm (adjust if needed)
 
-    // simulation defaults
-    simulation.maxPoints = 2000; // default limit for simulation points (can be changed at runtime)
-, tool: null, toolPath: null, pathPoints: [], index: 0, speed: 1 };
+    // ================= OpenCV readiness =================
+    function onOpenCvReady() {
+      cvReady = true;
+      const cvState = document.getElementById('cvState');
+      cvState.innerHTML = '<div style="color:#10b981">✅ OpenCV جاهز</div>';
+      showToast('تم تحميل OpenCV بنجاح', 1400);
+      
+      try {
+        console.log('OpenCV version:', cv.getVersionString());
+      } catch (e) {
+        console.log('OpenCV loaded successfully');
+      }
+      
+      // معالجة أي صورة محملة مسبقاً
+      if (previewCanvas && previewCanvas.width > 0) {
+        const isLaser = document.getElementById('machineCategory').value === 'laser';
+        setTimeout(() => {
+          if (isLaser) {
+            detectLaserContours();
+          } else {
+            detectContours();
+          }
+        }, 500);
+      }
+    }
+
+    function waitForCv() {
+      if (typeof cv !== 'undefined' && cv.getBuildInformation) {
+        onOpenCvReady();
+      } else {
+        setTimeout(waitForCv, 200);
+      }
+    }
+
+    // بديل إذا فشل التحميل بعد 15 ثانية
+    setTimeout(() => {
+      if (!cvReady && typeof cv === 'undefined') {
+        console.log('Trying fallback OpenCV source...');
+        const fallbackScript = document.createElement('script');
+        fallbackScript.src = 'https://cdn.jsdelivr.net/npm/opencv-js@4.8.0/opencv.js';
+        fallbackScript.onload = onOpenCvReady;
+        fallbackScript.onerror = () => {
+          document.getElementById('cvState').innerHTML = '❌ فشل تحميل OpenCV';
+          showToast('تعذر تحميل OpenCV. تأكد من الاتصال بالإنترنت', 5000);
+        };
+        document.head.appendChild(fallbackScript);
+      }
+    }, 15000);
+
+    // بدء عملية الانتظار
+    waitForCv();
 
     // ================= Debug overlay system =================
     (function initDebugOverlay(){
@@ -612,27 +688,6 @@
         placeholder.style.display = 'none';
       }
     }
-
-    // ================= OpenCV readiness =================
-    function waitForCv() {
-      if (typeof cv !== 'undefined' && cv.getBuildInformation) {
-        cvReady = true;
-        document.getElementById('cvState').innerHTML = '✅ OpenCV جاهز';
-        showToast('تم تحميل OpenCV بنجاح', 1400);
-        console.log('OpenCV version:', cv.getVersionString());
-      } else {
-        setTimeout(waitForCv, 100);
-      }
-    }
-
-    // إضافة معالج أخطاء لتحميل OpenCV
-    window.addEventListener('error', function(e) {
-      if (e.filename && e.filename.includes('opencv.js')) {
-        document.getElementById('cvState').innerHTML = '❌ فشل تحميل OpenCV';
-        showToast('فشل في تحميل OpenCV. تأكد من الاتصال بالإنترنت', 5000);
-      }
-    });
-    waitForCv();
 
     // ================= Clean Mats =================
     function cleanupMats() {
