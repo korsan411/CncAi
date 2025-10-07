@@ -1,0 +1,792 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>CNC AI — CNC Router & Laser Engraving</title>
+
+  <!-- مكتبات -->
+  <script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, Segoe UI, system-ui; background: #041022; color:#e6eef6; line-height:1.45 }
+    .app { max-width:1400px; margin:12px auto; padding:14px }
+    header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-bottom:12px; border-bottom:1px solid #1e293b }
+    .grid { display:grid; grid-template-columns:1fr 520px; gap:16px }
+    @media (max-width:1100px){ .grid{ grid-template-columns:1fr } }
+    .panel { background:#0b1320; padding:16px; border-radius:10px; border:1px solid #1e293b }
+    /* tabs improved */
+    .tab-buttons { display:flex; gap:8px; margin-top:12px; background: rgba(14,23,33,0.6); padding:6px; border-radius:8px }
+    .tab-buttons button { flex:1; border:none; padding:8px 10px; border-radius:6px; background:transparent; color:#9bb0c8; cursor:pointer }
+    .tab-buttons button.active { background:#0f172a; color:#e6eef6; box-shadow: inset 0 -3px 0 #06b6d4; }
+    .tab-content { display:none; margin-top:12px }
+    .tab-content.active { display:block }
+    canvas { max-width:100%; border-radius:6px; background:#000; display:block; margin:0 auto; border:1px solid #334155 }
+    #threeContainer { width:100%; height:420px; background:#081224; border-radius:8px; overflow:hidden; position:relative }
+    label { display:block; margin-top:12px; color:#cfeaf2; font-weight:bold }
+    input, select, textarea, button { font-size:0.9rem }
+    input, select { width:100%; padding:8px 10px; border-radius:6px; border:1px solid #1e293b; background:#0f172a; color:#e6eef6; margin-top:6px }
+    .button-group { display:flex; flex-direction:column; gap:8px; margin-top:12px }
+    .button-row { display:flex; gap:8px; }
+    button { background:#1e293b; color:#e6eef6; border:none; padding:10px; border-radius:8px; cursor:pointer }
+    button.primary { background:#06b6d4; color:#021; font-weight:bold }
+    button.secondary { background:#334155; }
+    #toast { position:fixed; left:16px; bottom:16px; background:rgba(0,0,0,0.85); color:#fff; padding:10px 14px; border-radius:8px; display:none; z-index:10000 }
+    .canvas-placeholder { width:100%; min-height:260px; background:#000; border-radius:6px; display:flex; align-items:center; justify-content:center; color:#9bb0c8; border:1px solid #334155 }
+    .small-meta { font-size:12px; color:#9bb0c8; margin-top:6px }
+
+    /* Debug overlay */
+    #debugOverlay {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      width: 420px;
+      max-height: 55vh;
+      background: rgba(2,6,23,0.9);
+      color: #e6eef6;
+      border: 1px solid rgba(102, 126, 234, 0.08);
+      border-radius: 8px;
+      font-size: 13px;
+      z-index: 20000;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+    }
+    #debugOverlay.minimized { height: 36px; width: 160px; cursor: pointer; }
+    #debugHeader {
+      display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.03);
+      background: linear-gradient(90deg, rgba(6,182,212,0.06), rgba(8,145,178,0.02));
+    }
+    #debugHeader b { color:#aee8f2; }
+    #debugControls { display:flex; gap:6px; align-items:center; }
+    .dbg-btn { background:transparent; border:1px solid rgba(255,255,255,0.06); color:#cfeaf2; padding:6px 8px; border-radius:6px; cursor:pointer; font-size:12px; }
+    #debugList { overflow:auto; padding:8px; display:flex; flex-direction:column; gap:6px; }
+    .dbg-item { padding:8px; border-radius:6px; background:rgba(255,255,255,0.02); line-height:1.2; max-height:120px; overflow:auto; font-family:monospace; font-size:12px; }
+    .dbg-time { opacity:0.7; font-size:11px; margin-bottom:6px; display:block; }
+    .dbg-error { border-left:4px solid #ef4444; }
+    .dbg-warn { border-left:4px solid #f59e0b; }
+    .dbg-info { border-left:4px solid #06b6d4; color:#cfeaf2; }
+    .dbg-meta { opacity:0.75; font-size:11px; margin-top:6px; color:#9bb0c8; }
+    #debugFooter { padding:6px 10px; border-top:1px solid rgba(255,255,255,0.02); text-align:right; font-size:12px; color:#9bb0c8; background:rgba(0,0,0,0.03); display:flex; justify-content:space-between; align-items:center; }
+
+    /* Simulation controls */
+    .sim-controls { position:absolute; top:10px; left:10px; z-index:120; display:flex; gap:8px; align-items:center; background:rgba(0,0,0,0.35); padding:6px;border-radius:6px }
+    .sim-controls button { background:rgba(0,0,0,0.55); color:white; border:1px solid #06b6d4; border-radius:4px; padding:6px 8px; cursor:pointer; font-size:0.9rem }
+    .sim-progress { position:absolute; bottom:10px; left:10px; z-index:120; background:rgba(0,0,0,0.35); padding:6px 8px;border-radius:6px; color:#cfeaf2; font-size:12px }
+
+    /* Top view + legend */
+    #topViewContainer { margin-top:12px; display:flex; flex-direction:column; gap:6px; align-items:center; }
+    #topView { width:100%; height:200px; background:#0d1722; border-radius:6px; border:1px solid #334155; display:block }
+    #topLegend { width:100%; height:18px; border-radius:6px; border:1px solid #2b3844; background:linear-gradient(90deg,#ddd,#333); }
+
+    /* colormap buttons */
+    .colormap-section {
+      margin: 16px 0;
+      padding: 16px;
+      background: rgba(14, 23, 33, 0.8);
+      border-radius: 10px;
+      border: 1px solid #334155;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+    .colormap-title {
+      text-align: center;
+      margin-bottom: 12px;
+      color: #cfeaf2;
+      font-weight: bold;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .colormap-buttons { display:flex; gap:8px; justify-content:center; margin-top:8px; flex-wrap:wrap; }
+    .colormap-buttons button {
+      background:#141b22; color:#cfeaf2; border:1px solid #26343f; padding:10px 16px; border-radius:8px; 
+      cursor:pointer; font-size:14px; font-weight:bold; transition:all 0.3s ease; min-width:80px;
+    }
+    .colormap-buttons button:hover { background:#1e293b; border-color:#06b6d4; transform:translateY(-2px); }
+    .colormap-buttons button.active { background:#06b6d4; color:#021; border-color:#06b6d4; box-shadow:0 4px 12px rgba(6,182,212,0.3); }
+
+    /* Machine category styles */
+    .machine-settings { transition: all 0.3s ease; }
+    .laser-specific { border-left: 3px solid #ff4444; padding-left: 10px; margin: 8px 0; background: rgba(255, 0, 0, 0.05); }
+    .router-specific { border-left: 3px solid #06b6d4; padding-left: 10px; margin: 8px 0; background: rgba(6, 182, 212, 0.05); }
+    .laser-edge-settings {
+      border: 1px solid #ff4444;
+      border-radius: 6px;
+      padding: 10px;
+      margin: 8px 0;
+      background: rgba(255, 68, 68, 0.05);
+    }
+    .laser-mode-description {
+      font-size: 11px;
+      color: #9bb0c8;
+      margin-top: 4px;
+      line-height: 1.3;
+    }
+
+    .loading-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: rgba(6, 182, 212, 0.1);
+      border-radius: 6px;
+      border: 1px solid rgba(6, 182, 212, 0.3);
+    }
+
+    .loading-spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #06b6d4;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin { 0%{transform:rotate(0)}100%{transform:rotate(360deg)} }
+    
+    /* Laser preview styles */
+    .laser-preview {
+      border: 2px solid #ff4444;
+      background: rgba(255, 68, 68, 0.05);
+      padding: 8px;
+      border-radius: 6px;
+      margin-top: 8px;
+    }
+    
+    .power-indicator {
+      height: 4px;
+      background: linear-gradient(90deg, #00ff00, #ffff00, #ff0000);
+      border-radius: 2px;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>CNC AI — CNC Router & Laser Engraving</h1>
+      <div id="cvState" class="loading-indicator">
+        <div class="loading-spinner"></div>
+        <span>جاري تحميل OpenCV...</span>
+      </div>
+    </header>
+
+    <div class="grid">
+      <!-- LEFT panel -->
+      <div class="panel">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="fileInput" type="file" accept="image/*"/>
+          <label class="file-input-label" for="fileInput" style="display:inline-block;padding:8px 12px;background:#1e293b;border-radius:6px;color:#e6eef6;cursor:pointer;border:1px dashed #334155">📁 اختر صورة</label>
+          <div style="flex:1"></div>
+
+          <label for="edgeMode" style="font-weight:normal;color:#9bb0c8">Edge Mode:</label>
+          <select id="edgeMode" style="width:140px">
+            <option value="auto">Canny (عادي)</option>
+            <option value="sobel">Sobel (دقيق)</option>
+            <option value="laplace">Laplacian (ناعـم)</option>
+          </select>
+        </div>
+
+        <!-- Edge sensitivity slider -->
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+          <label style="margin:0;color:#9bb0c8">حساسية الحواف:</label>
+          <input id="edgeSensitivity" type="range" min="0.1" max="1.0" step="0.05" value="0.33" style="flex:1">
+          <div id="edgeValue" style="min-width:44px;text-align:center;color:#cfeaf2">0.33</div>
+        </div>
+
+        <!-- ========== أزرار الـ Colormap الثابتة ========== -->
+        <div class="colormap-section">
+          <div class="colormap-title">
+            <span>🎨</span>
+            خيارات تدرج الألوان
+            <span>🎨</span>
+          </div>
+          <div class="colormap-buttons" id="colormapButtons">
+            <button data-map="jet" class="active" title="Jet - الأزرق إلى الأحمر">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+                <div>Jet</div>
+                <div style="width:100%;height:4px;background:linear-gradient(90deg,#0000ff,#00ffff,#ffff00,#ff0000);border-radius:2px"></div>
+              </div>
+            </button>
+            <button data-map="hot" title="Hot - الأسود إلى الأحمر إلى الأصفر">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+                <div>Hot</div>
+                <div style="width:100%;height:4px;background:linear-gradient(90deg,#000000,#ff0000,#ffff00,#ffffff);border-radius:2px"></div>
+              </div>
+            </button>
+            <button data-map="cool" title="Cool - السماوي إلى الأرجواني">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+                <div>Cool</div>
+                <div style="width:100%;height:4px;background:linear-gradient(90deg,#00ffff,#ff00ff);border-radius:2px"></div>
+              </div>
+            </button>
+            <button data-map="gray" title="Gray - التدرج الرمادي">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+                <div>Gray</div>
+                <div style="width:100%;height:4px;background:linear-gradient(90deg,#000000,#ffffff);border-radius:2px"></div>
+              </div>
+            </button>
+          </div>
+          <div class="small-meta" style="text-align: center; margin-top: 8px;">
+            التغيير يطبق على: Heatmap • Top View • Contours • كل المعاينات
+          </div>
+        </div>
+
+        <div class="tab-buttons" role="tablist">
+          <button data-tab="original" class="active">🖼️ الأصلية</button>
+          <button data-tab="heatmap">🔥 Heatmap</button>
+          <button data-tab="contour">📐 Contours</button>
+          <button data-tab="topview">🔝 Top View</button>
+          <button data-tab="simulation">🎬 المحاكاة</button>
+          <button data-tab="laserpreview" id="laserPreviewTab" style="display:none">🔴 معاينة الليزر</button>
+        </div>
+
+        <div id="original" class="tab-content active">
+          <div class="canvas-placeholder" id="originalPlaceholder">الصورة الأصلية ستظهر هنا</div>
+          <canvas id="canvasOriginal" style="display:none;"></canvas>
+        </div>
+
+        <div id="heatmap" class="tab-content">
+          <div class="canvas-placeholder" id="heatmapPlaceholder">Heatmap ستظهر هنا</div>
+          <canvas id="canvasHeatmap" style="display:none;"></canvas>
+        </div>
+
+        <div id="contour" class="tab-content">
+          <div class="canvas-placeholder" id="contourPlaceholder">Contours ستظهر هنا</div>
+          <canvas id="canvasContour" style="display:none;"></canvas>
+          <div class="small-meta">تبديل وضع كشف الحواف أو تحريك حساسية الحواف يحدث إعادة معالجة تلقائية</div>
+        </div>
+
+        <div id="topview" class="tab-content">
+          <div id="topViewContainer">
+            <canvas id="topView"></canvas>
+            <div id="topLegend" title="عمق النقش — الألوان فقط"></div>
+          </div>
+          <div class="small-meta">معاينة من الأعلى للعمق المتوقع بعد تنفيذ G-code (الألوان تتبع اختيار Colormap)</div>
+        </div>
+
+        <div id="simulation" class="tab-content">
+          <div id="threeContainer">
+            <div class="canvas-placeholder" id="simulationPlaceholder">المحاكاة ستظهر هنا بعد توليد G-code</div>
+          </div>
+        </div>
+
+        <div id="laserpreview" class="tab-content">
+          <div class="laser-preview">
+            <div class="canvas-placeholder" id="laserPreviewPlaceholder">معاينة نقش الليزر ستظهر هنا</div>
+            <canvas id="canvasLaserPreview" style="display:none;"></canvas>
+            <div class="small-meta">معاينة تأثير الليزر على المادة - الأحمر = قوة عالية، الأصفر = قوة متوسطة، الأخضر = قوة منخفضة</div>
+            <div class="power-indicator"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT panel -->
+      <div class="panel">
+        <h3>⚙️ إعدادات الماكينة</h3>
+
+        <!-- Machine Category Selection -->
+        <label for="machineCategory">نوع الماكينة الرئيسي</label>
+        <select id="machineCategory">
+          <option value="router">CNC Router (نحت خشب)</option>
+          <option value="laser">Laser Engraver (نقش ليزر)</option>
+        </select>
+
+        <!-- CNC Router Settings -->
+        <div id="routerSettings" class="machine-settings">
+          <!-- ... إعدادات الراوتر الحالية ... -->
+        </div>
+
+        <!-- Laser Engraver Settings -->
+        <div id="laserSettings" class="machine-settings" style="display:none;">
+          <h4 class="laser-specific">⚡ إعدادات Laser Engraver</h4>
+          
+          <label for="laserWorkWidth">عرض العمل (مم)</label>
+          <input id="laserWorkWidth" type="number" value="300" step="1" min="10" max="2000"/>
+          
+          <label for="laserWorkHeight">ارتفاع العمل (مم)</label>
+          <input id="laserWorkHeight" type="number" value="200" step="1" min="10" max="2000"/>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div>
+              <label for="laserOriginX">نقطة الأصل X (مم)</label>
+              <input id="laserOriginX" type="number" value="0" step="1"/>
+            </div>
+            <div>
+              <label for="laserOriginY">نقطة الأصل Y (مم)</label>
+              <input id="laserOriginY" type="number" value="0" step="1"/>
+            </div>
+          </div>
+          <div style="margin-top:6px"><button id="btnLaserCenterOrigin" class="secondary">🎯 توسيط نقطة الأصل</button></div>
+
+          <!-- Laser Power & Speed -->
+          <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
+            <label style="margin:0;color:#9bb0c8">قوة الليزر:</label>
+            <input id="laserPower" type="range" min="0" max="100" value="80" step="1" style="flex:1">
+            <div id="laserPowerValue" style="min-width:44px;text-align:center;color:#ff4444">80%</div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+            <label style="margin:0;color:#9bb0c8">سرعة الليزر:</label>
+            <input id="laserSpeed" type="range" min="100" max="5000" value="2000" step="100" style="flex:1">
+            <div id="laserSpeedValue" style="min-width:60px;text-align:center;color:#06b6d4">2000</div>
+          </div>
+
+          <!-- Laser Mode -->
+          <label for="laserMode">وضع الليزر</label>
+          <select id="laserMode">
+            <option value="grayscale">نقش تدرج الرمادي</option>
+            <option value="dithering">نقش متقطع (Dithering)</option>
+            <option value="contour">قص كونتور</option>
+            <option value="combined">نقش + قص</option>
+          </select>
+
+          <!-- Dithering Settings -->
+          <div id="ditheringSettings" style="margin-top:8px; padding:8px; background:rgba(255,68,68,0.05); border-radius:6px; border:1px solid rgba(255,68,68,0.3)">
+            <label for="ditheringType">نوع التقطيع</label>
+            <select id="ditheringType">
+              <option value="floyd">Floyd-Steinberg</option>
+              <option value="atkinson">Atkinson</option>
+              <option value="bayer">Bayer Matrix</option>
+            </select>
+            
+            <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+              <label style="margin:0;color:#9bb0c8">دقة التقطيع:</label>
+              <input id="ditheringQuality" type="range" min="1" max="10" value="5" step="1" style="flex:1">
+              <div id="ditheringQualityValue" style="min-width:44px;text-align:center;color:#ffaa00">5</div>
+            </div>
+          </div>
+
+          <!-- Advanced Settings -->
+          <div style="margin-top:12px; padding:8px; background:rgba(6,182,212,0.05); border-radius:6px; border:1px solid rgba(6,182,212,0.3)">
+            <label style="color:#06b6d4">🛠️ إعدادات متقدمة</label>
+            
+            <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+              <label style="font-weight:normal;">
+                <input id="laserDynamic" type="checkbox" checked /> 
+                قوة ديناميكية (حسب الظلام)
+              </label>
+            </div>
+
+            <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+              <label style="font-weight:normal;">
+                <input id="laserAirAssist" type="checkbox" /> 
+                Air Assist
+              </label>
+            </div>
+
+            <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+              <label style="font-weight:normal;">
+                <input id="laserOptimize" type="checkbox" checked /> 
+                تحسين المسارات
+              </label>
+            </div>
+
+            <label for="laserPasses" style="margin-top:8px">عدد المرات</label>
+            <input id="laserPasses" type="number" value="1" min="1" max="10"/>
+          </div>
+
+          <!-- Laser Buttons -->
+          <div class="button-group">
+            <div class="button-row">
+              <button id="btnLaserEngrave" class="primary" style="background:#ff4444; display:none;">⚡ توليد كود ليزر</button>
+              <button id="btnLaserPreview" class="secondary" style="display:none;">👁️ معاينة الليزر</button>
+            </div>
+            <div class="button-row">
+              <button id="btnLaserOptimize" class="secondary" style="display:none;">🔄 تحسين المسارات</button>
+              <button id="btnLaserDownload" class="secondary" style="display:none;">💾 تحميل كود الليزر</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="estTime" style="margin-top:12px;color:#9bb0c8;text-align:center;padding:8px;background:#0f172a;border-radius:6px"></div>
+
+        <label for="gcodeOut" style="margin-top:12px">📄 مخرجات G-code</label>
+        <textarea id="gcodeOut" readonly placeholder="سيظهر G-code هنا بعد التوليد..." style="height:180px;background:#021024;color:#cfeaf2;border-radius:8px;padding:10px;"></textarea>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Debug Overlay -->
+  <div id="debugOverlay" aria-live="polite" role="status">
+    <!-- ... محتوى الـ debug overlay الحالي ... -->
+  </div>
+
+  <div id="toast"></div>
+
+  <script>
+    // ================= متغيرات الليزر الجديدة =================
+    let laserPreviewData = null;
+    let optimizedPath = null;
+
+    // ================= نظام معالجة الليزر المحسن =================
+
+    // دالة لمعاينة تأثير الليزر
+    function generateLaserPreview() {
+      if (!grayMat || !previewCanvas) {
+        showToast("لا توجد صورة للمعاينة");
+        return;
+      }
+
+      try {
+        const canvas = document.getElementById('canvasLaserPreview');
+        const ctx = canvas.getContext('2d');
+        canvas.width = previewCanvas.width;
+        canvas.height = previewCanvas.height;
+        
+        const laserPower = parseInt(document.getElementById('laserPower').value) || 80;
+        const laserMode = document.getElementById('laserMode').value;
+        const dynamicPower = document.getElementById('laserDynamic').checked;
+        
+        // إنشاء صورة المعاينة
+        const imgData = ctx.createImageData(canvas.width, canvas.height);
+        
+        for (let y = 0; y < canvas.height; y++) {
+          for (let x = 0; x < canvas.width; x++) {
+            const grayValue = sampleGrayAt(x, y);
+            let power;
+            
+            if (dynamicPower) {
+              power = Math.round((grayValue / 255) * laserPower);
+            } else {
+              power = laserPower;
+            }
+            
+            const idx = (y * canvas.width + x) * 4;
+            
+            // تلوين حسب قوة الليزر
+            if (power > 70) {
+              imgData.data[idx] = 255;     // أحمر
+              imgData.data[idx + 1] = 0;
+              imgData.data[idx + 2] = 0;
+            } else if (power > 40) {
+              imgData.data[idx] = 255;     // أصفر
+              imgData.data[idx + 1] = 255;
+              imgData.data[idx + 2] = 0;
+            } else if (power > 10) {
+              imgData.data[idx] = 0;       // أخضر
+              imgData.data[idx + 1] = 255;
+              imgData.data[idx + 2] = 0;
+            } else {
+              imgData.data[idx] = 40;      // خلفية داكنة
+              imgData.data[idx + 1] = 40;
+              imgData.data[idx + 2] = 40;
+            }
+            
+            imgData.data[idx + 3] = 255;   // alpha
+          }
+        }
+        
+        ctx.putImageData(imgData, 0, 0);
+        showElement('canvasLaserPreview', 'laserPreviewPlaceholder');
+        laserPreviewData = imgData;
+        
+        showToast("تم إنشاء معاينة الليزر");
+        
+      } catch (error) {
+        console.error('Laser preview error:', error);
+        showToast('فشل في إنشاء معاينة الليزر');
+      }
+    }
+
+    // دالة تحسين مسارات الليزر
+    function optimizeLaserPath(points) {
+      if (!points || points.length < 2) return points;
+      
+      const optimized = [];
+      const tolerance = 2; // مم
+      
+      // إضافة النقطة الأولى
+      optimized.push(points[0]);
+      
+      for (let i = 1; i < points.length - 1; i++) {
+        const prev = optimized[optimized.length - 1];
+        const current = points[i];
+        const next = points[i + 1];
+        
+        // حساب المسافة والزاوية
+        const distToPrev = Math.hypot(current.x - prev.x, current.y - prev.y);
+        const distToNext = Math.hypot(next.x - current.x, next.y - current.y);
+        
+        // إذا كانت النقطة قريبة جداً أو على خط مستقيم، نتخطاها
+        if (distToPrev > tolerance && distToNext > tolerance) {
+          optimized.push(current);
+        }
+      }
+      
+      // إضافة النقطة الأخيرة
+      optimized.push(points[points.length - 1]);
+      
+      return optimized;
+    }
+
+    // دالة توليد G-code للليزر محسنة
+    function generateLaserGcode() {
+      if (!grayMat || !previewCanvas) {
+        showToast("لا توجد صورة جاهزة للمعالجة");
+        return "";
+      }
+
+      try {
+        showToast("جاري توليد كود الليزر...");
+        
+        const laserPower = parseInt(document.getElementById('laserPower').value) || 80;
+        const laserSpeed = parseInt(document.getElementById('laserSpeed').value) || 2000;
+        const laserMode = document.getElementById('laserMode').value;
+        const dynamicPower = document.getElementById('laserDynamic').checked;
+        const optimizePaths = document.getElementById('laserOptimize').checked;
+        const airAssist = document.getElementById('laserAirAssist').checked;
+        const passes = parseInt(document.getElementById('laserPasses').value) || 1;
+
+        const workWidth = parseFloat(document.getElementById('laserWorkWidth').value) || 300;
+        const workHeight = parseFloat(document.getElementById('laserWorkHeight').value) || 200;
+        const originX = parseFloat(document.getElementById('laserOriginX').value) || 0;
+        const originY = parseFloat(document.getElementById('laserOriginY').value) || 0;
+
+        const lines = [];
+        lines.push('; Laser G-code - Generated by CNC AI');
+        lines.push('G21 G90 G17');
+        lines.push('G0 X0 Y0');
+        if (airAssist) lines.push('M8'); // تشغيل Air Assist
+        
+        const scaleX = workWidth / previewCanvas.width;
+        const scaleY = workHeight / previewCanvas.height;
+        
+        let totalPoints = 0;
+        let totalLength = 0;
+        const allPoints = [];
+
+        // نمط المسح المتعرج
+        const stepOver = 2.0; // مم بين الخطوط
+        const pointSpacing = 2.0; // مم بين النقاط
+        
+        for (let pass = 0; pass < passes; pass++) {
+          for (let y = 0; y < previewCanvas.height; y += stepOver / scaleY) {
+            const rowPoints = [];
+            let inImage = false;
+            let segmentStart = -1;
+            
+            for (let x = 0; x < previewCanvas.width; x += pointSpacing / scaleX) {
+              const pt = new cv.Point(x, y);
+              const inside = contour ? cv.pointPolygonTest(contour, pt, false) >= 0 : true;
+              
+              if (inside && !inImage) {
+                segmentStart = x;
+                inImage = true;
+              } else if (!inside && inImage) {
+                // إنشاء قطعة المسار
+                for (let sx = segmentStart; sx < x; sx += pointSpacing / scaleX) {
+                  const grayValue = sampleGrayAt(sx, y);
+                  let power;
+                  
+                  if (dynamicPower) {
+                    power = Math.round((grayValue / 255) * laserPower);
+                  } else {
+                    power = laserPower;
+                  }
+                  
+                  const scaledX = (sx * scaleX) + originX;
+                  const scaledY = (y * scaleY) + originY;
+                  
+                  rowPoints.push({ 
+                    x: scaledX, 
+                    y: scaledY, 
+                    power: power,
+                    grayValue: grayValue
+                  });
+                  totalPoints++;
+                }
+                inImage = false;
+              }
+            }
+            
+            // إذا كنا لا نزال داخل الصورة في النهاية
+            if (inImage) {
+              for (let sx = segmentStart; sx < previewCanvas.width; sx += pointSpacing / scaleX) {
+                const grayValue = sampleGrayAt(sx, y);
+                let power;
+                
+                if (dynamicPower) {
+                  power = Math.round((grayValue / 255) * laserPower);
+                } else {
+                  power = laserPower;
+                }
+                
+                const scaledX = (sx * scaleX) + originX;
+                const scaledY = (y * scaleY) + originY;
+                
+                rowPoints.push({ 
+                  x: scaledX, 
+                  y: scaledY, 
+                  power: power,
+                  grayValue: grayValue
+                });
+                totalPoints++;
+              }
+            }
+            
+            if (rowPoints.length > 0) {
+              // اتجاه متعرج
+              const reverse = (y / (stepOver / scaleY)) % 2 !== 0;
+              if (reverse) rowPoints.reverse();
+              
+              allPoints.push(...rowPoints);
+            }
+          }
+        }
+
+        // تحسين المسارات إذا طلب المستخدم
+        let finalPoints = allPoints;
+        if (optimizePaths && allPoints.length > 100) {
+          finalPoints = optimizeLaserPath(allPoints);
+          showToast(`تم تحسين المسار من ${allPoints.length} إلى ${finalPoints.length} نقطة`);
+        }
+
+        optimizedPath = finalPoints;
+
+        // توليد G-code
+        lines.push('G0 X' + finalPoints[0].x.toFixed(2) + ' Y' + finalPoints[0].y.toFixed(2));
+        lines.push('M3 S' + Math.round(finalPoints[0].power * 10));
+        lines.push('G1 F' + laserSpeed.toFixed(0));
+        
+        let lastPower = finalPoints[0].power;
+        
+        for (let i = 0; i < finalPoints.length; i++) {
+          const point = finalPoints[i];
+          
+          // تحديث قوة الليزر فقط إذا تغيرت بشكل كبير
+          if (Math.abs(point.power - lastPower) > 5) {
+            lines.push('M3 S' + Math.round(point.power * 10));
+            lastPower = point.power;
+          }
+          
+          lines.push('G1 X' + point.x.toFixed(2) + ' Y' + point.y.toFixed(2));
+          
+          if (i > 0) {
+            const prev = finalPoints[i - 1];
+            totalLength += Math.hypot(point.x - prev.x, point.y - prev.y);
+          }
+        }
+
+        lines.push('M5'); // إيقاف الليزر
+        if (airAssist) lines.push('M9'); // إيقاف Air Assist
+        lines.push('M30');
+
+        // حساب الوقت التقديري
+        const timeMinutes = totalLength / laserSpeed;
+        const hours = Math.floor(timeMinutes / 60);
+        const minutes = Math.floor(timeMinutes % 60);
+        const seconds = Math.round((timeMinutes * 60) % 60);
+        
+        let timeText = "⏱️ الوقت التقديري: ";
+        if (hours > 0) timeText += hours + " ساعة ";
+        if (minutes > 0) timeText += minutes + " دقيقة ";
+        timeText += seconds + " ثانية";
+        
+        document.getElementById('estTime').innerHTML = timeText + ` | ${finalPoints.length} نقطة`;
+
+        showToast(`تم توليد كود الليزر: ${finalPoints.length} نقطة`);
+        return lines.join('\n');
+
+      } catch (error) {
+        console.error('Laser G-code generation error:', error);
+        showToast('فشل في توليد كود الليزر');
+        return "";
+      }
+    }
+
+    // ================= event listeners للليزر =================
+
+    // تحديث واجهة الليزر
+    function updateLaserUI() {
+      const isLaser = document.getElementById('machineCategory').value === 'laser';
+      const laserPreviewTab = document.getElementById('laserPreviewTab');
+      
+      if (isLaser) {
+        laserPreviewTab.style.display = 'block';
+        // إظهار إعدادات التقطيع فقط في وضع Dithering
+        const ditheringSettings = document.getElementById('ditheringSettings');
+        const laserMode = document.getElementById('laserMode').value;
+        ditheringSettings.style.display = laserMode === 'dithering' ? 'block' : 'none';
+      } else {
+        laserPreviewTab.style.display = 'none';
+      }
+    }
+
+    // تحديث قيم الليزر
+    document.getElementById('laserPower').addEventListener('input', function(e) {
+      document.getElementById('laserPowerValue').textContent = e.target.value + '%';
+      document.getElementById('laserPowerValue').style.color = `hsl(${e.target.value * 1.2}, 100%, 60%)`;
+    });
+
+    document.getElementById('laserSpeed').addEventListener('input', function(e) {
+      document.getElementById('laserSpeedValue').textContent = e.target.value;
+    });
+
+    document.getElementById('ditheringQuality').addEventListener('input', function(e) {
+      document.getElementById('ditheringQualityValue').textContent = e.target.value;
+    });
+
+    document.getElementById('laserMode').addEventListener('change', function() {
+      updateLaserUI();
+    });
+
+    // أزرار الليزر
+    document.getElementById('btnLaserPreview').addEventListener('click', function() {
+      generateLaserPreview();
+      document.querySelector('.tab-buttons button[data-tab="laserpreview"]').click();
+    });
+
+    document.getElementById('btnLaserEngrave').addEventListener('click', function() {
+      const gcode = generateLaserGcode();
+      document.getElementById('gcodeOut').value = gcode;
+      lastGeneratedGcode = gcode;
+      if (gcode) {
+        showToast("تم توليد كود الليزر بنجاح");
+        renderTopViewFromGcode(gcode);
+        document.querySelector('.tab-buttons button[data-tab="simulation"]').click();
+      }
+    });
+
+    document.getElementById('btnLaserOptimize').addEventListener('click', function() {
+      if (optimizedPath) {
+        showToast(`المسار محسن بالفعل: ${optimizedPath.length} نقطة`);
+      } else {
+        showToast("قم أولاً بتوليد كود الليزر للتحسين");
+      }
+    });
+
+    document.getElementById('btnLaserDownload').addEventListener('click', function() {
+      document.getElementById('btnDownload').click();
+    });
+
+    document.getElementById('btnLaserCenterOrigin').addEventListener('click', function() {
+      const workWidth = parseFloat(document.getElementById('laserWorkWidth').value) || 0;
+      const workHeight = parseFloat(document.getElementById('laserWorkHeight').value) || 0;
+      document.getElementById('laserOriginX').value = (workWidth / 2).toFixed(1);
+      document.getElementById('laserOriginY').value = (workHeight / 2).toFixed(1);
+      showToast("تم توسيط نقطة الأصل للليزر");
+    });
+
+    // تحديث واجهة الليزر عند التبديل
+    document.getElementById('machineCategory').addEventListener('change', function() {
+      updateLaserUI();
+    });
+
+    // ================= تهيئة واجهة الليزر =================
+    document.addEventListener('DOMContentLoaded', function() {
+      updateLaserUI();
+    });
+
+    // ... باقي الكود الحالي (OpenCV, المحاكاة، إلخ) ...
+    
+  </script>
+</body>
+</html>
