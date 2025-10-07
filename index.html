@@ -404,6 +404,32 @@
           </div>
           <div style="margin-top:6px"><button id="btnLaserCenterOrigin" class="secondary">🎯 توسيط نقطة الأصل</button></div>
 
+          <!-- Laser Edge Detection Settings -->
+          <div class="laser-edge-settings">
+            <label for="laserEdgeMode">نمط كشف الحواف للليزر</label>
+            <select id="laserEdgeMode">
+              <option value="canny">Canny (عادي)</option>
+              <option value="adaptive">Adaptive Threshold (للنقش)</option>
+              <option value="morphological">Morphological (للتفاصيل الدقيقة)</option>
+              <option value="gradient">Gradient-Based (للتدرجات)</option>
+            </select>
+            <div class="laser-mode-description" id="laserModeDesc">
+              Adaptive Threshold - ممتاز للصور ذات الإضاءة غير المتجانسة
+            </div>
+
+            <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+              <label style="margin:0;color:#9bb0c8">دقة الليزر:</label>
+              <input id="laserDetail" type="range" min="1" max="10" value="5" step="1" style="flex:1">
+              <div id="laserDetailValue" style="min-width:44px;text-align:center;color:#ff4444">5</div>
+            </div>
+          </div>
+
+          <div style="margin-top: 8px;">
+            <button id="btnRedetectLaser" class="secondary">🔄 إعادة كشف حواف الليزر</button>
+          </div>
+
+          <hr style="border-color:#ff4444;margin:12px 0"/>
+
           <!-- Laser Power & Speed -->
           <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
             <label style="margin:0;color:#9bb0c8">قوة الليزر:</label>
@@ -700,9 +726,6 @@
       try { console.log(msg); } catch (e) {}
     }
 
-    function cmToMm(cm) { return cm * 10; }
-    function mmToCm(mm) { return mm / 10; }
-
     function updateDimensionDisplay() {
       const widthCm = parseFloat(document.getElementById('workWidth').value) || 0;
       const heightCm = parseFloat(document.getElementById('workHeight').value) || 0;
@@ -808,6 +831,7 @@
       const laserPreviewBtn = document.getElementById('btnLaserPreview');
       const laserOptimizeBtn = document.getElementById('btnLaserOptimize');
       const laserDownloadBtn = document.getElementById('btnLaserDownload');
+      const redetectLaserBtn = document.getElementById('btnRedetectLaser');
       
       if (isLaser) {
         rasterBtn.style.display = 'none';
@@ -817,6 +841,7 @@
         laserPreviewBtn.style.display = 'block';
         laserOptimizeBtn.style.display = 'block';
         laserDownloadBtn.style.display = 'block';
+        redetectLaserBtn.style.display = 'block';
       } else {
         rasterBtn.style.display = 'block';
         contourBtn.style.display = 'block';
@@ -825,6 +850,7 @@
         laserPreviewBtn.style.display = 'none';
         laserOptimizeBtn.style.display = 'none';
         laserDownloadBtn.style.display = 'none';
+        redetectLaserBtn.style.display = 'none';
       }
     }
 
@@ -1140,6 +1166,39 @@
       updateLaserUI();
     });
 
+    // Laser edge mode descriptions
+    const laserModeDescriptions = {
+      canny: 'Canny - كشف حواف تقليدي مناسب للصور العامة',
+      adaptive: 'Adaptive Threshold - ممتاز للصور ذات الإضاءة غير المتجانسة',
+      morphological: 'Morphological - للحواف الدقيقة والناعمة والتفاصيل الصغيرة',
+      gradient: 'Gradient-Based - للتدرجات اللونية والصور ذات التباين العالي'
+    };
+
+    document.getElementById('laserEdgeMode').addEventListener('change', function(e) {
+      document.getElementById('laserModeDesc').textContent = laserModeDescriptions[e.target.value] || '';
+      if (!previewCanvas) return;
+      const isLaser = document.getElementById('machineCategory').value === 'laser';
+      if (isLaser && cvReady && previewCanvas && previewCanvas.width > 0) {
+        detectLaserContours();
+      }
+    });
+
+    // Laser detail slider update
+    document.getElementById('laserDetail').addEventListener('input', function(e) {
+      document.getElementById('laserDetailValue').textContent = e.target.value;
+    });
+
+    // Laser redetect button
+    document.getElementById('btnRedetectLaser').addEventListener('click', () => {
+      if (!previewCanvas) {
+        showToast('لا توجد صورة محملة');
+        return;
+      }
+      if (cvReady) {
+        detectLaserContours();
+      }
+    });
+
     // أزرار الليزر
     document.getElementById('btnLaserPreview').addEventListener('click', function() {
       generateLaserPreview();
@@ -1177,8 +1236,6 @@
       showToast("تم توسيط نقطة الأصل للليزر");
     });
 
-    // ... (يتبع باقي الكود الأساسي للراوتر والوظائف الأخرى)
-    
     // ================= Load image =================
     document.getElementById('fileInput').addEventListener('change', async function (e) {
       const file = e.target.files[0];
