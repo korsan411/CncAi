@@ -1,1040 +1,598 @@
 <!doctype html>
+
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>CNC AI — Fixed Full</title>
-
-  <!-- OpenCV (CDN) -->
-  <script src="https://docs.opencv.org/4.8.0/opencv.js" onload="onOpenCvReady()" onerror="onOpenCvLoadError()"></script>
-
-  <!-- Three.js -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
-
-  <style>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>CNC AI — CNC Router & Laser Engraving (مصحح)</title>  <!-- مكتبات -->  <script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>  <style>
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: Arial, "Segoe UI", system-ui; background: #041022; color:#e6eef6; }
-    .app { max-width:1400px; margin:12px auto; padding:14px; }
-    header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
-    h1 { margin:0; font-size:20px; }
-    .grid { display:grid; grid-template-columns:1fr 480px; gap:16px; }
-    @media(max-width:1100px){ .grid{ grid-template-columns:1fr } }
-    .panel { background:#0b1320; padding:14px; border-radius:10px; border:1px solid #1e293b; }
-    .tab-buttons { display:flex; gap:8px; margin-top:12px; }
-    .tab-buttons button { flex:1; border:none; padding:8px; border-radius:6px; background:transparent; color:#9bb0c8; cursor:pointer }
+    body { margin: 0; font-family: Arial, Segoe UI, system-ui; background: #041022; color:#e6eef6; line-height:1.45 }
+    .app { max-width:1400px; margin:12px auto; padding:14px }
+    header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-bottom:12px; border-bottom:1px solid #1e293b }
+    .grid { display:grid; grid-template-columns:1fr 520px; gap:16px }
+    @media (max-width:1100px){ .grid{ grid-template-columns:1fr } }
+    .panel { background:#0b1320; padding:16px; border-radius:10px; border:1px solid #1e293b }
+    .tab-buttons { display:flex; gap:8px; margin-top:12px; background: rgba(14,23,33,0.6); padding:6px; border-radius:8px }
+    .tab-buttons button { flex:1; border:none; padding:8px 10px; border-radius:6px; background:transparent; color:#9bb0c8; cursor:pointer }
     .tab-buttons button.active { background:#0f172a; color:#e6eef6; box-shadow: inset 0 -3px 0 #06b6d4; }
     .tab-content { display:none; margin-top:12px }
     .tab-content.active { display:block }
     canvas { max-width:100%; border-radius:6px; background:#000; display:block; margin:0 auto; border:1px solid #334155 }
-    .canvas-placeholder { width:100%; min-height:260px; background:#000; border-radius:6px; display:flex; align-items:center; justify-content:center; color:#9bb0c8; border:1px solid #334155 }
-    label { display:block; margin-top:10px; color:#cfeaf2; font-weight:600 }
-    input, select, textarea, button { font-size:0.95rem; }
-    input, select, textarea { width:100%; padding:8px 10px; border-radius:6px; border:1px solid #1e293b; background:#0f172a; color:#e6eef6; margin-top:6px }
+    #threeContainer { width:100%; height:420px; background:#081224; border-radius:8px; overflow:hidden; position:relative }
+    label { display:block; margin-top:12px; color:#cfeaf2; font-weight:bold }
+    input, select, textarea, button { font-size:0.9rem }
+    input, select { width:100%; padding:8px 10px; border-radius:6px; border:1px solid #1e293b; background:#0f172a; color:#e6eef6; margin-top:6px }
+    .button-group { display:flex; flex-direction:column; gap:8px; margin-top:12px }
     .button-row { display:flex; gap:8px; }
     button { background:#1e293b; color:#e6eef6; border:none; padding:10px; border-radius:8px; cursor:pointer }
     button.primary { background:#06b6d4; color:#021; font-weight:bold }
-    .colormap-buttons { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
-    .colormap-buttons button { padding:8px 12px; border-radius:8px; border:1px solid #26343f; background:#141b22; color:#cfeaf2; cursor:pointer }
-    .colormap-buttons button.active { background:#06b6d4; color:#021; border-color:#06b6d4; box-shadow:0 4px 12px rgba(6,182,212,0.3) }
-    #threeContainer { width:100%; height:420px; background:#081224; border-radius:8px; overflow:hidden; position:relative }
-    #debugOverlay { position: fixed; right: 12px; bottom: 12px; width: 360px; background: rgba(2,6,23,0.9); color: #e6eef6; border-radius:8px; padding:8px; border:1px solid rgba(255,255,255,0.03); font-size:13px; z-index:20000; }
-    #toast { position:fixed; left:12px; bottom:12px; background:rgba(0,0,0,0.85); color:#fff; padding:10px 14px; border-radius:8px; display:none; z-index:10000 }
-    .small-meta { font-size:12px; color:#9bb0c8; margin-top:6px; }
-    .sim-controls { position:absolute; top:8px; left:8px; z-index:120; display:flex; gap:8px; }
-    .loading-spinner { width:14px; height:14px; border:2px solid rgba(255,255,255,0.12); border-top:2px solid #06b6d4; border-radius:50%; animation:spin 1s linear infinite; display:inline-block; vertical-align:middle; }
-    @keyframes spin {0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
-    .colormap-legend { height:14px; border-radius:6px; border:1px solid #26343f; margin-top:8px; }
-  </style>
-</head>
+    button.secondary { background:#334155; }
+    #toast { position:fixed; left:16px; bottom:16px; background:rgba(2,6,23,0.9); padding:12px;border-radius:8px;border:1px solid rgba(255,255,255,0.04); display:none }
+    .canvas-placeholder { padding:40px 12px; text-align:center; color:#7aa7b8; }
+    .laser-preview { border: 2px solid #ff4444; background: rgba(255, 68, 68, 0.03); padding: 8px; border-radius: 6px; margin-top: 8px; }
+    .power-indicator { height: 4px; background: linear-gradient(90deg, #00ff00, #ffff00, #ff0000); border-radius: 2px; margin-top: 4px; }
+  </style></head>
 <body>
   <div class="app">
     <header>
-      <h1>CNC AI — نسخة مصححة كاملة</h1>
-      <div id="cvState"><span class="loading-spinner"></span> جاري تحميل OpenCV...</div>
-    </header>
-
-    <div class="grid">
-      <!-- LEFT -->
-      <div class="panel">
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input id="fileInput" type="file" accept="image/*" />
-          <label style="display:inline-block;padding:8px 12px;background:#1e293b;border-radius:6px;color:#e6eef6;cursor:pointer">📁 رفع صورة</label>
-          <div style="flex:1"></div>
-          <label for="edgeMode" style="font-weight:normal;color:#9bb0c8">Edge</label>
-          <select id="edgeMode" style="width:140px">
-            <option value="auto">Canny</option>
-            <option value="sobel">Sobel</option>
-            <option value="laplace">Laplacian</option>
-          </select>
-        </div>
-
-        <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
-          <label style="margin:0;color:#9bb0c8">حساسية الحواف:</label>
-          <input id="edgeSensitivity" type="range" min="0.05" max="1.0" step="0.05" value="0.33" style="flex:1">
-          <div id="edgeValue" style="min-width:44px;text-align:center;color:#cfeaf2">0.33</div>
-        </div>
-
-        <div class="colormap-buttons" id="colormapButtons" style="margin-top:12px">
-          <button data-map="jet" class="active">Jet</button>
-          <button data-map="hot">Hot</button>
-          <button data-map="cool">Cool</button>
-          <button data-map="gray">Gray</button>
-        </div>
-        <div id="colormapLegend" class="colormap-legend" style="background:linear-gradient(90deg,#0000ff,#00ffff,#ffff00,#ff0000)"></div>
-        <div class="small-meta">التأثير على Heatmap وTop View وG-code (Z)</div>
-
-        <div class="tab-buttons" role="tablist">
-          <button data-tab="original" class="active">🖼 الأصلية</button>
-          <button data-tab="heatmap">🔥 Heatmap</button>
-          <button data-tab="contour">📐 Contours</button>
-          <button data-tab="topview">🔝 Top View</button>
-          <button data-tab="simulation">🎬 المحاكاة 3D</button>
-          <button data-tab="laserpreview" id="laserPreviewTab" style="display:none">🔴 معاينة ليزر</button>
-        </div>
-
-        <div id="original" class="tab-content active">
-          <div id="originalPlaceholder" class="canvas-placeholder">الصورة الأصلية ستظهر هنا</div>
-          <canvas id="canvasOriginal" style="display:none"></canvas>
-        </div>
-
-        <div id="heatmap" class="tab-content">
-          <div id="heatmapPlaceholder" class="canvas-placeholder">Heatmap ستظهر هنا</div>
-          <canvas id="canvasHeatmap" style="display:none"></canvas>
-        </div>
-
-        <div id="contour" class="tab-content">
-          <div id="contourPlaceholder" class="canvas-placeholder">Contours ستظهر هنا</div>
-          <canvas id="canvasContour" style="display:none"></canvas>
-          <div class="small-meta">تغيير وضع الكشف أو حساسية الحواف يعيد المعالجة تلقائيًا</div>
-        </div>
-
-        <div id="topview" class="tab-content">
-          <canvas id="topView" style="width:100%;height:220px;border-radius:6px;border:1px solid #334155;background:#0d1722"></canvas>
-          <div class="small-meta">معاينة Top View بالألوان المختارة</div>
-        </div>
-
-        <div id="simulation" class="tab-content">
-          <div id="threeContainer">
-            <div id="simulationPlaceholder" class="canvas-placeholder">المحاكاة ستظهر هنا بعد توليد G-code</div>
-          </div>
-        </div>
-
-        <div id="laserpreview" class="tab-content">
-          <div class="canvas-placeholder" id="laserPreviewPlaceholder">معاينة الليزر</div>
-          <canvas id="canvasLaserPreview" style="display:none"></canvas>
-        </div>
-
+      <h1>CNC AI — CNC Router & Laser Engraving (مصحح)</h1>
+      <div id="cvState" class="loading-indicator">
+        <div class="loading-spinner"></div>
+        <span id="cvStateText">جاري تحميل OpenCV...</span>
       </div>
+    </header><div class="grid">
+  <!-- LEFT panel -->
+  <div class="panel">
+    <div style="display:flex;gap:8px;align-items:center;">
+      <input id="fileInput" type="file" accept="image/*"/>
+      <label class="file-input-label" for="fileInput" style="display:inline-block;padding:8px 12px;background:#1e293b;border-radius:6px;color:#e6eef6;cursor:pointer;border:1px dashed #334155">📁 اختر صورة</label>
+      <div style="flex:1"></div>
 
-      <!-- RIGHT -->
-      <div class="panel">
-        <h3>⚙️ إعدادات الماكينة</h3>
+      <label for="edgeMode" style="font-weight:normal;color:#9bb0c8">Edge Mode:</label>
+      <select id="edgeMode" style="width:140px">
+        <option value="auto">Canny (عادي)</option>
+        <option value="sobel">Sobel (دقيق)</option>
+        <option value="laplace">Laplacian (ناعـم)</option>
+      </select>
+    </div>
 
-        <label for="machineCategory">نوع الماكينة</label>
-        <select id="machineCategory">
-          <option value="router" selected>Router (نحت)</option>
-          <option value="laser">Laser (نقش)</option>
-        </select>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+      <label style="margin:0;color:#9bb0c8">حساسية الحواف:</label>
+      <input id="edgeSensitivity" type="range" min="0.1" max="1.0" step="0.05" value="0.33" style="flex:1">
+      <div id="edgeValue" style="min-width:44px;text-align:center;color:#cfeaf2">0.33</div>
+    </div>
 
-        <label>عرض العمل (مم)</label>
-        <input id="workWidth" type="number" value="300" step="1" />
+    <div class="tab-buttons" role="tablist">
+      <button data-tab="original" class="active">🖼️ الأصلية</button>
+      <button data-tab="heatmap">🔥 Heatmap</button>
+      <button data-tab="contour">📐 Contours</button>
+      <button data-tab="topview">🔝 Top View</button>
+      <button data-tab="simulation">🎬 المحاكاة</button>
+      <button data-tab="laserpreview" id="laserPreviewTab" style="display:none">🔴 معاينة الليزر</button>
+    </div>
 
-        <label>ارتفاع العمل (مم)</label>
-        <input id="workHeight" type="number" value="200" step="1" />
+    <div id="original" class="tab-content active">
+      <div class="canvas-placeholder" id="originalPlaceholder">الصورة الأصلية ستظهر هنا</div>
+      <canvas id="canvasOriginal" width="800" height="600" style="display:block;"></canvas>
+    </div>
 
-        <label>عمق العمل (مم)</label>
-        <input id="workDepth" type="number" value="3.0" step="0.1" />
+    <div id="heatmap" class="tab-content">
+      <div class="canvas-placeholder" id="heatmapPlaceholder">Heatmap ستظهر هنا</div>
+      <canvas id="canvasHeatmap" style="display:none;"></canvas>
+    </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
-          <div>
-            <label>Origin X (مم)</label>
-            <input id="originX" type="number" value="0" />
-          </div>
-          <div>
-            <label>Origin Y (مم)</label>
-            <input id="originY" type="number" value="0" />
-          </div>
-        </div>
-        <div style="margin-top:8px"><button id="btnCenterOrigin" class="secondary">🎯 توسيط نقطة الأصل</button></div>
+    <div id="contour" class="tab-content">
+      <div class="canvas-placeholder" id="contourPlaceholder">Contours ستظهر هنا</div>
+      <canvas id="canvasContour" style="display:none;"></canvas>
+    </div>
 
-        <hr style="border-color:#122433;margin:12px 0" />
-
-        <label>خطوة المسح (مم)</label>
-        <input id="stepOver" type="number" value="2.0" step="0.1" />
-
-        <label>اتجاه المسح (Raster)</label>
-        <select id="scanDir">
-          <option value="x">أفقي (X)</option>
-          <option value="y">رأسي (Y)</option>
-        </select>
-
-        <div class="button-row" style="margin-top:12px">
-          <button id="btnGen" class="primary">⚡ توليد G-code (Raster)</button>
-          <button id="btnQuick" class="secondary">🧪 اختبار سريع</button>
-        </div>
-
-        <div style="margin-top:10px">
-          <label>نطاق الحواف (Contour)</label>
-          <select id="contourMode">
-            <option value="outer">الخارجية فقط</option>
-            <option value="all">كل الحواف</option>
-          </select>
-          <div style="height:8px"></div>
-          <div class="button-row">
-            <button id="btnContour" class="secondary">🌀 توليد G-code (Contour)</button>
-            <button id="btnDownload" class="secondary">💾 تحميل G-code</button>
-          </div>
-        </div>
-
-        <!-- Laser section (hidden unless Laser mode) -->
-        <div id="laserSettings" style="display:none;margin-top:12px;padding:8px;border-radius:8px;border:1px solid #332222;background:rgba(255,68,68,0.03)">
-          <h4 style="margin:6px 0;color:#ff4444">⚡ إعدادات Laser</h4>
-          <label>عرض العمل (مم)</label>
-          <input id="laserWorkWidth" type="number" value="300" />
-          <label>ارتفاع العمل (مم)</label>
-          <input id="laserWorkHeight" type="number" value="200" />
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
-            <div>
-              <label>Origin X (مم)</label>
-              <input id="laserOriginX" type="number" value="0" />
-            </div>
-            <div>
-              <label>Origin Y (مم)</label>
-              <input id="laserOriginY" type="number" value="0" />
-            </div>
-          </div>
-          <div style="margin-top:8px"><button id="btnLaserCenterOrigin" class="secondary">🎯 توسيط أصل الليزر</button></div>
-
-          <label style="margin-top:10px">نمط كشف الحواف</label>
-          <select id="laserEdgeMode">
-            <option value="adaptive">Adaptive</option>
-            <option value="canny">Canny</option>
-            <option value="morphological">Morphological</option>
-            <option value="gradient">Gradient</option>
-          </select>
-
-          <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
-            <label style="margin:0;color:#9bb0c8">قوة الليزر:</label>
-            <input id="laserPower" type="range" min="0" max="100" value="80" style="flex:1" />
-            <div id="laserPowerValue" style="min-width:54px;text-align:center;color:#ff4444">80%</div>
-          </div>
-
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <button id="btnLaserPreview" class="secondary">👁 معاينة الليزر</button>
-            <button id="btnLaserEngrave" class="primary" style="background:#ff4444">⚡ توليد كود ليزر</button>
-            <button id="btnRedetectLaser" class="secondary">🔄 إعادة كشف</button>
-          </div>
-        </div>
-
-        <div id="estTime" style="margin-top:12px;color:#9bb0c8;text-align:center;padding:8px;background:#0f172a;border-radius:6px"></div>
-
-        <label style="margin-top:12px">📄 مخرجات G-code</label>
-        <textarea id="gcodeOut" readonly placeholder="سيظهر G-code هنا بعد التوليد..." style="height:220px;background:#021024;color:#cfeaf2;border-radius:8px;padding:10px;"></textarea>
+    <div id="topview" class="tab-content">
+      <div id="topViewContainer">
+        <canvas id="topView"></canvas>
+        <div id="topLegend" title="عمق النقش — الألوان فقط"></div>
       </div>
     </div>
-  </div>
 
-  <div id="debugOverlay" aria-live="polite" role="status">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <strong>Debug — Console</strong>
-      <div style="display:flex;gap:6px">
-        <button id="dbgCopy" style="background:transparent;border:1px solid rgba(255,255,255,0.06);color:#cfeaf2;padding:6px;border-radius:6px;cursor:pointer">نسخ</button>
-        <button id="dbgClear" style="background:transparent;border:1px solid rgba(255,255,255,0.06);color:#cfeaf2;padding:6px;border-radius:6px;cursor:pointer">مسح</button>
+    <div id="simulation" class="tab-content">
+      <div id="threeContainer">
+        <div class="canvas-placeholder" id="simulationPlaceholder">المحاكاة ستظهر هنا بعد توليد G-code</div>
       </div>
     </div>
-    <div id="debugList" style="margin-top:8px;max-height:40vh;overflow:auto;font-family:monospace;font-size:12px"></div>
+
+    <div id="laserpreview" class="tab-content">
+      <div class="laser-preview">
+        <div class="canvas-placeholder" id="laserPreviewPlaceholder">معاينة نقش الليزر ستظهر هنا</div>
+        <canvas id="canvasLaserPreview" style="display:none;"></canvas>
+        <div class="small-meta">معاينة تأثير الليزر على المادة - الأحمر = قوة عالية، الأصفر = قوة متوسطة، الأخضر = قوة منخفضة</div>
+        <div class="power-indicator"></div>
+      </div>
+    </div>
+
   </div>
 
-  <div id="toast"></div>
+  <!-- RIGHT panel -->
+  <div class="panel">
+    <h3>⚙️ إعدادات الماكينة</h3>
 
-  <script>
-  // ===== Globals =====
-  let cvReady = false;
-  let previewCanvas = null;
-  let grayMat = null; // cv.Mat grayscale copy of image
-  let contour = null; // main contour cv.Mat
-  let additionalContours = [];
-  let lastGeneratedGcode = '';
-  let currentColormap = 'jet';
-  let optimizedPath = null;
+    <label for="machineCategory">نوع الماكينة الرئيسي</label>
+    <select id="machineCategory">
+      <option value="router">CNC Router (نحت خشب)</option>
+      <option value="laser">Laser Engraver (نقش ليزر)</option>
+    </select>
 
-  // ===== OpenCV load handlers =====
-  function onOpenCvReady() {
-    cvReady = true;
-    document.getElementById('cvState').innerHTML = '✅ OpenCV جاهز';
-    showToast('تم تحميل OpenCV بنجاح', 1400);
-    try { console.log('OpenCV', cv.getBuildInformation()); } catch(e){}
-  }
-  function onOpenCvLoadError() {
-    document.getElementById('cvState').innerHTML = '❌ فشل تحميل OpenCV';
-    showToast('فشل تحميل OpenCV — تحقق من اتصال الإنترنت', 6000);
-    // try fallback after short delay
-    setTimeout(()=> {
-      if (typeof cv === 'undefined') {
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/opencv-js@4.8.0/opencv.js';
-        script.onload = onOpenCvReady;
-        script.onerror = ()=> showToast('فشل تحميل OpenCV (fallback)'); 
-        document.head.appendChild(script);
+    <div id="routerSettings" class="machine-settings">
+      <h4 class="router-specific">🔄 إعدادات CNC Router</h4>
+      <label for="workWidth">عرض العمل (مم)</label>
+      <input id="workWidth" type="number" value="300" step="1" min="10" max="2000"/>
+      <label for="workHeight">ارتفاع العمل (مم)</label>
+      <input id="workHeight" type="number" value="200" step="1" min="10" max="2000"/>
+    </div>
+
+    <hr style="border-color:#122433;margin:12px 0"/>
+
+    <div class="laser-edge-settings">
+      <label for="laserEdgeMode">نمط كشف الحواف للليزر</label>
+      <select id="laserEdgeMode">
+        <option value="adaptive">Adaptive Threshold</option>
+        <option value="morphological">Morphological</option>
+        <option value="gradient">Gradient-Based</option>
+        <option value="canny">Canny</option>
+      </select>
+
+      <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+        <label style="margin:0;color:#9bb0c8">دقة الليزر:</label>
+        <input id="laserDetail" type="range" min="1" max="10" value="5" step="1" style="flex:1">
+        <div id="laserDetailValue" style="min-width:44px;text-align:center;color:#ff4444">5</div>
+      </div>
+
+      <div style="margin-top: 8px;">
+        <button id="btnRedetectLaser" class="secondary">🔄 إعادة كشف حواف الليزر</button>
+      </div>
+
+      <hr style="border-color:#ff4444;margin:12px 0"/>
+
+      <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
+        <label style="margin:0;color:#9bb0c8">قوة الليزر:</label>
+        <input id="laserPower" type="range" min="0" max="100" value="80" step="1" style="flex:1">
+        <div id="laserPowerValue" style="min-width:44px;text-align:center;color:#ff4444">80%</div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+        <label style="margin:0;color:#9bb0c8">سرعة الليزر (مم/دقيقة):</label>
+        <input id="laserSpeed" type="range" min="100" max="5000" value="2000" step="100" style="flex:1">
+        <div id="laserSpeedValue" style="min-width:60px;text-align:center;color:#06b6d4">2000</div>
+      </div>
+
+      <label for="laserMode">وضع الليزر</label>
+      <select id="laserMode">
+        <option value="grayscale">نقش تدرج الرمادي</option>
+        <option value="dithering">نقش متقطع (Dithering)</option>
+        <option value="contour">قص كونتور</option>
+        <option value="combined">نقش + قص</option>
+      </select>
+
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <label><input id="laserDynamic" type="checkbox"/> قوة ديناميكية (تدرج)</label>
+        <label><input id="laserOptimize" type="checkbox"/> تحسين المسارات</label>
+        <label><input id="laserAirAssist" type="checkbox"/> Air Assist</label>
+      </div>
+
+      <label for="laserPasses">عدد المرور (passes)</label>
+      <input id="laserPasses" type="number" min="1" max="10" value="1" />
+
+      <label for="laserWorkWidth">عرض العمل (مم)</label>
+      <input id="laserWorkWidth" type="number" value="300" step="1" />
+      <label for="laserWorkHeight">ارتفاع العمل (مم)</label>
+      <input id="laserWorkHeight" type="number" value="200" step="1" />
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+        <div>
+          <label for="laserOriginX">Origin X (مم)</label>
+          <input id="laserOriginX" type="number" value="0" />
+        </div>
+        <div>
+          <label for="laserOriginY">Origin Y (مم)</label>
+          <input id="laserOriginY" type="number" value="0" />
+        </div>
+      </div>
+
+      <div style="margin-top:12px" class="button-row">
+        <button id="btnGenerateLaser" class="primary">🛠️ توليد G-code الليزر</button>
+        <button id="btnDownloadGcode" class="secondary">⬇️ تحميل G-code</button>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+  </div>  <script>
+    // =============== Globals ===============
+    let cvReady = false;
+    let previewCanvas = document.getElementById('canvasOriginal');
+    let grayMat = null;                // OpenCV gray matrix used for heatmap & sampling
+    let contour = null;               // main detected contour (cv.Mat)
+    let lastGeneratedGcode = "";
+
+    function onOpenCvReady() {
+      cv['onRuntimeInitialized']=()=>{
+        cvReady = true;
+        document.getElementById('cvStateText').textContent = 'OpenCV جاهز';
+        setTimeout(()=>{ document.getElementById('cvState').style.display='none' }, 800);
       }
-    }, 1500);
-  }
-
-  // ===== Debug overlay system =====
-  (function initDebug(){
-    const debugList = document.getElementById('debugList');
-    const dbgClear = document.getElementById('dbgClear');
-    const dbgCopy = document.getElementById('dbgCopy');
-    const logs = [];
-
-    function addEntry(type,msg,meta){
-      const time = new Date().toISOString().slice(11,23);
-      const el = document.createElement('div');
-      el.style.padding='6px'; el.style.marginBottom='6px'; el.style.borderRadius='6px';
-      el.style.background = type==='error' ? 'rgba(255,68,68,0.06)' : (type==='warn' ? 'rgba(255,200,100,0.04)' : 'rgba(6,182,212,0.02)');
-      el.innerHTML = `<div style="opacity:0.8;font-size:11px">${time} • ${type.toUpperCase()}</div><div>${String(msg)}</div>${meta?'<div style="opacity:0.7;font-size:11px;margin-top:6px">'+String(meta)+'</div>':''}`;
-      debugList.prepend(el);
-      logs.push({time,type,msg,meta});
-      // limit
-      if (logs.length>200) { logs.shift(); if(debugList.lastChild) debugList.removeChild(debugList.lastChild); }
     }
 
-    dbgClear.addEventListener('click', ()=> { debugList.innerHTML=''; logs.length=0; showToast('تم مسح السجل'); });
-    dbgCopy.addEventListener('click', async ()=> {
-      try {
-        const txt = logs.map(l=>`[${l.time}] ${l.type.toUpperCase()}: ${l.msg}\n${l.meta||''}`).join('\n\n');
-        await navigator.clipboard.writeText(txt);
-        addEntry('info','تم نسخ السجل');
-      } catch(e){ addEntry('error','فشل النسخ',e.message); }
-    });
+    function showToast(msg, timeout=3000) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.style.display = 'block';
+      clearTimeout(t._hid);
+      t._hid = setTimeout(()=>{ t.style.display='none' }, timeout);
+    }
 
-    const _log = console.log, _warn = console.warn, _err = console.error;
-    console.log = function(...a){ try{ addEntry('info', a.join(' ')); }catch(e){}; _log.apply(console,a); }
-    console.warn = function(...a){ try{ addEntry('warn', a.join(' ')); }catch(e){}; _warn.apply(console,a); }
-    console.error = function(...a){ try{ addEntry('error', a.join(' ')); }catch(e){}; _err.apply(console,a); }
+    function safeMatDelete(m) { try{ if(m && typeof m.delete === 'function'){ m.delete(); } }catch(e){} }
 
-    window.addEventListener('error', (ev)=> { addEntry('error', ev.message, `${ev.filename}:${ev.lineno}`); });
-    window.addEventListener('unhandledrejection', (ev)=> { addEntry('error','UnhandledRejection',ev.reason && ev.reason.message ? ev.reason.message : String(ev.reason)); });
-  })();
-
-  // ===== Helpers =====
-  function showToast(msg, ms=2500){
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.style.display = 'block';
-    clearTimeout(t._t);
-    t._t = setTimeout(()=> t.style.display = 'none', ms);
-    console.log(msg);
-  }
-
-  function safeMatDelete(mat){
-    try{ if(mat && typeof mat.delete === 'function' && !mat.isDeleted) mat.delete(); } catch(e){ console.warn('delete mat err', e); }
-  }
-
-  function cleanupMats(){
-    safeMatDelete(grayMat); grayMat = null;
-    safeMatDelete(contour); contour = null;
-    additionalContours.forEach(it=> safeMatDelete(it.contour));
-    additionalContours = [];
-  }
-
-  // sample grayscale byte from grayMat
-  function sampleGrayAt(x,y){
-    if(!grayMat) return 0;
-    const px = Math.max(0, Math.min(grayMat.cols - 1, Math.floor(x)));
-    const py = Math.max(0, Math.min(grayMat.rows - 1, Math.floor(y)));
-    return grayMat.ucharPtr(py, px)[0];
-  }
-
-  // ===== UI wiring: Tabs & colormap =====
-  document.querySelectorAll('.tab-buttons button').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      document.querySelectorAll('.tab-buttons button').forEach(b=>b.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(tc=>tc.classList.remove('active'));
-      btn.classList.add('active');
-      document.getElementById(btn.dataset.tab).classList.add('active');
-      if(btn.dataset.tab === 'simulation') initSimulation();
-    });
-  });
-
-  document.getElementById('edgeSensitivity').addEventListener('input', (e)=> {
-    document.getElementById('edgeValue').textContent = e.target.value;
-    if(cvReady && previewCanvas) detectAppropriate();
-  });
-  document.getElementById('edgeMode').addEventListener('change', ()=> { if(cvReady && previewCanvas) detectAppropriate(); });
-
-  // colormap buttons
-  document.getElementById('colormapButtons').addEventListener('click', (ev) => {
-    const btn = ev.target.closest('button[data-map]');
-    if(!btn) return;
-    document.querySelectorAll('#colormapButtons button').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    currentColormap = btn.dataset.map;
-    // update legend gradient
-    const legend = document.getElementById('colormapLegend');
-    if(currentColormap === 'jet') legend.style.background = 'linear-gradient(90deg,#0000ff,#00ffff,#ffff00,#ff0000)';
-    else if(currentColormap === 'hot') legend.style.background = 'linear-gradient(90deg,#000,#ff0000,#ffff00,#ffffff)';
-    else if(currentColormap === 'cool') legend.style.background = 'linear-gradient(90deg,#00ffff,#ff00ff)';
-    else legend.style.background = 'linear-gradient(90deg,#000,#fff)';
-    renderHeatmap(); renderTopView(); // update displays
-  });
-
-  // ===== Image loading =====
-  document.getElementById('fileInput').addEventListener('change', async function(e){
-    const f = e.target.files[0];
-    if(!f) return;
-    if(!f.type.match('image.*')) { showToast('اختر ملف صورة'); return; }
-    if(f.size > 12 * 1024 * 1024) showToast('ملف كبير — سيتم تقليصه لتحسين الأداء');
-    try {
-      cleanupMats();
+    // ======== image loader ========
+    document.getElementById('fileInput').addEventListener('change', (e)=>{
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
       const img = new Image();
+      img.onload = () => {
+        const ctx = previewCanvas.getContext('2d');
+        // fit image to canvas while preserving aspect
+        const maxW = 1200, maxH = 900;
+        let w = img.width, h = img.height;
+        if (w > maxW) { const r = maxW / w; w = maxW; h = Math.round(h * r); }
+        if (h > maxH) { const r = maxH / h; h = maxH; w = Math.round(w * r); }
+        previewCanvas.width = w; previewCanvas.height = h;
+        ctx.clearRect(0,0,w,h);
+        ctx.drawImage(img,0,0,w,h);
+        document.getElementById('laserPreviewTab').style.display = 'inline-block';
+
+        // cleanup previous mats
+        safeMatDelete(grayMat);
+        contour && safeMatDelete(contour);
+        contour = null;
+
+        // lazy detect after load
+        if (cvReady) setTimeout(()=> detectLaserContours(), 50);
+      }
       img.src = URL.createObjectURL(f);
-      await img.decode();
+    });
 
-      previewCanvas = document.getElementById('canvasOriginal');
-      const ctx = previewCanvas.getContext('2d');
-
-      // resize to max pixels for performance
-      const maxPixels = 1280 * 1280; // ~1.6MP
-      let w = img.width, h = img.height;
-      if(w*h > maxPixels) {
-        const ratio = Math.sqrt(maxPixels / (w*h));
-        w = Math.floor(w * ratio); h = Math.floor(h * ratio);
-        showToast('تم تحسين حجم الصورة لأداء أفضل');
-      }
-
-      previewCanvas.width = w; previewCanvas.height = h;
-      ctx.drawImage(img, 0, 0, w, h);
-
-      // show canvases
-      showElement('canvasOriginal', 'originalPlaceholder');
-      showElement('canvasHeatmap', 'heatmapPlaceholder');
-      showElement('canvasContour', 'contourPlaceholder');
-
-      if(cvReady) {
-        detectAppropriate();
-      } else {
-        showToast('في انتظار OpenCV...');
-        // will be called when OpenCV ready
-      }
-    } catch (err) {
-      console.error('image load error', err);
-      showToast('فشل في تحميل الصورة');
+    // ======= Utility: sample gray at pixel with bounds check ======
+    function sampleGrayAt(x, y) {
+      if (!grayMat) return 0;
+      const xi = Math.min(grayMat.cols - 1, Math.max(0, Math.round(x)));
+      const yi = Math.min(grayMat.rows - 1, Math.max(0, Math.round(y)));
+      return grayMat.ucharPtr(yi, xi)[0];
     }
-  });
 
-  function showElement(canvasId, placeholderId) {
-    const canvas = document.getElementById(canvasId);
-    const ph = document.getElementById(placeholderId);
-    if(canvas) canvas.style.display = 'block';
-    if(ph) ph.style.display = 'none';
-  }
+    // ======= Laser contour detection (clean, memory-safe) =======
+    async function detectLaserContours() {
+      if (!cvReady) { showToast('OpenCV غير جاهز'); return; }
+      if (!previewCanvas || previewCanvas.width === 0) { showToast('لا توجد صورة صالحة'); return; }
 
-  // ===== Edge detection + contours (router) =====
-  async function detectContours(){
-    if(!cvReady) { showToast('OpenCV غير جاهز'); return; }
-    if(!previewCanvas || previewCanvas.width === 0) { showToast('لا توجد صورة صالحة'); return; }
+      showToast('جاري كشف حواف الليزر...');
 
-    let src = null, gray = null, blurred = null, edges = null, hierarchy = null, contours = null, kernel = null;
-    try {
-      src = cv.imread(previewCanvas);
-      gray = new cv.Mat();
-      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-      blurred = new cv.Mat();
-      cv.GaussianBlur(gray, blurred, new cv.Size(5,5), 0);
+      let src = null, gray = null, edges = null, hierarchy = null, contours = null;
+      try {
+        src = cv.imread(previewCanvas);
+        if (src.empty()) { showToast('الصورة غير صالحة'); src.delete(); return; }
 
-      const mode = document.getElementById('edgeMode').value || 'auto';
-      const sens = parseFloat(document.getElementById('edgeSensitivity').value) || 0.33;
+        gray = new cv.Mat();
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
-      const median = cv.mean(blurred)[0];
-      const lowerThreshold = Math.max(0, (1.0 - sens) * median);
-      const upperThreshold = Math.min(255, (1.0 + sens) * median);
+        const mode = document.getElementById('laserEdgeMode').value || 'adaptive';
+        const detailLevel = parseInt(document.getElementById('laserDetail').value) || 5;
 
-      edges = new cv.Mat();
-      if(mode === 'sobel') {
-        const gradX = new cv.Mat(), gradY = new cv.Mat();
-        cv.Sobel(blurred, gradX, cv.CV_16S, 1, 0, 3);
-        cv.Sobel(blurred, gradY, cv.CV_16S, 0, 1, 3);
-        cv.convertScaleAbs(gradX, gradX);
-        cv.convertScaleAbs(gradY, gradY);
-        cv.addWeighted(gradX, 0.5, gradY, 0.5, 0, edges);
-        safeMatDelete(gradX); safeMatDelete(gradY);
-      } else if(mode === 'laplace') {
-        cv.Laplacian(blurred, edges, cv.CV_16S, 3);
-        cv.convertScaleAbs(edges, edges);
-      } else {
-        cv.Canny(blurred, edges, lowerThreshold, upperThreshold);
-      }
-
-      kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3,3));
-      cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel);
-
-      contours = new cv.MatVector();
-      hierarchy = new cv.Mat();
-      cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
-
-      // filter by area
-      const minArea = (gray.cols * gray.rows) * 0.005; // 0.5%
-      const valid = [];
-      for(let i=0;i<contours.size();i++){
-        const c = contours.get(i);
-        const a = cv.contourArea(c);
-        if(a > minArea) valid.push({contour: c.clone(), area: a});
-        c.delete();
-      }
-
-      if(valid.length === 0) {
-        showToast('لم يتم العثور على حواف واضحة');
-        safeMatDelete(src); safeMatDelete(blurred); safeMatDelete(edges); safeMatDelete(hierarchy); safeMatDelete(contours); safeMatDelete(kernel); safeMatDelete(gray);
-        return;
-      }
-
-      valid.sort((a,b)=> b.area - a.area);
-      // cleanup previous
-      safeMatDelete(contour);
-      additionalContours.forEach(it=> safeMatDelete(it.contour));
-      additionalContours = [];
-
-      contour = valid[0].contour;
-      for(let i=1;i<valid.length;i++) additionalContours.push({contour: valid[i].contour, area: valid[i].area});
-
-      if(grayMat) safeMatDelete(grayMat);
-      grayMat = gray.clone();
-
-      renderHeatmap(); renderContour(gray, contour); renderTopView();
-
-      showToast(`تم كشف ${valid.length} كونتور — الأكبر: ${Math.round(valid[0].area)} px`);
-    } catch(err){
-      console.error('detectContours error', err);
-      showToast('فشل في استخراج الحواف');
-    } finally {
-      safeMatDelete(src); safeMatDelete(blurred); safeMatDelete(edges); safeMatDelete(hierarchy); safeMatDelete(contours); safeMatDelete(kernel);
-    }
-  }
-
-  // ===== Laser-specific detection =====
-  async function detectLaserContours(){
-    if(!cvReady) { showToast('OpenCV غير جاهز'); return; }
-    if(!previewCanvas || previewCanvas.width === 0) { showToast('لا توجد صورة صالحة'); return; }
-
-    let src = null, gray = null, edges = null, hierarchy = null, contours = null;
-    try {
-      src = cv.imread(previewCanvas);
-      gray = new cv.Mat();
-      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-
-      const mode = document.getElementById('laserEdgeMode').value || 'adaptive';
-      const detail = Math.max(3, 2 * Math.floor((parseFloat(document.getElementById('edgeSensitivity').value)||0.33) * 5) + 1);
-
-      if(mode === 'adaptive') {
-        const adaptive = new cv.Mat();
-        cv.adaptiveThreshold(gray, adaptive, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, detail, 2);
-        const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(3,3));
         edges = new cv.Mat();
-        cv.morphologyEx(adaptive, edges, cv.MORPH_CLOSE, kernel);
-        safeMatDelete(adaptive); safeMatDelete(kernel);
-      } else if(mode === 'morphological') {
-        const blurred = new cv.Mat();
-        cv.GaussianBlur(gray, blurred, new cv.Size(3,3), 0);
-        const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(3,3));
-        const dil = new cv.Mat(), ero = new cv.Mat();
-        cv.dilate(blurred, dil, kernel);
-        cv.erode(blurred, ero, kernel);
-        edges = new cv.Mat();
-        cv.subtract(dil, ero, edges);
-        safeMatDelete(blurred); safeMatDelete(kernel); safeMatDelete(dil); safeMatDelete(ero);
-      } else if(mode === 'gradient') {
-        const blurred = new cv.Mat();
-        cv.GaussianBlur(gray, blurred, new cv.Size(5,5), 0);
-        const gx = new cv.Mat(), gy = new cv.Mat(), ax = new cv.Mat(), ay = new cv.Mat();
-        cv.Sobel(blurred, gx, cv.CV_16S, 1,0,3);
-        cv.Sobel(blurred, gy, cv.CV_16S, 0,1,3);
-        cv.convertScaleAbs(gx, ax);
-        cv.convertScaleAbs(gy, ay);
-        edges = new cv.Mat();
-        cv.addWeighted(ax, 0.5, ay, 0.5, 0, edges);
-        safeMatDelete(blurred); safeMatDelete(gx); safeMatDelete(gy); safeMatDelete(ax); safeMatDelete(ay);
-      } else {
-        // default fallback Canny
-        edges = new cv.Mat();
-        cv.Canny(gray, edges, 50, 150);
-      }
 
-      contours = new cv.MatVector();
-      hierarchy = new cv.Mat();
-      cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
-
-      let valid = [];
-      for(let i=0;i<contours.size();i++){
-        const c = contours.get(i);
-        const a = cv.contourArea(c);
-        if(a > (gray.cols * gray.rows) * 0.0005) valid.push({contour: c.clone(), area: a});
-        c.delete();
-      }
-
-      if(valid.length === 0) {
-        showToast('لم يتم العثور على حواف لليزر');
-        safeMatDelete(src); safeMatDelete(edges); safeMatDelete(gray); safeMatDelete(hierarchy); safeMatDelete(contours);
-        return;
-      }
-
-      valid.sort((a,b)=> b.area - a.area);
-      safeMatDelete(contour); additionalContours.forEach(it=> safeMatDelete(it.contour)); additionalContours = [];
-      contour = valid[0].contour;
-      for(let i=1;i<valid.length;i++) additionalContours.push({contour: valid[i].contour, area: valid[i].area});
-
-      if(grayMat) safeMatDelete(grayMat);
-      grayMat = gray.clone();
-
-      renderHeatmap(); renderContour(gray, contour); renderTopView();
-
-      showToast(`تم كشف حواف الليزر — ${valid.length} عناصر`);
-    } catch(err){
-      console.error('detectLaserContours error', err);
-      showToast('فشل كشف حواف الليزر');
-    } finally {
-      safeMatDelete(src); safeMatDelete(edges); safeMatDelete(hierarchy); safeMatDelete(contours);
-    }
-  }
-
-  // ===== Heatmap rendering (colormap) =====
-  function renderHeatmap(){
-    if(!previewCanvas || !grayMat) return;
-    const canvas = document.getElementById('canvasHeatmap');
-    const ctx = canvas.getContext('2d');
-    canvas.width = previewCanvas.width;
-    canvas.height = previewCanvas.height;
-    const img = ctx.createImageData(canvas.width, canvas.height);
-    for(let y=0;y<canvas.height;y++){
-      for(let x=0;x<canvas.width;x++){
-        const g = sampleGrayAt(x,y);
-        const rgb = colormapSample(currentColormap, g);
-        const idx = (y*canvas.width + x)*4;
-        img.data[idx] = rgb[0]; img.data[idx+1] = rgb[1]; img.data[idx+2] = rgb[2]; img.data[idx+3] = 255;
-      }
-    }
-    ctx.putImageData(img, 0, 0);
-  }
-
-  function colormapSample(map, v){
-    // v: 0..255
-    const t = v / 255;
-    if(map === 'gray') return [v, v, v];
-    if(map === 'hot') {
-      const r = Math.round(Math.min(255, 255 * Math.pow(t, 0.8)));
-      const g = Math.round(Math.min(255, 255 * Math.max(0, (t - 0.4) * 1.66)));
-      const b = Math.round(Math.min(255, 255 * Math.max(0, (t - 0.8) * 5)));
-      return [r, g, b];
-    }
-    if(map === 'cool') {
-      const r = Math.round(255 * (1 - t));
-      const g = Math.round(255 * t);
-      const b = Math.round(255 * (0.5 + 0.5 * (1 - t)));
-      return [r, g, b];
-    }
-    // jet-like
-    const r = Math.round(255 * Math.max(0, Math.min(1, 1.5 - Math.abs(4*t - 3))));
-    const g = Math.round(255 * Math.max(0, Math.min(1, 1.5 - Math.abs(4*t - 2))));
-    const b = Math.round(255 * Math.max(0, Math.min(1, 1.5 - Math.abs(4*t - 1))));
-    return [r,g,b];
-  }
-
-  // ===== Contour rendering overlay =====
-  function renderContour(gray, cnt){
-    if(!previewCanvas) return;
-    const cCanvas = document.getElementById('canvasContour');
-    const ctx = cCanvas.getContext('2d');
-    cCanvas.width = previewCanvas.width;
-    cCanvas.height = previewCanvas.height;
-    ctx.clearRect(0,0,cCanvas.width,cCanvas.height);
-    // draw original image as background
-    ctx.globalAlpha = 1.0;
-    ctx.drawImage(previewCanvas, 0, 0);
-    if(!cnt) return;
-    ctx.strokeStyle = 'rgba(0,255,128,0.95)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    try {
-      // cnt has rows points
-      for(let i=0;i<cnt.rows;i++){
-        const x = cnt.intAt(i,0);
-        const y = cnt.intAt(i,1);
-        if(i === 0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-      }
-      ctx.closePath();
-      ctx.stroke();
-    } catch(e) {
-      console.warn('renderContour error', e);
-    }
-  }
-
-  // ===== Top View render (color = colormap, Z mapped from gray) =====
-  function renderTopView(){
-    const tv = document.getElementById('topView');
-    if(!previewCanvas || !grayMat) {
-      // clear
-      const ctx = tv.getContext('2d');
-      ctx.fillStyle = '#0d1722'; ctx.fillRect(0,0,tv.width || tv.clientWidth, tv.height || tv.clientHeight);
-      return;
-    }
-    const ctx = tv.getContext('2d');
-    const w = previewCanvas.width, h = previewCanvas.height;
-    tv.width = w; tv.height = h;
-    const img = ctx.createImageData(w,h);
-    for(let y=0;y<h;y++){
-      for(let x=0;x<w;x++){
-        const g = sampleGrayAt(x,y);
-        const rgb = colormapSample(currentColormap, g);
-        const idx = (y*w + x)*4;
-        img.data[idx]=rgb[0]; img.data[idx+1]=rgb[1]; img.data[idx+2]=rgb[2]; img.data[idx+3]=255;
-      }
-    }
-    ctx.putImageData(img,0,0);
-  }
-
-  // ===== G-code generators =====
-  function generateGcodeRaster(){
-    if(!previewCanvas || !grayMat) { showToast('لا توجد صورة جاهزة'); return ''; }
-    const workWidth = parseFloat(document.getElementById('workWidth').value) || 300;
-    const workHeight = parseFloat(document.getElementById('workHeight').value) || 200;
-    const workDepth = parseFloat(document.getElementById('workDepth').value) || 3.0;
-    const stepOver = parseFloat(document.getElementById('stepOver').value) || 2.0;
-    const scanDir = document.getElementById('scanDir').value || 'x';
-
-    const scaleX = workWidth / previewCanvas.width;
-    const scaleY = workHeight / previewCanvas.height;
-
-    const lines = [];
-    lines.push('; Raster G-code - Generated by CNC AI');
-    lines.push('G21 G90 G17');
-    lines.push('G0 X0 Y0');
-
-    let points = 0;
-    // choose direction
-    if(scanDir === 'x'){
-      for(let y=0; y<previewCanvas.height; y += Math.max(1, Math.round(stepOver / scaleY))){
-        const row = [];
-        for(let x=0; x<previewCanvas.width; x += Math.max(1, Math.round(stepOver / scaleX))){
-          const grayv = sampleGrayAt(x,y);
-          const z = (grayv / 255) * workDepth;
-          const X = (x * scaleX).toFixed(3);
-          const Y = (y * scaleY).toFixed(3);
-          const Z = (-z).toFixed(3);
-          row.push({X,Y,Z});
-          points++;
+        if (mode === 'adaptive') {
+          const adaptive = new cv.Mat();
+          const blockSize = Math.max(3, 2 * Math.floor(detailLevel) + 1);
+          cv.adaptiveThreshold(gray, adaptive, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, blockSize, 2);
+          const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(3, 3));
+          cv.morphologyEx(adaptive, edges, cv.MORPH_CLOSE, kernel);
+          safeMatDelete(adaptive); safeMatDelete(kernel);
+        } else if (mode === 'morphological') {
+          const blurred = new cv.Mat();
+          cv.GaussianBlur(gray, blurred, new cv.Size(3, 3), 0);
+          const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(3, 3));
+          const dilated = new cv.Mat(); const eroded = new cv.Mat();
+          cv.dilate(blurred, dilated, kernel); cv.erode(blurred, eroded, kernel);
+          cv.subtract(dilated, eroded, edges);
+          cv.normalize(edges, edges, 0, 255, cv.NORM_MINMAX);
+          safeMatDelete(blurred); safeMatDelete(kernel); safeMatDelete(dilated); safeMatDelete(eroded);
+        } else if (mode === 'gradient') {
+          const blurred = new cv.Mat(); cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
+          const gradX = new cv.Mat(); const gradY = new cv.Mat(); const absGradX = new cv.Mat(); const absGradY = new cv.Mat();
+          cv.Sobel(blurred, gradX, cv.CV_16S, 1, 0, 3); cv.Sobel(blurred, gradY, cv.CV_16S, 0, 1, 3);
+          cv.convertScaleAbs(gradX, absGradX); cv.convertScaleAbs(gradY, absGradY);
+          cv.addWeighted(absGradX, 0.5, absGradY, 0.5, 0, edges);
+          const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(2, 2));
+          cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel);
+          safeMatDelete(blurred); safeMatDelete(gradX); safeMatDelete(gradY); safeMatDelete(absGradX); safeMatDelete(absGradY); safeMatDelete(kernel);
+        } else {
+          const blurred = new cv.Mat(); cv.GaussianBlur(gray, blurred, new cv.Size(3, 3), 0);
+          cv.Canny(blurred, edges, 50, 150);
+          safeMatDelete(blurred);
         }
-        if(((y / stepOver) | 0) % 2 === 1) row.reverse();
-        row.forEach(p => lines.push(`G1 X${p.X} Y${p.Y} Z${p.Z} F800`));
-      }
-    } else {
-      for(let x=0; x<previewCanvas.width; x += Math.max(1, Math.round(stepOver / scaleX))){
-        const col = [];
-        for(let y=0; y<previewCanvas.height; y += Math.max(1, Math.round(stepOver / scaleY))){
-          const grayv = sampleGrayAt(x,y);
-          const z = (grayv/255) * workDepth;
-          const X = (x * scaleX).toFixed(3);
-          const Y = (y * scaleY).toFixed(3);
-          const Z = (-z).toFixed(3);
-          col.push({X,Y,Z});
-          points++;
+
+        // find contours
+        contours = new cv.MatVector();
+        hierarchy = new cv.Mat();
+        cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+        // choose largest contour by area
+        let maxArea = 0; let idx = -1;
+        for (let i = 0; i < contours.size(); i++) {
+          const c = contours.get(i);
+          const a = cv.contourArea(c);
+          if (a > maxArea) { maxArea = a; idx = i; }
         }
-        if(((x / stepOver) | 0) % 2 === 1) col.reverse();
-        col.forEach(p => lines.push(`G1 X${p.X} Y${p.Y} Z${p.Z} F800`));
+
+        if (idx >= 0) {
+          // set global contour (clone to keep independent)
+          safeMatDelete(contour);
+          contour = contours.get(idx).clone();
+          showToast(`تم كشف كونتور رئيسي (المساحة: ${Math.round(maxArea)})`);
+        } else {
+          showToast('لم يتم العثور على كونتور مناسب');
+          safeMatDelete(src); safeMatDelete(gray); safeMatDelete(edges); safeMatDelete(hierarchy); if (contours) contours.delete();
+          return;
+        }
+
+        // keep grayMat for later sampling
+        safeMatDelete(grayMat);
+        grayMat = gray.clone();
+
+        // render previews if you have these functions (safe no-op if not)
+        try { renderHeatmap(); } catch(e){}
+        try { renderContour(gray, contour); } catch(e){}
+
+        // cleanup
+        safeMatDelete(src); safeMatDelete(edges); safeMatDelete(hierarchy);
+        if (contours) contours.delete();
+
+      } catch (err) {
+        console.error('detectLaserContours error', err);
+        showToast('فشل في تحليل الصورة للّيزر');
+        safeMatDelete(src); safeMatDelete(gray); safeMatDelete(edges); safeMatDelete(hierarchy);
+        if (contours) contours.delete();
       }
     }
 
-    showToast(`تم توليد G-code (Raster) — نقاط تقريبية: ${points}`);
-    return lines.join('\n');
-  }
-
-  function generateGcodeContour(){
-    if(!contour) { showToast('لا يوجد كونتور'); return ''; }
-    const workWidth = parseFloat(document.getElementById('workWidth').value) || 300;
-    const workHeight = parseFloat(document.getElementById('workHeight').value) || 200;
-    const scaleX = workWidth / previewCanvas.width;
-    const scaleY = workHeight / previewCanvas.height;
-
-    const lines = ['; Contour G-code - Generated by CNC AI', 'G21 G90'];
-    // traverse contour points
-    try {
-      for(let i=0;i<contour.rows;i++){
-        const x = contour.intAt(i,0);
-        const y = contour.intAt(i,1);
-        lines.push(`G1 X${(x*scaleX).toFixed(3)} Y${(y*scaleY).toFixed(3)} Z-1.0 F600`);
+    // ======== Path optimizer (kept simple) ========
+    function optimizeLaserPath(points) {
+      if (!points || points.length < 2) return points;
+      const optimized = [];
+      const tolerance = 2; // مم
+      optimized.push(points[0]);
+      for (let i = 1; i < points.length - 1; i++) {
+        const prev = optimized[optimized.length - 1];
+        const current = points[i];
+        const next = points[i + 1];
+        const distToPrev = Math.hypot(current.x - prev.x, current.y - prev.y);
+        const distToNext = Math.hypot(next.x - current.x, next.y - current.y);
+        if (distToPrev > tolerance && distToNext > tolerance) optimized.push(current);
       }
-      showToast('تم توليد G-code من الكونتور');
-    } catch(e) {
-      console.error('generateGcodeContour error', e);
-      showToast('خطأ أثناء توليد G-code من الكونتور');
+      optimized.push(points[points.length - 1]);
+      return optimized;
     }
-    return lines.join('\n');
-  }
 
-  // Laser G-code (simple raster with S parameter)
-  function generateLaserGcode(){
-    if(!previewCanvas || !grayMat) { showToast('لا توجد صورة جاهزة'); return ''; }
-    const workWidth = parseFloat(document.getElementById('laserWorkWidth').value) || parseFloat(document.getElementById('workWidth').value) || 300;
-    const workHeight = parseFloat(document.getElementById('laserWorkHeight').value) || parseFloat(document.getElementById('workHeight').value) || 200;
-    const laserPowerMax = parseInt(document.getElementById('laserPower').value) || 80;
-    const scaleX = workWidth / previewCanvas.width;
-    const scaleY = workHeight / previewCanvas.height;
+    // ======= map power to S (configurable) =======
+    function mapPowerToS(pct, maxS = 1000) {
+      pct = Math.max(0, Math.min(100, pct));
+      return Math.round((pct / 100) * maxS);
+    }
 
-    const lines = [];
-    lines.push('; Laser G-code - Generated by CNC AI');
-    lines.push('G21 G90');
-    lines.push('G0 X0 Y0');
-    lines.push('M3 S0'); // start laser (S will be updated)
+    // ======= Generate Laser G-code (fixed & optimized) =======
+    function generateLaserGcode() {
+      if (!grayMat || !previewCanvas) { showToast('لا توجد صورة جاهزة للمعالجة'); return ''; }
 
-    let lastS = -1;
-    for(let y=0; y<previewCanvas.height; y += 2){
-      const row = [];
-      for(let x=0; x<previewCanvas.width; x += 2){
-        const g = sampleGrayAt(x,y);
-        const p = Math.round((g/255) * laserPowerMax);
-        const X = (x * scaleX).toFixed(3);
-        const Y = (y * scaleY).toFixed(3);
-        row.push({X,Y,p});
-      }
-      if(((y/2) | 0) % 2 === 1) row.reverse();
-      row.forEach(pt => {
-        if(pt.p !== lastS){
-          lines.push(`M3 S${Math.round(pt.p*10)}`); lastS = pt.p;
+      try {
+        showToast('جاري توليد G-code...');
+
+        const laserPower = parseInt(document.getElementById('laserPower').value) || 80; // percent 0..100
+        const laserSpeed = parseInt(document.getElementById('laserSpeed').value) || 2000; // mm/min
+        const dynamicPower = document.getElementById('laserDynamic').checked;
+        const optimizePaths = document.getElementById('laserOptimize').checked;
+        const airAssist = document.getElementById('laserAirAssist').checked;
+        const passes = parseInt(document.getElementById('laserPasses').value) || 1;
+
+        const workWidth = parseFloat(document.getElementById('laserWorkWidth').value) || 300;
+        const workHeight = parseFloat(document.getElementById('laserWorkHeight').value) || 200;
+        const originX = parseFloat(document.getElementById('laserOriginX').value) || 0;
+        const originY = parseFloat(document.getElementById('laserOriginY').value) || 0;
+
+        const lines = [];
+        lines.push('; Laser G-code - Generated by CNC AI (corrected)');
+        lines.push('G21 G90 G17');
+        lines.push('G0 X0 Y0');
+        if (airAssist) lines.push('M8');
+
+        const scaleX = workWidth / previewCanvas.width; // mm per pixel
+        const scaleY = workHeight / previewCanvas.height;
+
+        let totalPoints = 0;
+        let totalLength = 0;
+        const allPoints = [];
+
+        // user/tunable params (in mm)
+        const stepOverMm = 2.0; // mm between raster lines
+        const pointSpacingMm = 2.0; // mm between points along a line
+
+        // convert to pixel steps (integers) to avoid fractional loops
+        const yStepPx = Math.max(1, Math.round(stepOverMm / scaleY));
+        const xStepPx = Math.max(1, Math.round(pointSpacingMm / scaleX));
+
+        // build mask from the detected contour to speed up inside-tests
+        let mask = null;
+        try {
+          if (contour) {
+            mask = new cv.Mat.zeros(grayMat.rows, grayMat.cols, cv.CV_8UC1);
+            const vec = new cv.MatVector();
+            vec.push_back(contour);
+            cv.drawContours(mask, vec, 0, new cv.Scalar(255), cv.FILLED);
+            vec.delete();
+          }
+        } catch (err) {
+          console.warn('failed to build mask from contour', err);
+          safeMatDelete(mask);
+          mask = null;
         }
-        lines.push(`G1 X${pt.X} Y${pt.Y} F2000`);
+
+        for (let pass = 0; pass < passes; pass++) {
+          for (let y = 0; y < previewCanvas.height; y += yStepPx) {
+            let inSegment = false;
+            let segStartX = -1;
+            // accumulate a row's points in pixels and later convert to mm
+            const rowPointsPx = [];
+
+            for (let x = 0; x < previewCanvas.width; x += xStepPx) {
+              // fast inside check using mask if available else assume inside
+              let inside = true;
+              if (mask) {
+                const yi = Math.min(mask.rows - 1, Math.max(0, Math.round(y)));
+                const xi = Math.min(mask.cols - 1, Math.max(0, Math.round(x)));
+                inside = mask.ucharPtr(yi, xi)[0] > 0;
+              }
+
+              if (inside && !inSegment) {
+                inSegment = true; segStartX = x;
+              } else if (!inside && inSegment) {
+                // finalize segment from segStartX .. x-1
+                for (let sx = segStartX; sx < x; sx += xStepPx) {
+                  const grayValue = sampleGrayAt(sx, y);
+                  const powerPct = dynamicPower ? Math.round((grayValue / 255) * laserPower) : laserPower;
+                  const px = (sx * scaleX) + originX;
+                  const py = (y * scaleY) + originY;
+                  rowPointsPx.push({ x: px, y: py, power: powerPct, gray: grayValue });
+                  totalPoints++;
+                }
+                inSegment = false;
+              }
+            }
+
+            // if still inside at line end
+            if (inSegment && segStartX >= 0) {
+              for (let sx = segStartX; sx < previewCanvas.width; sx += xStepPx) {
+                const grayValue = sampleGrayAt(sx, y);
+                const powerPct = dynamicPower ? Math.round((grayValue / 255) * laserPower) : laserPower;
+                const px = (sx * scaleX) + originX;
+                const py = (y * scaleY) + originY;
+                rowPointsPx.push({ x: px, y: py, power: powerPct, gray: grayValue });
+                totalPoints++;
+              }
+            }
+
+            if (rowPointsPx.length > 0) {
+              allPoints.push(...rowPointsPx); // correct use of spread operator
+            }
+          }
+        }
+
+        // cleanup mask
+        safeMatDelete(mask);
+
+        if (allPoints.length === 0) {
+          showToast('لا توجد نقاط ليزر بعد المسح — تحقق من كشف الحواف أو خيارات الدقة.');
+          return '';
+        }
+
+        // optional optimization pass
+        let pathPoints = allPoints;
+        if (optimizePaths) pathPoints = optimizeLaserPath(allPoints);
+
+        // build gcode lines from pathPoints
+        let prev = null;
+        const maxS = 1000; // default; change if your firmware expects different range
+        let currentS = -1;
+
+        for (let i = 0; i < pathPoints.length; i++) {
+          const p = pathPoints[i];
+          if (!prev) {
+            lines.push(`G0 X${p.x.toFixed(3)} Y${p.y.toFixed(3)}`);
+            const sVal = mapPowerToS(p.power, maxS);
+            lines.push(`M3 S${sVal}`);
+            currentS = sVal;
+          } else {
+            const dist = Math.hypot(p.x - prev.x, p.y - prev.y);
+            totalLength += dist;
+            // if power changed, emit new M3 S
+            const sVal = mapPowerToS(p.power, maxS);
+            if (sVal !== currentS) {
+              lines.push(`M3 S${sVal}`);
+              currentS = sVal;
+            }
+            lines.push(`G1 X${p.x.toFixed(3)} Y${p.y.toFixed(3)} F${laserSpeed}`);
+          }
+          prev = p;
+        }
+
+        lines.push('M5'); // turn off laser
+        if (airAssist) lines.push('M9');
+        lines.push('G0 X0 Y0');
+
+        // time estimate (mm/min assumed)
+        const timeMinutes = (totalLength / (laserSpeed || 1));
+        const mins = Math.floor(timeMinutes);
+        const secs = Math.round((timeMinutes - mins) * 60);
+        lines.push(`; Estimated time: ${mins}m ${secs}s`);
+
+        lastGeneratedGcode = lines.join('\n');
+        showToast('تم توليد G-code بنجاح');
+        return lastGeneratedGcode;
+
+      } catch (err) {
+        console.error('generateLaserGcode error', err);
+        showToast('خطأ عند توليد G-code');
+        return '';
+      }
+    }
+
+    // ======== Download helper ========
+    document.getElementById('btnGenerateLaser').addEventListener('click', ()=>{
+      const g = generateLaserGcode();
+      if (g && g.length > 0) {
+        lastGeneratedGcode = g;
+      }
+    });
+
+    document.getElementById('btnDownloadGcode').addEventListener('click', ()=>{
+      if (!lastGeneratedGcode) { showToast('لم يتم توليد G-code بعد'); return; }
+      const blob = new Blob([lastGeneratedGcode], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'laser_gcode.ngc'; document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('btnRedetectLaser').addEventListener('click', ()=> detectLaserContours());
+
+    // keep UI values visible
+    document.getElementById('laserPower').addEventListener('input', e=> document.getElementById('laserPowerValue').textContent = e.target.value + '%');
+    document.getElementById('laserSpeed').addEventListener('input', e=> document.getElementById('laserSpeedValue').textContent = e.target.value);
+    document.getElementById('laserDetail').addEventListener('input', e=> document.getElementById('laserDetailValue').textContent = e.target.value);
+
+    // simple tab switching
+    document.querySelectorAll('.tab-buttons button').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        document.querySelectorAll('.tab-buttons button').forEach(b=>b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+        btn.classList.add('active');
+        const t = btn.getAttribute('data-tab');
+        document.getElementById(t).classList.add('active');
       });
-    }
-
-    lines.push('M5'); lines.push('M30');
-    showToast('تم توليد G-code لليزر');
-    return lines.join('\n');
-  }
-
-  // optimize simple polyline path (reduce collinear / close points)
-  function optimizeLaserPath(points){
-    if(!points || points.length < 3) return points;
-    const tol = 1.0; // mm
-    const out = [points[0]];
-    for(let i=1;i<points.length-1;i++){
-      const a = out[out.length-1];
-      const b = points[i];
-      const c = points[i+1];
-      const area = Math.abs((b.x - a.x)*(c.y - a.y) - (b.y - a.y)*(c.x - a.x));
-      const dist = Math.hypot(b.x - a.x, b.y - a.y);
-      if(area < 0.5 && dist < tol) {
-        // skip
-      } else {
-        out.push(b);
-      }
-    }
-    out.push(points[points.length-1]);
-    return out;
-  }
-
-  // ===== Button behaviours =====
-  document.getElementById('machineCategory').addEventListener('change', (e) => {
-    const isLaser = e.target.value === 'laser';
-    document.getElementById('laserSettings').style.display = isLaser ? 'block' : 'none';
-    document.getElementById('laserPreviewTab').style.display = isLaser ? 'inline-block' : 'none';
-    showToast(isLaser ? 'تم التبديل إلى وضع الليزر' : 'تم التبديل إلى وضع الرواتر');
-    if(previewCanvas && cvReady) detectAppropriate();
-  });
-
-  document.getElementById('btnCenterOrigin').addEventListener('click', ()=>{
-    const w = parseFloat(document.getElementById('workWidth').value) || 300;
-    const h = parseFloat(document.getElementById('workHeight').value) || 200;
-    document.getElementById('originX').value = (w/2).toFixed(1);
-    document.getElementById('originY').value = (h/2).toFixed(1);
-    showToast('تم توسيط نقطة الأصل');
-  });
-
-  document.getElementById('btnLaserCenterOrigin').addEventListener('click', ()=>{
-    const w = parseFloat(document.getElementById('laserWorkWidth').value) || 300;
-    const h = parseFloat(document.getElementById('laserWorkHeight').value) || 200;
-    document.getElementById('laserOriginX').value = (w/2).toFixed(1);
-    document.getElementById('laserOriginY').value = (h/2).toFixed(1);
-    showToast('تم توسيط نقطة أصل الليزر');
-  });
-
-  document.getElementById('btnRedetectLaser').addEventListener('click', ()=> {
-    if(!previewCanvas) { showToast('لا توجد صورة'); return; }
-    if(cvReady) detectLaserContours();
-  });
-
-  document.getElementById('btnLaserPreview').addEventListener('click', ()=> {
-    generateLaserPreview();
-    document.querySelector('.tab-buttons button[data-tab="laserpreview"]').click();
-  });
-
-  document.getElementById('btnLaserEngrave').addEventListener('click', ()=> {
-    const g = generateLaserGcode();
-    document.getElementById('gcodeOut').value = g;
-    lastGeneratedGcode = g;
-    showToast('تم توليد كود الليزر');
-    renderTopViewFromGcode(g);
-    document.querySelector('.tab-buttons button[data-tab="simulation"]').click();
-  });
-
-  document.getElementById('btnGen').addEventListener('click', ()=> {
-    const g = generateGcodeRaster();
-    document.getElementById('gcodeOut').value = g;
-    lastGeneratedGcode = g;
-    document.querySelector('.tab-buttons button[data-tab="simulation"]').click();
-  });
-
-  document.getElementById('btnContour').addEventListener('click', ()=> {
-    const g = generateGcodeContour();
-    document.getElementById('gcodeOut').value = g;
-    lastGeneratedGcode = g;
-    document.querySelector('.tab-buttons button[data-tab="simulation"]').click();
-  });
-
-  document.getElementById('btnDownload').addEventListener('click', ()=>{
-    const txt = document.getElementById('gcodeOut').value;
-    if(!txt) { showToast('لا يوجد G-code للتحميل'); return; }
-    const blob = new Blob([txt], {type:'text/plain'});
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'cnc_ai_output.gcode';
-    document.body.appendChild(a); a.click(); a.remove();
-    showToast('تم تنزيل ملف G-code');
-  });
-
-  // Quick test
-  document.getElementById('btnQuick').addEventListener('click', ()=> {
-    if(!previewCanvas) { showToast('قم برفع صورة أولاً'); return; }
-    showToast('اختبار سريع: كشف الحواف');
-    detectAppropriate();
-  });
-
-  // ===== Laser preview (visual) =====
-  function generateLaserPreview(){
-    if(!previewCanvas || !grayMat) { showToast('لا توجد بيانات'); return; }
-    const canvas = document.getElementById('canvasLaserPreview');
-    const ctx = canvas.getContext('2d');
-    canvas.width = previewCanvas.width; canvas.height = previewCanvas.height;
-    const img = ctx.createImageData(canvas.width, canvas.height);
-    const powerMax = parseInt(document.getElementById('laserPower').value) || 80;
-    const dynamic = true;
-    for(let y=0;y<canvas.height;y++){
-      for(let x=0;x<canvas.width;x++){
-        const gv = sampleGrayAt(x,y);
-        const p = dynamic ? Math.round((gv/255) * powerMax) : powerMax;
-        const idx = (y*canvas.width + x)*4;
-        if(p > 70){ img.data[idx]=255; img.data[idx+1]=0; img.data[idx+2]=0; } 
-        else if(p > 40){ img.data[idx]=255; img.data[idx+1]=255; img.data[idx+2]=0; }
-        else if(p > 10){ img.data[idx]=0; img.data[idx+1]=255; img.data[idx+2]=0; }
-        else { img.data[idx]=30; img.data[idx+1]=30; img.data[idx+2]=30; }
-        img.data[idx+3]=255;
-      }
-    }
-    ctx.putImageData(img, 0, 0);
-    showElement('canvasLaserPreview','laserPreviewPlaceholder');
-    showToast('تم إنشاء معاينة الليزر');
-  }
-
-  // ===== Render TopView from G-code (simple) =====
-  function renderTopViewFromGcode(gcode){
-    // parse X and Y positions and draw path in topView
-    if(!gcode) return;
-    const tv = document.getElementById('topView');
-    const ctx = tv.getContext('2d');
-    const w = tv.width || tv.clientWidth;
-    const h = tv.height || tv.clientHeight;
-    ctx.fillStyle = '#0d1722'; ctx.fillRect(0,0,w,h);
-    const lines = gcode.split('\n');
-    const pts = [];
-    const xs = [], ys = [];
-    lines.forEach(l => {
-      const m = l.match(/X([0-9\.\-]+)\s*Y([0-9\.\-]+)/i);
-      if(m){
-        const x = parseFloat(m[1]), y = parseFloat(m[2]);
-        pts.push({x,y}); xs.push(x); ys.push(y);
-      }
-    });
-    if(pts.length < 2) return;
-    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
-    const pad = 10;
-    const scaleX = (w - 2*pad) / (maxX - minX || 1);
-    const scaleY = (h - 2*pad) / (maxY - minY || 1);
-    ctx.strokeStyle = '#00ff99'; ctx.lineWidth = 1.6; ctx.beginPath();
-    pts.forEach((p,i)=>{
-      const sx = pad + (p.x - minX) * scaleX;
-      const sy = pad + (p.y - minY) * scaleY;
-      if(i===0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
-    });
-    ctx.stroke();
-  }
-
-  // ===== Simulation (three.js simple) =====
-  let sim = { scene:null, camera:null, renderer:null, controls:null, container:null, line:null };
-  function initSimulation(){
-    const container = document.getElementById('threeContainer');
-    container.innerHTML = '';
-    sim.container = container;
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 1, 10000);
-    camera.position.set(0, 300, 500);
-    const renderer = new THREE.WebGLRenderer({ antialias:true });
-    renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setClearColor(0x081224);
-    container.appendChild(renderer.domElement);
-
-    const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(0, 1, 1);
-    scene.add(light);
-
-    const plane = new THREE.Mesh(new THREE.PlaneGeometry(400, 300), new THREE.MeshStandardMaterial({ color: 0x8b5a2b }));
-    plane.rotation.x = -Math.PI/2; plane.position.y = 0;
-    scene.add(plane);
-
-    // parse lastGeneratedGcode
-    const points = [];
-    (lastGeneratedGcode||'').split('\n').forEach(l => {
-      const m = l.match(/X([0-9\.\-]+)\s*Y([0-9\.\-]+)/i);
-      if(m){
-        const x = parseFloat(m[1]) - (parseFloat(document.getElementById('workWidth').value||300)/2);
-        const y = parseFloat(m[2]) - (parseFloat(document.getElementById('workHeight').value||200)/2);
-        points.push(new THREE.Vector3(x, 1, y));
-      }
     });
 
-    if(points.length > 1){
-      const geometry = new THREE.BufferGeometry().setFromPoints(points);
-      const material = new THREE.LineBasicMaterial({ color: 0x00ff99 });
-      const line = new THREE.Line(geometry, material);
-      scene.add(line);
-      sim.line = line;
-    }
+    // keep a minimal renderHeatmap/renderContour to avoid exceptions if referenced
+    function renderHeatmap() { try { const canvas = document.getElementById('canvasHeatmap'); const ctx = canvas.getContext('2d'); canvas.width = grayMat.cols; canvas.height = grayMat.rows; const img = ctx.createImageData(canvas.width, canvas.height); const d = img.data; for (let i=0;i<grayMat.data.length;i++){ const v = grayMat.data[i]; d[i*4]=v; d[i*4+1]=v; d[i*4+2]=v; d[i*4+3]=255; } ctx.putImageData(img,0,0); document.getElementById('canvasHeatmap').style.display='block'; } catch(e){} }
+    function renderContour(g, c) { try { const canvas = document.getElementById('canvasContour'); const ctx = canvas.getContext('2d'); canvas.width = g.cols; canvas.height = g.rows; ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(previewCanvas,0,0); if (!c) return; ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 1.5; ctx.beginPath(); const pts = c.data32S || null; // fallback: we will draw using findNonZero for visibility
+      try { const temp = new cv.Mat(); cv.drawContours(temp, (()=>{ const mv = new cv.MatVector(); mv.push_back(c); return mv; })(), 0, new cv.Scalar(255,0,0,255), 1); temp.delete(); } catch(e){} } catch(e){} }
 
-    const controls = new THREE.OrbitControls(camera, renderer.domElement);
-    sim.scene = scene; sim.camera = camera; sim.renderer = renderer; sim.controls = controls;
-
-    function animate(){
-      requestAnimationFrame(animate);
-      controls.update();
-      renderer.render(scene, camera);
-    }
-    animate();
-  }
-
-  // ===== Utility: detectAppropriate =====
-  function detectAppropriate(){
-    const isLaser = document.getElementById('machineCategory').value === 'laser';
-    if(isLaser) detectLaserContours(); else detectContours();
-  }
-
-  // ===== Expose for debugging =====
-  window.detectContours = detectContours;
-  window.detectLaserContours = detectLaserContours;
-  window.generateGcodeRaster = generateGcodeRaster;
-  window.generateLaserGcode = generateLaserGcode;
-
-  // initial hide canvases
-  document.getElementById('canvasOriginal').style.display = 'none';
-  document.getElementById('canvasHeatmap').style.display = 'none';
-  document.getElementById('canvasContour').style.display = 'none';
-  document.getElementById('canvasLaserPreview').style.display = 'none';
-
-  </script>
-</body>
+  </script></body>
 </html>
