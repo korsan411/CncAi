@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CncAi — index (5) — مصحح</title>
+  <style>
+    :root{--bg:#f4f6f8;--card:#fff;--accent:#0b74de}
+    body{font-family: Arial, Helvetica, sans-serif;margin:0;padding:16px;background:var(--bg);color:#222}
+    header{display:flex;gap:12px;align-items:center;justify-content:space-between}
+    h1{margin:0;font-size:18px}
+    .container{display:grid;grid-template-columns:380px 1fr;gap:12px;margin-top:12px}
+    .panel{background:var(--card);padding:12px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.06)}
+    label{display:block;margin:8px 0 4px;font-size:13px}
+    input[type=file]{width:100%}
+    canvas{background:#111;border-radius:6px;display:block;max-width:100%}
+    textarea{width:100%;height:180px;padding:8px;border-radius:6px;border:1px solid #ddd;resize:vertical}
+    .row{display:flex;gap:8px}
+    button{padding:8px 12px;border-radius:6px;border:0;background:var(--accent);color:white;cursor:pointer}
+    .muted{font-size:12px;color:#666}
+    .small{font-size:12px}
+    .controls{display:flex;flex-direction:column;gap:8px}
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>CncAi — نسخة مصحّحة (index (5))</h1>
+      <div class="muted small">تم إصلاح دوال كشف الحواف وتوليد G-code لليزر — X & Y من حدود الحواف</div>
+    </div>
+    <div class="muted small">حافظت على أساسيات الواجهة</div>
+  </header>
+
+  <div class="container">
+    <div class="panel">
+      <div class="controls">
+        <label>رفع صورة</label>
+        <input id="imgFile" type="file" accept="image/*" />
+
+        <label>إعدادات كشف الحواف</label>
+        <label class="small">Canny Threshold: <input id="cannyThresh" type="range" min="10" max="300" value="80"></label>
+
+        <label>إعدادات التوليد (Raster)</label>
+        <label class="small">Step Over (mm): <input id="stepOver" type="number" value="2" min="0.1" step="0.1"></label>
+        <label class="small">Point Spacing (mm): <input id="pointSpacing" type="number" value="1" min="0.1" step="0.1"></label>
+
+        <label>سرعة الليزر (mm/min): <input id="laserSpeed" type="number" value="2000"></label>
+        <label>Max S (firmware range): <input id="maxS" type="number" value="1000"></label>
+
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <button id="detectBtn">كشف الحواف</button>
+          <button id="gcodeBtn">توليد G-code</button>
+        </div>
+
+        <div class="muted small">مخرجات وسجل</div>
+        <textarea id="log" readonly></textarea>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div class="muted small">معاينة</div>
+        <div class="muted small">X & Y مأخوذة من حدود الحواف (Bounding Box)</div>
+      </div>
+      <canvas id="preview" width="1024" height="768"></canvas>
+    </div>
+  </div>
+
+  <!-- OpenCV.js (CDN) -->
+  <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady()" ></script>
+
+  <script>
+    // ==== عناصر الواجهة ====
+    const imgFile = document.getElementById('imgFile');
+    const detectBtn = document.getElementById('detectBtn');
+    const gcodeBtn = document.getElementById('gcodeBtn');
+    const preview = document.getElementById('preview');
+    const ctx = preview.getContext('2d');
+    const logEl = document.getElementById('log');
+
+    // حالة الصورة والماتركس
+    let originalImage = new Image();
+    let imgMat = null; // mat من OpenCV (RGBA)
+    let contoursData = { contours: null, hierarchy: null, mask: null, boundingBox: null };
+
+    function appendLog(txt){
+      const t = new Date().toLocaleTimeString();
+      logEl.value = `${t} | ${txt}\n` + logEl.value;
+    }
+
+    function onOpenCvReady(){
+      appendLog('OpenCV.js جاهز');
+    }
+
+    // ==== تحميل الصورة إلى canvas و imgMat ====
+    imgFile.addEventListener('change', (e) => {
+      const f = e.target.files[0];
+      if(!f) return;
+      const url = URL.createObjectURL(f);
+      originalImage.onload = () => {
+        // ضبط حجم الكانڤاس ليتناسب مع الصورة داخل حد أقصى ليبقى العرض مناسبًا
+        const maxW = 1400, maxH = 1000;
+        let w = originalImage.width, h = originalImage.height;
+        const ratio = Math.min(maxW / w, maxH / h, 1);
+        preview.width = Math.round(w * ratio);
+        preview.height = Math.round(h * ratio);
+        ctx.clearRect(0,0,preview.width, preview.height);
+        ctx.drawImage(originalImage, 0, 0, preview.width, preview.height);
+
+        // تحرير أي Mats سابقة
+        try{ if(imgMat) imgMat.delete(); } catch(e){}
+        // نقرأ الصورة المعروضة على الكانڤاس إلى Mat (RGBA)
+        imgMat = cv.imread(preview);
+        appendLog('تم تحميل الصورة إلى canvas (Mat جاهزة)');
+        // مسح أي نتائج سابقة
+        clearContoursData();
+      };
+      originalImage.src = url;
+    });
+
+    function clearContoursData(){
+      try{ if(contoursData.mask) contoursData.mask.delete(); }catch(e){}
+      try{ if(contoursData.contours) contoursData.contours.delete(); }catch(e){}
+      try{ if(contoursData.hierarchy) contoursData.hierarchy.delete(); }catch(e){}
+      contoursData = { contours: null, hierarchy: null, mask: null, boundingBox: null };
+    }
+
+    // ==== زر كشف الحواف ====
+    detectBtn.addEventListener('click', () => {
+      if(!imgMat){ appendLog('لا توجد صورة محمّلة'); return; }
+      detectLaserContours();
+    });
+
+    // ==== زر توليد G-code ====
+    gcodeBtn.addEventListener('click', () => {
+      if(!contoursData || !contoursData.mask){ appendLog('لم تُكشف أي حواف بعد'); return; }
+      const gcode = generateLaserGcode(contoursData);
+      if(gcode && gcode.length>0){
+        appendLog('تم توليد G-code — طول الأسطر: ' + gcode.split('\\n').length);
+        // نضع G-code أعلى السجل لتسهيل نسخه
+        logEl.value = gcode + "\\n\\n" + logEl.value;
+      } else {
+        appendLog('لم يتم توليد أي G-code (لا نقاط)');
+      }
+    });
+
+    // ================== كشف الحواف (مصحح) ==================
+    function detectLaserContours(){
+      appendLog('بدء كشف الحواف...');
+      // نعمل clone للـ imgMat كي لا نغيّر الأصل
+      let src = imgMat.clone();
+      let gray = new cv.Mat();
+      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
+
+      // تهيئة Canny
+      const t = parseInt(document.getElementById('cannyThresh').value, 10) || 80;
+      let edges = new cv.Mat();
+      cv.Canny(gray, edges, Math.max(1, t*0.5), t);
+
+      // تطبيق إغلاق خفيف لإزالة الشوائب
+      let kernel = cv.Mat.ones(3,3,cv.CV_8U);
+      cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel);
+      kernel.delete();
+
+      // إيجاد الكونتورات (نأخذ RETR_EXTERNAL للحصول على الحواف الخارجية أساساً)
+      let contours = new cv.MatVector();
+      let hierarchy = new cv.Mat();
+      cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+      appendLog('تم العثور على كونتورات: ' + contours.size());
+
+      // نرسم قناع (mask) مملوء من الكونتورات الكبيرة فقط، ونحسب bounding box عام
+      const minArea = 30; // يمكنك تعديلها حسب الحاجة
+      let mask = new cv.Mat.zeros(edges.rows, edges.cols, cv.CV_8UC1);
+      let bb = { x: Infinity, y: Infinity, x2: 0, y2: 0 };
+
+      for(let i=0;i<contours.size();i++){
+        let cnt = contours.get(i);
+        const area = cv.contourArea(cnt);
+        if(area < minArea){ cnt.delete(); continue; }
+        // تقريب لتخفيض عدد النقاط
+        let approx = new cv.Mat();
+        cv.approxPolyDP(cnt, approx, 1, true);
+
+        // رسم الكونتور المملوء على الماسك
+        let tmpVec = new cv.MatVector(); tmpVec.push_back(approx);
+        cv.drawContours(mask, tmpVec, 0, new cv.Scalar(255), cv.FILLED);
+
+        // حساب bounding rect
+        const r = cv.boundingRect(approx);
+        bb.x = Math.min(bb.x, r.x);
+        bb.y = Math.min(bb.y, r.y);
+        bb.x2 = Math.max(bb.x2, r.x + r.width);
+        bb.y2 = Math.max(bb.y2, r.y + r.height);
+
+        tmpVec.delete();
+        approx.delete();
+        cnt.delete();
+      }
+
+      // حالة عدم العثور
+      if(bb.x === Infinity || bb.x2 === 0){
+        appendLog('لم يتم العثور على حواف كبيرة كافية.');
+        // تنظيف
+        edges.delete(); gray.delete(); src.delete();
+        contours.delete(); hierarchy.delete(); mask.delete();
+        return;
+      }
+
+      // حفظ النتائج عالمياً (نحتفظ بـ contours/hierarchy كـ null لتفادي تسريبات غير لازمة،
+      // لكن نحفظ الماسك و bounding box)
+      try{ if(contoursData.mask) contoursData.mask.delete(); }catch(e){}
+      contoursData.mask = mask;
+      contoursData.boundingBox = { x: bb.x, y: bb.y, width: bb.x2 - bb.x, height: bb.y2 - bb.y };
+      // نحرر contours/hierarchy الأصلية لأننا رسمنا الماسك بالفعل
+      contours.delete();
+      hierarchy.delete();
+
+      // عرض الماسك على الكانڤاس (للمعاينة) - نقوم بتوسيط الرسم ليتناسب مع preview
+      showMaskOnCanvas(mask);
+
+      // تنظيف مؤقت
+      edges.delete(); gray.delete(); src.delete();
+
+      appendLog('انتهى كشف الحواف. Bounding box: x=' + contoursData.boundingBox.x + ', y=' + contoursData.boundingBox.y + ', w=' + contoursData.boundingBox.width + ', h=' + contoursData.boundingBox.height);
+    }
+
+    // تحويل ماسك إلى صورة ورسمها على الكانڤاس بنفس قياس preview
+    function showMaskOnCanvas(mask){
+      const w = mask.cols, h = mask.rows;
+      const imgData = ctx.createImageData(w, h);
+      for(let y=0;y<h;y++){
+        for(let x=0;x<w;x++){
+          const v = mask.ucharPtr(y,x)[0];
+          const idx = (y*w + x)*4;
+          imgData.data[idx] = v;
+          imgData.data[idx+1] = v;
+          imgData.data[idx+2] = v;
+          imgData.data[idx+3] = 255;
+        }
+      }
+      // نستخدم canvas مؤقت لعمل drawImage مع الحجم المناسب
+      const tmp = document.createElement('canvas'); tmp.width = w; tmp.height = h;
+      tmp.getContext('2d').putImageData(imgData, 0, 0);
+
+      ctx.clearRect(0,0,preview.width, preview.height);
+      ctx.drawImage(tmp, 0, 0, preview.width, preview.height);
+    }
+
+    // ================== توليد G-code (مصحح) ==================
+    function generateLaserGcode({ mask, boundingBox }){
+      appendLog('بدء توليد G-code (Raster داخل bounding box)...');
+
+      // إعدادات
+      const stepOverMm = parseFloat(document.getElementById('stepOver').value) || 2.0;
+      const pointSpacingMm = parseFloat(document.getElementById('pointSpacing').value) || 1.0;
+      const laserSpeed = parseFloat(document.getElementById('laserSpeed').value) || 2000;
+      const maxS = parseFloat(document.getElementById('maxS').value) || 1000;
+
+      // حساب مقياس mm <-> pixel
+      // ملاحظة: mask.cols/rows تمثل أبعاد الصورة الأصلية (المسح عليها)
+      // preview.width/height تمثل كيفية عرضها؛ نحتاج العلاقة pxPerMm (نستخدم افتراض pxPerMm = mask.cols / preview.width كنسبة تحجيم)
+      const pxPerDisplayX = mask.cols / preview.width;
+      const pxPerDisplayY = mask.rows / preview.height;
+
+      // نحسب عدد بكسلات لكل mm مستخدماً pxPerDisplayX (افتراض أن المستخدم يريد mm على الصورة المعروضة)
+      const xStepPx = Math.max(1, Math.round(pointSpacingMm * pxPerDisplayX));
+      const yStepPx = Math.max(1, Math.round(stepOverMm * pxPerDisplayY));
+
+      appendLog('الخطوات المحسوبة (بكسل) — xStep:' + xStepPx + ', yStep:' + yStepPx);
+
+      // حدود المسح في إحداثيات الماسك (pixels)
+      const sx = Math.max(0, Math.floor(boundingBox.x));
+      const sy = Math.max(0, Math.floor(boundingBox.y));
+      const ex = Math.min(mask.cols, Math.ceil(boundingBox.x + boundingBox.width));
+      const ey = Math.min(mask.rows, Math.ceil(boundingBox.y + boundingBox.height));
+
+      // جمع نقاط المسح raster داخل الماسك
+      let allPoints = [];
+      for(let y = sy; y < ey; y += yStepPx){
+        let rowPoints = [];
+        for(let x = sx; x < ex; x += xStepPx){
+          // فحص سريع للماسك — داخل/خارج
+          try{
+            const v = mask.ucharPtr(y, x)[0];
+            if(v > 0){
+              rowPoints.push({x: x, y: y});
+            }
+          } catch(e){
+            // تجاهل خارج المدى
+          }
+        }
+        // نُدرج نقاط الصف — استخدم spread لتصحيح الخطأ السابق
+        if(rowPoints.length) allPoints.push(...rowPoints);
+      }
+
+      if(allPoints.length === 0){
+        appendLog('لم تُوجد نقاط داخل حدود الحواف للمسح.');
+        return '';
+      }
+
+      // تحويل بكسل -> ملم: نفترض ratio ثابت. المستخدم يمكنه تعديل هذا السلوك إذا أراد دقة حقيقية.
+      // mmPerPx = 1 / (pxPerDisplayX) إذا اعتبرنا pointSpacingMm معكوساً؛ هنا نطلب أن 1 بكسل على الماسك = (1/pxPerDisplayX) ملم على نظام العرض.
+      const mmPerPxX = 1 / pxPerDisplayX;
+      const mmPerPxY = 1 / pxPerDisplayY;
+
+      // خريطة طاقة بسيطة (يمكن استبدالها بتحويل من قيمة gray إذا أردت)
+      function mapPowerToS(norm){ // norm 0..1 -> S 0..maxS
+        const s = Math.round(Math.min(1, Math.max(0, norm)) * maxS);
+        return s;
+      }
+
+      // توليد G-code الأساسي
+      let g = [];
+      g.push('; Generated by CncAi - corrected');
+      g.push('G21 ; mm');
+      g.push('G90 ; absolute positioning');
+      g.push('F' + laserSpeed);
+
+      // نبدأ من أول نقطة
+      let prev = null;
+      // سنستخدم ترتيب بسيط: نفذ كل النقاط المتوفرة بالتسلسل (يمكن تحسين المسار لاحقًا)
+      for(let i=0;i<allPoints.length;i++){
+        const p = allPoints[i];
+        const gx = (p.x * mmPerPxX).toFixed(3);
+        const gy = (p.y * mmPerPxY).toFixed(3);
+        if(!prev){
+          g.push('G0 X' + gx + ' Y' + gy); // تحريك سريع لبدء المسار
+          // تشغيل الليزر — هنا نضع S كقيمة كاملة (يمكن تعديله لاحقاً لاستخدام gray)
+          g.push('M3 S' + mapPowerToS(1.0));
+        } else {
+          // تحرك بتغذية محددة
+          g.push('G1 X' + gx + ' Y' + gy + ' F' + laserSpeed);
+        }
+        prev = p;
+      }
+
+      g.push('M5'); // إيقاف الماكينة
+      g.push('G0 X0 Y0'); // إرجاع للمصدر
+      appendLog('تم توليد G-code — نقاط: ' + allPoints.length);
+
+      return g.join('\\n');
+    }
+
+    // ==== تنظيف موارد OpenCV عند مغادرة الصفحة ====
+    window.addEventListener('beforeunload', () => {
+      try{ if(imgMat) imgMat.delete(); }catch(e){}
+      try{ if(contoursData.mask) contoursData.mask.delete(); }catch(e){}
+    });
+  </script>
+</body>
+</html>
