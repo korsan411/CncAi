@@ -250,8 +250,10 @@
         <div id="original" class="tab-content active">
           <div class="canvas-placeholder" id="originalPlaceholder">الصورة الأصلية ستظهر هنا</div>
           <canvas id="canvasOriginal" style="display:none;"></canvas>
+<div id="dimensionLabel" class="muted small" style="text-align:center; margin-top:8px;">العرض × الارتفاع: -</div>
+
         </div>
-<div id="dimensionLabel" class="muted small">العرض × الارتفاع: -</div>
+
         <div id="heatmap" class="tab-content">
           <div class="canvas-placeholder" id="heatmapPlaceholder">Heatmap ستظهر هنا</div>
           <canvas id="canvasHeatmap" style="display:none;"></canvas>
@@ -726,18 +728,11 @@
       try { console.log(msg); } catch (e) {}
     }
 
-    function updateDimensionDisplay() {
-      const widthCm = parseFloat(document.getElementById('workWidth').value) || 0;
-      const heightCm = parseFloat(document.getElementById('workHeight').value) || 0;
-      document.getElementById('widthMm').textContent = widthCm.toFixed(1) + ' مم';
-      document.getElementById('heightMm').textContent = heightCm.toFixed(1) + ' مم';
-      
-      // Update laser dimensions too
-      const laserWidthCm = parseFloat(document.getElementById('laserWorkWidth').value) || 0;
-      const laserHeightCm = parseFloat(document.getElementById('laserWorkHeight').value) || 0;
-      document.getElementById('laserWidthMm').textContent = laserWidthCm.toFixed(1) + ' مم';
-      document.getElementById('laserHeightMm').textContent = laserHeightCm.toFixed(1) + ' مم';
-    }
+    function updateDimensionDisplay(width, height) {
+  const el = document.getElementById('dimensionLabel');
+  if (!el) return;
+  el.textContent = `العرض: ${width}px × الارتفاع: ${height}px`;
+}
 
     function showElement(elementId, hidePlaceholderId) {
       const element = document.getElementById(elementId);
@@ -964,7 +959,7 @@
 
       try {
         showToast("جاري توليد كود الليزر...");
-
+        
         const laserPower = parseInt(document.getElementById('laserPower').value) || 80;
         const laserSpeed = parseInt(document.getElementById('laserSpeed').value) || 2000;
         const laserMode = document.getElementById('laserMode').value;
@@ -983,131 +978,150 @@
         lines.push('G21 G90 G17');
         lines.push('G0 X0 Y0');
         if (airAssist) lines.push('M8'); // تشغيل Air Assist
-
+        
         const scaleX = workWidth / previewCanvas.width;
         const scaleY = workHeight / previewCanvas.height;
-
+        
         let totalPoints = 0;
         let totalLength = 0;
-        let allPoints = [];
+        const allPoints = [];
 
-        // اقرأ القناع وحدود الحواف من المتغيرات العالمية إذا وُجدت
-        const mask = (window.laserMask && !window.laserMask.isDeleted && window.laserMask.rows) ? window.laserMask : null;
-        const bbox = window.laserBoundingBox || { x:0, y:0, width: previewCanvas.width, height: previewCanvas.height };
-
-        // حساب خطوات المسح بالبيكسل لتجنّب زيادات عشريّة في الحلقة
-        const stepOver = parseFloat(document.getElementById('stepOver')?.value) || 2.0; // mm
-        const pointSpacing = parseFloat(document.getElementById('pointSpacing')?.value) || 2.0; // mm
-
-        // تحويل mm -> pixels في إحداثيات الماسك/preview
-        const pxPerMmX = previewCanvas.width / workWidth; // pixels per mm
-        const pxPerMmY = previewCanvas.height / workHeight;
-        const yStepPx = Math.max(1, Math.round(stepOver * pxPerMmY));
-        const xStepPx = Math.max(1, Math.round(pointSpacing * pxPerMmX));
-
-        // حدود داخل الماسك (نقفل ضمن صفوف و أعمدة الماسك)
-        const sx = Math.max(0, Math.floor(bbox.x));
-        const sy = Math.max(0, Math.floor(bbox.y));
-        const ex = Math.min(previewCanvas.width, Math.ceil(bbox.x + bbox.width));
-        const ey = Math.min(previewCanvas.height, Math.ceil(bbox.y + bbox.height));
-
-        // اجمع نقاط Raster داخل القناع أو داخل الـ contour القديم
-        for (let y = sy; y < ey; y += yStepPx) {
-          let rowPoints = [];
-          for (let x = sx; x < ex; x += xStepPx) {
-            let inside = true;
-            // إذا وُجد القناع استخدم فحص سريع للبيكسل
-            if (mask) {
-              try {
-                const my = Math.round((y * mask.rows) / previewCanvas.height);
-                const mx = Math.round((x * mask.cols) / previewCanvas.width);
-                const v = mask.ucharPtr(my, mx)[0];
-                inside = v > 0;
-              } catch(e) { inside = false; }
-            } else if (typeof contour !== 'undefined' && contour) {
-              // استخدام pointPolygonTest كبديل إن لم يتوفر قناع
-              try {
-                const pt = new cv.Point(Math.round(x), Math.round(y));
-                inside = contour ? cv.pointPolygonTest(contour, pt, false) >= 0 : true;
-              } catch(e) { inside = false; }
-            }
-
-            if (inside) {
-              // اقرأ قيمة السطوع إن وُجد grayMat
-              const grayVal = (typeof sampleGrayAt === 'function') ? sampleGrayAt(Math.round(x), Math.round(y)) : 255;
-              let power = laserPower;
-              if (dynamicPower) {
-                power = Math.round((grayVal / 255) * laserPower);
+        // نمط المسح المتعرج
+        const stepOver = 2.0; // مم بين الخطوط
+        const pointSpacing = 2.0; // مم بين النقاط
+        
+        for (let pass = 0; pass < passes; pass++) {
+          for (let y = 0; y < previewCanvas.height; y += stepOver / scaleY) {
+            const rowPoints = [];
+            let inImage = false;
+            let segmentStart = -1;
+            
+            for (let x = 0; x < previewCanvas.width; x += pointSpacing / scaleX) {
+              const pt = new cv.Point(x, y);
+              const inside = contour ? cv.pointPolygonTest(contour, pt, false) >= 0 : true;
+              
+              if (inside && !inImage) {
+                segmentStart = x;
+                inImage = true;
+              } else if (!inside && inImage) {
+                // إنشاء قطعة المسار
+                for (let sx = segmentStart; sx < x; sx += pointSpacing / scaleX) {
+                  const grayValue = sampleGrayAt(sx, y);
+                  let power;
+                  
+                  if (dynamicPower) {
+                    power = Math.round((grayValue / 255) * laserPower);
+                  } else {
+                    power = laserPower;
+                  }
+                  
+                  const scaledX = (sx * scaleX) + originX;
+                  const scaledY = (y * scaleY) + originY;
+                  
+                  rowPoints.push({ 
+                    x: scaledX, 
+                    y: scaledY, 
+                    power: power,
+                    grayValue: grayValue
+                  });
+                  totalPoints++;
+                }
+                inImage = false;
               }
-              // نحفظ بالإحداثيات المكانية (mm)
-              const gx = (x * scaleX) + originX;
-              const gy = (y * scaleY) + originY;
-              rowPoints.push({ x: gx, y: gy, power });
+            }
+            
+            // إذا كنا لا نزال داخل الصورة في النهاية
+            if (inImage) {
+              for (let sx = segmentStart; sx < previewCanvas.width; sx += pointSpacing / scaleX) {
+                const grayValue = sampleGrayAt(sx, y);
+                let power;
+                
+                if (dynamicPower) {
+                  power = Math.round((grayValue / 255) * laserPower);
+                } else {
+                  power = laserPower;
+                }
+                
+                const scaledX = (sx * scaleX) + originX;
+                const scaledY = (y * scaleY) + originY;
+                
+                rowPoints.push({ 
+                  x: scaledX, 
+                  y: scaledY, 
+                  power: power,
+                  grayValue: grayValue
+                });
+                totalPoints++;
+              }
+            }
+            
+            if (rowPoints.length > 0) {
+              // اتجاه متعرج
+              const reverse = (y / (stepOver / scaleY)) % 2 !== 0;
+              if (reverse) rowPoints.reverse();
+              
+              allPoints.push(...rowPoints);
             }
           }
-          if (rowPoints.length > 0) {
-            // اتجاه متعرج لتحسين التوليد
-            const rowIndex = Math.floor((y - sy) / yStepPx);
-            if (rowIndex % 2 === 1) rowPoints.reverse();
-            allPoints.push(...rowPoints);
-          }
         }
 
-        if (allPoints.length === 0) {
-          showToast('لا توجد نقاط داخل حدود الحواف للمسح');
-          return '';
-        }
-
-        // تحسين المسارات إذا رُغِب
+        // تحسين المسارات إذا طلب المستخدم
         let finalPoints = allPoints;
         if (optimizePaths && allPoints.length > 100) {
           finalPoints = optimizeLaserPath(allPoints);
           showToast(`تم تحسين المسار من ${allPoints.length} إلى ${finalPoints.length} نقطة`);
         }
 
-        // توليد الـ G-code
-        lines.push('G0 X' + finalPoints[0].x.toFixed(3) + ' Y' + finalPoints[0].y.toFixed(3));
-        // دالة تحويل الطاقة إلى S (نطاق 0..1000 أو كما يضبط المستخدم)
-        const maxS = parseInt(document.getElementById('maxS')?.value) || 1000;
-        function mapPowerToS(pct) { return Math.round(Math.max(0, Math.min(100, pct)) / 100 * maxS); }
+        optimizedPath = finalPoints;
 
-        lines.push('M3 S' + mapPowerToS(finalPoints[0].power));
-        lines.push('G1 F' + Math.round(laserSpeed));
-
+        // توليد G-code
+        lines.push('G0 X' + finalPoints[0].x.toFixed(2) + ' Y' + finalPoints[0].y.toFixed(2));
+        lines.push('M3 S' + Math.round(finalPoints[0].power * 10));
+        lines.push('G1 F' + laserSpeed.toFixed(0));
+        
         let lastPower = finalPoints[0].power;
+        
         for (let i = 0; i < finalPoints.length; i++) {
-          const pt = finalPoints[i];
-          if (Math.abs(pt.power - lastPower) >= 2) {
-            lines.push('M3 S' + mapPowerToS(pt.power));
-            lastPower = pt.power;
+          const point = finalPoints[i];
+          
+          // تحديث قوة الليزر فقط إذا تغيرت بشكل كبير
+          if (Math.abs(point.power - lastPower) > 5) {
+            lines.push('M3 S' + Math.round(point.power * 10));
+            lastPower = point.power;
           }
-          lines.push('G1 X' + pt.x.toFixed(3) + ' Y' + pt.y.toFixed(3));
+          
+          lines.push('G1 X' + point.x.toFixed(2) + ' Y' + point.y.toFixed(2));
+          
+          if (i > 0) {
+            const prev = finalPoints[i - 1];
+            totalLength += Math.hypot(point.x - prev.x, point.y - prev.y);
+          }
         }
 
-        lines.push('M5');
-        lines.push('G0 X0 Y0');
+        lines.push('M5'); // إيقاف الليزر
         if (airAssist) lines.push('M9'); // إيقاف Air Assist
+        lines.push('M30');
 
-        // حساب وقت تقريبي
-        let totalLen = 0;
-        for (let i=1;i<finalPoints.length;i++){
-          const dx = finalPoints[i].x - finalPoints[i-1].x;
-          const dy = finalPoints[i].y - finalPoints[i-1].y;
-          totalLen += Math.sqrt(dx*dx + dy*dy);
-        }
-        const minutes = totalLen / (laserSpeed / 60);
-        const hours = Math.floor(minutes / 60);
-        const mins = Math.floor(minutes % 60);
-        const secs = Math.round((minutes - Math.floor(minutes)) * 60);
-        document.getElementById('estTime').innerHTML = `⏱️ ${hours}h ${mins}m ${secs}s | ${finalPoints.length} pts`;
+        // حساب الوقت التقديري
+        const timeMinutes = totalLength / laserSpeed;
+        const hours = Math.floor(timeMinutes / 60);
+        const minutes = Math.floor(timeMinutes % 60);
+        const seconds = Math.round((timeMinutes * 60) % 60);
+        
+        let timeText = "⏱️ الوقت التقديري: ";
+        if (hours > 0) timeText += hours + " ساعة ";
+        if (minutes > 0) timeText += minutes + " دقيقة ";
+        timeText += seconds + " ثانية";
+        
+        document.getElementById('estTime').innerHTML = timeText + ` | ${finalPoints.length} نقطة`;
 
-        showToast(`تم توليد كود الليزر (${finalPoints.length} نقطة)`);
-        return lines.join('\\n');
+        showToast(`تم توليد كود الليزر: ${finalPoints.length} نقطة`);
+        return lines.join('\n');
 
-      } catch (err) {
-        console.error('generateLaserGcode error', err);
-        showToast('فشل في توليد الكود');
-        return '';
+      } catch (error) {
+        console.error('Laser G-code generation error:', error);
+        showToast('فشل في توليد كود الليزر');
+        return "";
       }
     }
 
@@ -1551,40 +1565,6 @@
 
         renderHeatmap();
         renderContour(gray, contour);
-
-        // إنشاء قناع للكونتور (لاختبارات سريعة لاحقاً)
-        try {
-          // حذف أي قناع سابق
-          if (window.laserMask) { try { window.laserMask.delete(); } catch(e){} }
-          const mask = new cv.Mat.zeros(gray.rows, gray.cols, cv.CV_8UC1);
-          const vec = new cv.MatVector();
-          vec.push_back(contour);
-          if (additionalContours && additionalContours.length) {
-            for (let ac of additionalContours) {
-              if (ac && ac.contour) vec.push_back(ac.contour);
-            }
-          }
-          cv.drawContours(mask, vec, -1, new cv.Scalar(255), cv.FILLED);
-          // حساب bounding box موحد
-          let bx = Infinity, by = Infinity, bx2 = 0, by2 = 0;
-          try {
-            let allCnts = vec;
-            for (let i=0;i<allCnts.size();i++){
-              const c = allCnts.get(i);
-              const r = cv.boundingRect(c);
-              bx = Math.min(bx, r.x); by = Math.min(by, r.y);
-              bx2 = Math.max(bx2, r.x + r.width); by2 = Math.max(by2, r.y + r.height);
-            }
-          } catch(e){}
-          // حفظ القناع والإحداثيات عالمياً
-          window.laserMask = mask;
-          window.laserBoundingBox = { x: (isFinite(bx)?bx:0), y:(isFinite(by)?by:0), width: Math.max(0, bx2 - bx), height: Math.max(0, by2 - by) };
-          // تنظيف متجه الكونتورات الذي أنشأناه لو كان محلياً
-          try{ vec.delete(); } catch(e){}
-        } catch(err) {
-          console.warn('failed to build laser mask', err);
-        }
-
 
         // تنظيف
         safeMatDelete(src);
