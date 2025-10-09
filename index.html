@@ -1,341 +1,1350 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CNC AI - Laser Gcode Fixed</title>
-  <style>
-    :root {
-      --bg-dark: #0e0e0e;
-      --bg-light: #f5f5f5;
-      --text-light: #eaeaea;
-      --accent: #00ffc3;
-      --accent2: #ff8800;
-    }
-    body {
-      margin: 0;
-      font-family: "Cairo", sans-serif;
-      background: var(--bg-dark);
-      color: var(--text-light);
-      overflow-x: hidden;
-      text-align: center;
-    }
-    header {
-      padding: 10px 0;
-      background: linear-gradient(90deg, #1a1a1a, #111);
-      color: var(--accent);
-      font-size: 1.3em;
-      font-weight: 600;
-      border-bottom: 2px solid var(--accent2);
-      text-shadow: 0 0 10px var(--accent);
-    }
-    main {
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 20px;
-    }
-    .canvas-container {
-      position: relative;
-      display: inline-block;
-    }
-    canvas {
-      max-width: 100%;
-      border: 1px solid #333;
-      border-radius: 10px;
-      background-color: #000;
-    }
-    .controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      justify-content: center;
-      margin-top: 15px;
-    }
-    button {
-      padding: 10px 15px;
-      border-radius: 8px;
-      border: none;
-      background: var(--accent2);
-      color: #000;
-      font-weight: 600;
-      cursor: pointer;
-      transition: 0.3s;
-    }
-    button:hover {
-      background: var(--accent);
-      color: #000;
-      transform: scale(1.05);
-    }
-    #progressBarFixed {
-      width: 0%;
-      height: 4px;
-      background: var(--accent);
-      transition: width 0.4s ease;
-      position: fixed;
-      top: 0;
-      left: 0;
-      z-index: 9999;
-    }
-    #operationStatusFixed {
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      padding: 6px 10px;
-      border-radius: 6px;
-      font-size: 0.9em;
-      background: rgba(0, 0, 0, 0.7);
-      color: var(--accent);
-      z-index: 9999;
-      backdrop-filter: blur(4px);
-    }
-  </style>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <title>CNC AI — Multi Machine Raster Engraving</title>
+
+    <!-- مكتبات -->
+    <script src="https://docs.opencv.org/4.8.0/opencv.js" async></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
+
+    <style>
+        /* الأساسيات */
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            margin: 0;
+            font-family: Arial, Segoe UI, system-ui;
+            background: #041022;
+            color: #e6eef6;
+            line-height: 1.5;
+        }
+        
+        /* التخطيط الرئيسي */
+        .app {
+            max-width: 1400px;
+            margin: 16px auto;
+            padding: 14px;
+        }
+        
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #1e293b;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 480px;
+            gap: 16px;
+        }
+        
+        @media (max-width: 1000px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* اللوحات */
+        .panel {
+            background: #0b1320;
+            padding: 16px;
+            border-radius: 10px;
+            border: 1px solid #1e293b;
+        }
+        
+        .panel-section {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #1e293b;
+        }
+        
+        .panel-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        
+        /* التبويبات */
+        .tabs {
+            display: flex;
+            margin-top: 12px;
+            border-bottom: 1px solid #1e293b;
+        }
+        
+        .tabs button {
+            margin-left: 6px;
+            padding: 8px 14px;
+            border: none;
+            border-radius: 6px 6px 0 0;
+            cursor: pointer;
+            background: transparent;
+            color: #9bb0c8;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+        
+        .tabs button:hover {
+            background: #1e293b;
+        }
+        
+        .tabs button.active {
+            background: #06b6d4;
+            color: #021;
+        }
+        
+        .tab-content {
+            display: none;
+            margin-top: 12px;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* العناصر المرئية */
+        canvas {
+            max-width: 100%;
+            border-radius: 6px;
+            background: #000;
+            display: block;
+            margin: 0 auto;
+            border: 1px solid #334155;
+        }
+        
+        textarea {
+            width: 100%;
+            height: 200px;
+            background: #021024;
+            color: #cfeaf2;
+            font-family: monospace;
+            border-radius: 8px;
+            padding: 10px;
+            border: 1px solid #1e293b;
+            resize: vertical;
+        }
+        
+        #threeContainer {
+            width: 100%;
+            height: 400px;
+            background: #081224;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .simulation-controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 100;
+            display: flex;
+            gap: 8px;
+        }
+        
+        .simulation-controls button {
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: 1px solid #06b6d4;
+            border-radius: 4px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        
+        .simulation-controls button:hover {
+            background: rgba(6, 182, 212, 0.3);
+        }
+        
+        .simulation-info {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+        
+        /* النماذج */
+        label {
+            display: block;
+            margin-top: 12px;
+            color: #cfeaf2;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+        
+        .input-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 8px 10px;
+            border-radius: 6px;
+            border: 1px solid #1e293b;
+            background: #0f172a;
+            color: #e6eef6;
+            margin-top: 6px;
+            font-size: 0.9rem;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: #06b6d4;
+        }
+        
+        /* الأزرار */
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 16px;
+        }
+        
+        button {
+            background: #1e293b;
+            color: #e6eef6;
+            border: none;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 0.9rem;
+        }
+        
+        button:hover {
+            background: #334155;
+        }
+        
+        button.primary {
+            background: #06b6d4;
+            color: #021;
+            font-weight: bold;
+        }
+        
+        button.primary:hover {
+            background: #0ea5e9;
+        }
+        
+        /* التنبيهات */
+        #toast {
+            position: fixed;
+            left: 16px;
+            bottom: 16px;
+            background: rgba(0, 0, 0, 0.85);
+            color: #fff;
+            padding: 10px 14px;
+            border-radius: 8px;
+            display: none;
+            z-index: 10000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* النصوص */
+        h1 {
+            margin: 0;
+            color: #06b6d4;
+            font-size: 1.5rem;
+        }
+        
+        h3 {
+            margin-top: 0;
+            color: #9bb0c8;
+            font-size: 1.1rem;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #1e293b;
+        }
+        
+        #cvState {
+            color: #9bb0c8;
+            font-size: 0.9em;
+            padding: 6px 10px;
+            background: #0f172a;
+            border-radius: 6px;
+        }
+        
+        #estTime {
+            margin-top: 12px;
+            color: #9bb0c8;
+            text-align: center;
+            padding: 8px;
+            background: #0f172a;
+            border-radius: 6px;
+        }
+        
+        .file-input-container {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+        
+        .file-input-container input[type=file] {
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        
+        .file-input-label {
+            display: block;
+            padding: 10px;
+            background: #1e293b;
+            color: #e6eef6;
+            text-align: center;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+            border: 2px dashed #334155;
+        }
+        
+        .file-input-label:hover {
+            background: #334155;
+        }
+        
+        .info-text {
+            font-size: 0.8rem;
+            color: #9bb0c8;
+            margin-top: 4px;
+        }
+        
+        .settings-row {
+            display: flex;
+            gap: 10px;
+            align-items: end;
+        }
+        
+        .settings-row .input-group {
+            flex: 1;
+        }
+        
+        .material-preset {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 8px;
+            margin-top: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .material-preset:hover {
+            background: #334155;
+        }
+        
+        .material-preset.active {
+            background: #06b6d4;
+            color: #021;
+            border-color: #06b6d4;
+        }
+        
+        .material-name {
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+        
+        .material-details {
+            font-size: 0.8rem;
+            color: #9bb0c8;
+        }
+        
+        .active-material .material-details {
+            color: #021;
+        }
+        
+        .dimension-info {
+            font-size: 0.8rem;
+            color: #06b6d4;
+            margin-top: 4px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #1e293b;
+            border-radius: 3px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: #06b6d4;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #06b6d4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .canvas-placeholder {
+            width: 100%;
+            height: 300px;
+            background: #000;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #9bb0c8;
+            border: 1px solid #334155;
+        }
+        
+        .error-message {
+            color: #ef4444;
+            font-size: 0.8rem;
+            margin-top: 4px;
+        }
+        
+        .success-message {
+            color: #10b981;
+            font-size: 0.8rem;
+            margin-top: 4px;
+        }
+    </style>
 </head>
 <body>
-  <header>CNC AI — نسخة الليزر المصححة</header>
-  <div id="progressBarFixed"></div>
-  <div id="operationStatusFixed">جاهز</div>
+    <div class="app">
+        <header>
+            <h1>CNC AI — Multi Machine Raster Engraving</h1>
+            <div id="cvState">
+                <span class="loading"></span>جاري تحميل OpenCV...
+            </div>
+        </header>
 
-  <main>
-    <div class="controls">
-      <input type="file" id="fileInput" accept="image/*">
-      <button id="detectBtn">كشف الحواف</button>
-      <button id="gcodeBtn">توليد كود الليزر</button>
+        <div class="grid">
+            <!-- لوحة الصورة والمعاينة -->
+            <div class="panel">
+                <div class="file-input-container">
+                    <input id="fileInput" type="file" accept="image/*"/>
+                    <label class="file-input-label" for="fileInput">📁 اختر صورة للتحميل</label>
+                </div>
+                
+                <div class="tabs">
+                    <button data-tab="original" class="active">🖼️ الصورة الأصلية</button>
+                    <button data-tab="heatmap">🔥 خريطة الحرارة</button>
+                    <button data-tab="contour">📐 الكشف عن الحواف</button>
+                    <button data-tab="simulation">🎬 محاكاة التشغيل</button>
+                </div>
+                
+                <div id="original" class="tab-content active">
+                    <div class="canvas-placeholder" id="originalPlaceholder">
+                        سيتم عرض الصورة هنا
+                    </div>
+                    <canvas id="canvasOriginal" style="display: none;"></canvas>
+                </div>
+                
+                <div id="heatmap" class="tab-content">
+                    <div class="canvas-placeholder" id="heatmapPlaceholder">
+                        خريطة الحرارة ستظهر هنا بعد تحميل الصورة
+                    </div>
+                    <canvas id="canvasHeatmap" style="display: none;"></canvas>
+                </div>
+                
+                <div id="contour" class="tab-content">
+                    <div class="canvas-placeholder" id="contourPlaceholder">
+                        كشف الحواف سيظهر هنا بعد تحميل الصورة
+                    </div>
+                    <canvas id="canvasContour" style="display: none;"></canvas>
+                </div>
+                
+                <div id="simulation" class="tab-content">
+                    <div id="threeContainer">
+                        <div class="canvas-placeholder" id="simulationPlaceholder">
+                            محاكاة التشغيل ستظهر هنا بعد توليد G-code
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- لوحة التحكم والإعدادات -->
+            <div class="panel">
+                <!-- إعدادات الماكينة -->
+                <div class="panel-section">
+                    <h3>⚙️ إعدادات الماكينة</h3>
+                    
+                    <label for="machineType">
+                        نوع الماكينة
+                    </label>
+                    <select id="machineType">
+                        <option value="router">Router CNC</option>
+                        <option value="laser">Laser Engraver</option>
+                        <option value="plasma">Plasma Cutter</option>
+                        <option value="3dprinter">3D Printer</option>
+                    </select>
+                    
+                    <div class="info-text" id="machineDescription">
+                        Router CNC - مناسبة للنحت على الخشب والأكريليك والمعادن اللينة
+                    </div>
+                </div>
+                
+                <!-- إعدادات حجم العمل -->
+                <div class="panel-section">
+                    <h3>📏 إعدادات حجم العمل</h3>
+                    
+                    <div class="input-group">
+                        <div>
+                            <label for="workWidth">
+                                عرض العمل (سم)
+                            </label>
+                            <input id="workWidth" type="number" value="30" step="0.1" min="1" max="100"/>
+                            <div class="dimension-info" id="widthMm">300.0 مم</div>
+                        </div>
+                        
+                        <div>
+                            <label for="workHeight">
+                                ارتفاع العمل (سم)
+                            </label>
+                            <input id="workHeight" type="number" value="20" step="0.1" min="1" max="100"/>
+                            <div class="dimension-info" id="heightMm">200.0 مم</div>
+                        </div>
+                    </div>
+                    
+                    <label for="workDepth">
+                        عمق العمل (مم)
+                    </label>
+                    <input id="workDepth" type="number" value="3.0" step="0.1" min="0.1" max="20"/>
+                    
+                    <div class="settings-row">
+                        <div class="input-group">
+                            <div>
+                                <label for="originX">
+                                    نقطة الأصل X (سم)
+                                </label>
+                                <input id="originX" type="number" value="0" step="0.1"/>
+                            </div>
+                            
+                            <div>
+                                <label for="originY">
+                                    نقطة الأصل Y (سم)
+                                </label>
+                                <input id="originY" type="number" value="0" step="0.1"/>
+                            </div>
+                        </div>
+                        
+                        <button id="btnCenterOrigin" class="secondary">🎯 توسيط نقطة الأصل</button>
+                    </div>
+                </div>
+                
+                <!-- إعدادات الخامة -->
+                <div class="panel-section">
+                    <h3>📦 إعدادات الخامة</h3>
+                    
+                    <label for="materialType">
+                        نوع الخامة
+                    </label>
+                    <select id="materialType">
+                        <option value="wood">خشب</option>
+                        <option value="acrylic">أكريليك</option>
+                        <option value="aluminum">ألومنيوم</option>
+                        <option value="steel">صلب</option>
+                        <option value="brass">نحاس</option>
+                        <option value="plastic">بلاستيك</option>
+                        <option value="foam">رغوة</option>
+                        <option value="custom">مخصص</option>
+                    </select>
+                    
+                    <div id="materialPresets">
+                        <!-- سيتم تعبئتها بالجافاسكريبت -->
+                    </div>
+                </div>
+                
+                <!-- إعدادات التشغيل -->
+                <div class="panel-section">
+                    <h3>🚀 إعدادات التشغيل</h3>
+                    
+                    <label for="feedRate">
+                        سرعة التغذية (مم/دقيقة)
+                    </label>
+                    <input id="feedRate" type="number" value="800" min="10" max="5000"/>
+                    
+                    <label for="safeZ">
+                        ارتفاع الأمان (مم)
+                    </label>
+                    <input id="safeZ" type="number" value="5" step="0.1" min="0" max="50"/>
+                    
+                    <label for="invertZ">
+                        عكس المحور Z
+                    </label>
+                    <select id="invertZ">
+                        <option value="no">لا</option>
+                        <option value="yes">نعم</option>
+                    </select>
+                    
+                    <label for="scanDir">
+                        اتجاه المسارات
+                    </label>
+                    <select id="scanDir">
+                        <option value="x">أفقي (X)</option>
+                        <option value="y">رأسي (Y)</option>
+                    </select>
+                    
+                    <label for="stepOver">
+                        خطوة المسح (مم)
+                    </label>
+                    <input id="stepOver" type="number" value="5" step="0.1" min="0.1" max="20"/>
+                    
+                    <label for="maxDepth">
+                        أقصى عمق (مم)
+                    </label>
+                    <input id="maxDepth" type="number" value="3.0" step="0.1" min="0.1" max="20"/>
+                </div>
+
+                <!-- أزرار التحكم -->
+                <div class="button-group">
+                    <button id="btnGen" class="primary">⚡ توليد G-code</button>
+                    <button id="btnQuick" class="secondary">🧪 اختبار سريع</button>
+                    <button id="btnDownload" class="secondary">💾 تحميل G-code</button>
+                </div>
+                
+                <div id="estTime"></div>
+                
+                <label for="gcodeOut" style="margin-top: 16px;">📄 مخرجات G-code</label>
+                <textarea id="gcodeOut" readonly placeholder="سيظهر G-code هنا بعد التوليد..."></textarea>
+            </div>
+        </div>
     </div>
-    <div class="canvas-container">
-      <canvas id="imageCanvas"></canvas>
-    </div>
-  </main>
-<script>
-let src, gray, edges;
-let contoursData = { mask: null, gray: null, boundingBox: null };
+    
+    <div id="toast"></div>
 
-// ✅ تحميل OpenCV.js
-function loadOpenCv() {
-  if (typeof cv === 'undefined') {
-    const script = document.createElement('script');
-    script.src = "https://docs.opencv.org/4.x/opencv.js";
-    script.onload = () => {
-      console.log("تم تحميل OpenCV بنجاح");
-      updateStatusFixed("✅ تم تحميل OpenCV بنجاح", "success");
-    };
-    document.body.appendChild(script);
-  } else {
-    console.log("OpenCV موجود مسبقًا");
-  }
-}
-loadOpenCv();
+    <script>
+        // ========== تعريف المتغيرات العامة ==========
+        let cvReady = false;
+        let grayMat = null;
+        let contour = null;
+        let previewCanvas = null;
+        
+        // محاكاة ثلاثية الأبعاد
+        let scene, camera, renderer, controls;
+        let simulation = {
+            isPlaying: false,
+            speed: 1,
+            currentLine: 0,
+            totalLines: 0,
+            animationId: null
+        };
 
-// ✅ تحديث حالة التشغيل
-function updateStatusFixed(text, type = "info") {
-  const el = document.getElementById('operationStatusFixed');
-  if (!el) return;
-  el.textContent = text;
-  el.style.color = type === "error" ? "#ff5555" : (type === "success" ? "#00ffae" : "#ffaa00");
-}
+        // إعدادات الماكينات الافتراضية
+        const machineDefaults = {
+            router: { 
+                feed: 800, 
+                safeZ: 5, 
+                maxDepth: 3, 
+                stepOver: 5,
+                description: "Router CNC - مناسبة للنحت على الخشب والأكريليك والمعادن اللينة"
+            },
+            laser: { 
+                feed: 1200, 
+                safeZ: 0, 
+                maxDepth: 0, 
+                stepOver: 0.2,
+                description: "Laser Engraver - مناسبة للنقش على الخشب والجلود والأكريليك"
+            },
+            plasma: { 
+                feed: 1500, 
+                safeZ: 3, 
+                maxDepth: 0, 
+                stepOver: 1,
+                description: "Plasma Cutter - مناسبة لقطع المعادن بسمك مختلف"
+            },
+            "3dprinter": { 
+                feed: 1000, 
+                safeZ: 0.2, 
+                maxDepth: 0.2, 
+                stepOver: 0.4,
+                description: "3D Printer - للطباعة ثلاثية الأبعاد باستخدام تقنية FDM"
+            }
+        };
 
-// ✅ تحديث شريط التقدم
-function setProgressFixed(percent) {
-  const bar = document.getElementById('progressBarFixed');
-  if (bar) bar.style.width = percent + "%";
-}
-
-// ✅ تحميل الصورة للكانفاس
-document.getElementById('fileInput').addEventListener('change', function (e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const img = new Image();
-  img.onload = function () {
-    const canvas = document.getElementById('imageCanvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = img.width;
-    canvas.height = img.height;
-    ctx.drawImage(img, 0, 0);
-    updateStatusFixed("📷 تم تحميل الصورة");
-  };
-  img.src = URL.createObjectURL(file);
-});
-
-// ✅ كشف الحواف
-document.getElementById('detectBtn').addEventListener('click', async () => {
-  if (typeof cv === 'undefined') {
-    updateStatusFixed("⚠️ OpenCV لم يتم تحميله بعد", "error");
-    return;
-  }
-
-  const canvas = document.getElementById('imageCanvas');
-  if (!canvas.width) {
-    updateStatusFixed("⚠️ يرجى تحميل صورة أولاً", "error");
-    return;
-  }
-
-  setProgressFixed(10);
-  updateStatusFixed("🔍 جاري كشف الحواف...", "loading");
-
-  const srcMat = cv.imread(canvas);
-  gray = new cv.Mat();
-  cv.cvtColor(srcMat, gray, cv.COLOR_RGBA2GRAY, 0);
-  edges = new cv.Mat();
-  cv.Canny(gray, edges, 100, 200);
-
-  const mask = edges.clone();
-  contoursData.mask = mask.clone();
-  contoursData.gray = gray.clone();
-  contoursData.boundingBox = { x: 0, y: 0, width: mask.cols, height: mask.rows };
-
-  cv.imshow(canvas, edges);
-  updateStatusFixed("✅ تم كشف الحواف بنجاح", "success");
-  setProgressFixed(100);
-
-  srcMat.delete();
-  edges.delete();
-});
-
-</script>
-
-<script>
-// ✅ دالة توليد كود الليزر الآمنة
-document.getElementById('gcodeBtn')?.addEventListener('click', () => {
-  if (!window.contoursData?.mask) {
-    updateStatusFixed('⚠️ يجب أولاً كشف الحواف قبل توليد الكود', 'error');
-    console.warn('لم يتم توليد الكود - لا توجد بيانات حواف');
-    return;
-  }
-
-  updateStatusFixed('⚙️ جاري توليد كود الليزر...', 'loading');
-  setProgressFixed(20);
-
-  setTimeout(() => {
-    const gcode = generateLaserGcodeSafe({
-      mask: contoursData.mask,
-      boundingBox: contoursData.boundingBox,
-      gray: contoursData.gray
-    });
-
-    if (gcode && gcode.length > 0) {
-      window.latestGcode = gcode;
-      updateStatusFixed('✅ تم توليد كود الليزر بنجاح', 'success');
-      setProgressFixed(100);
-      console.log("✅ G-code generated successfully");
-      console.log(gcode);
-    } else {
-      updateStatusFixed('❌ لم يتم توليد كود صالح', 'error');
-      setProgressFixed(0);
-      console.warn('لم يتم توليد كود صالح');
-    }
-  }, 200);
-});
-
-// ✅ الدالة الفعلية لتوليد GCODE من الحواف
-function generateLaserGcodeSafe({ mask, boundingBox, gray }) {
-  try {
-    const stepOver = 2.0;
-    const spacing = 1.0;
-    const speed = 2000;
-    const maxS = 1000;
-
-    const pxPerMmX = mask.cols / (boundingBox?.width || mask.cols);
-    const pxPerMmY = mask.rows / (boundingBox?.height || mask.rows);
-
-    const mmPerPxX = 1 / pxPerMmX;
-    const mmPerPxY = 1 / pxPerMmY;
-
-    const sx = Math.max(0, Math.floor(boundingBox?.x || 0));
-    const sy = Math.max(0, Math.floor(boundingBox?.y || 0));
-    const ex = Math.min(mask.cols, Math.ceil(sx + (boundingBox?.width || mask.cols)));
-    const ey = Math.min(mask.rows, Math.ceil(sy + (boundingBox?.height || mask.rows)));
-
-    let gcode = [];
-    gcode.push('; === GCODE GENERATED BY CNC AI ===');
-    gcode.push('G21 ; Set units to mm');
-    gcode.push('G90 ; Absolute positioning');
-    gcode.push(`F${speed}`);
-
-    const xStep = Math.max(1, Math.round(spacing * pxPerMmX));
-    const yStep = Math.max(1, Math.round(stepOver * pxPerMmY));
-
-    let prevPower = -1;
-
-    for (let y = sy; y < ey; y += yStep) {
-      let dir = (y - sy) / yStep % 2 === 0 ? 1 : -1; // zig-zag pattern
-      let xStart = dir > 0 ? sx : ex - 1;
-      let xEnd = dir > 0 ? ex : sx;
-      for (let x = xStart; dir > 0 ? x < xEnd : x >= xEnd; x += dir * xStep) {
-        const v = mask.ucharPtr(y, x)[0];
-        if (v > 0) {
-          let powerNorm = 1.0;
-          if (gray) {
-            const gv = gray.ucharPtr(y, x)[0];
-            powerNorm = (255 - gv) / 255.0;
-          }
-          const sVal = Math.round(powerNorm * maxS);
-          if (sVal !== prevPower) {
-            gcode.push(`M3 S${sVal}`);
-            prevPower = sVal;
-          }
-          const gx = (x * mmPerPxX).toFixed(3);
-          const gy = (y * mmPerPxY).toFixed(3);
-          gcode.push(`G1 X${gx} Y${gy}`);
+        // ========== وظائف المساعدة ==========
+        
+        /**
+         * عرض رسالة تنبيه
+         */
+        function showToast(msg, ms = 3000) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.style.display = 'block';
+            clearTimeout(t._t);
+            t._t = setTimeout(() => t.style.display = 'none', ms);
         }
-      }
-      setProgressFixed(30 + ((y - sy) / (ey - sy)) * 60);
-    }
+        
+        /**
+         * تحويل السنتيمتر إلى ملليمتر
+         */
+        function cmToMm(cm) {
+            return cm * 10;
+        }
+        
+        /**
+         * تحديث عرض الأبعاد بالملليمتر
+         */
+        function updateDimensionDisplay() {
+            const widthCm = parseFloat(document.getElementById('workWidth').value) || 0;
+            const heightCm = parseFloat(document.getElementById('workHeight').value) || 0;
+            
+            document.getElementById('widthMm').textContent = cmToMm(widthCm).toFixed(1) + ' مم';
+            document.getElementById('heightMm').textContent = cmToMm(heightCm).toFixed(1) + ' مم';
+        }
 
-    gcode.push('M5 ; Laser off');
-    gcode.push('G0 X0 Y0');
-    return gcode.join('\n');
-  } catch (err) {
-    console.error('generateLaserGcodeSafe error:', err);
-    updateStatusFixed('⚠️ خطأ أثناء توليد كود الليزر', 'error');
-    return '';
-  }
-}
-</script>
+        /**
+         * إظهار العنصر وإخفاء العنصر البديل
+         */
+        function showElement(elementId, hidePlaceholderId) {
+            const element = document.getElementById(elementId);
+            const placeholder = document.getElementById(hidePlaceholderId);
+            
+            if (element && placeholder) {
+                element.style.display = 'block';
+                placeholder.style.display = 'none';
+            }
+        }
 
-<script>
-// ✅ دالة تحديث عرض الأبعاد بأمان (تمنع الخطأ textContent of null)
-function updateDimensionDisplay(width, height) {
-  let label = document.getElementById('dimensionLabel');
-  if (!label) {
-    label = document.createElement('div');
-    label.id = 'dimensionLabel';
-    label.style.position = 'fixed';
-    label.style.bottom = '10px';
-    label.style.left = '10px';
-    label.style.padding = '5px 10px';
-    label.style.background = 'rgba(0,0,0,0.6)';
-    label.style.color = '#00ffc3';
-    label.style.borderRadius = '5px';
-    label.style.fontSize = '0.9em';
-    document.body.appendChild(label);
-  }
-  label.textContent = `العرض: ${width}px — الارتفاع: ${height}px`;
-}
+        /**
+         * أخذ عينة من الصورة الرمادية باستخدام الاستيفاء الثنائي
+         */
+        function sampleGrayAt(x, y) {
+            if (!grayMat) return 128;
+            
+            const gw = grayMat.cols;
+            const gh = grayMat.rows;
+            
+            // تحويل الإحداثيات
+            const gx_f = (x / previewCanvas.width) * (gw - 1);
+            const gy_f = (y / previewCanvas.height) * (gh - 1);
+            
+            // نقاط الشبكة المحيطة
+            const x0 = Math.floor(gx_f);
+            const y0 = Math.floor(gy_f);
+            const x1 = Math.min(gw - 1, x0 + 1);
+            const y1 = Math.min(gh - 1, y0 + 1);
+            
+            // نسب الاستيفاء
+            const sx = gx_f - x0;
+            const sy = gy_f - y0;
+            
+            // الحصول على القيم من المصفوفة
+            const v00 = grayMat.data[y0 * gw + x0];
+            const v10 = grayMat.data[y0 * gw + x1];
+            const v01 = grayMat.data[y1 * gw + x0];
+            const v11 = grayMat.data[y1 * gw + x1];
+            
+            // الاستيفاء الثنائي
+            const v0 = v00 * (1 - sx) + v10 * sx;
+            const v1 = v01 * (1 - sx) + v11 * sx;
+            
+            return Math.round(v0 * (1 - sy) + v1 * sy);
+        }
 
-// ✅ مراقبة الكانفاس لتحديث الأبعاد تلقائيًا
-const canvas = document.getElementById('imageCanvas');
-const observer = new ResizeObserver(entries => {
-  for (let entry of entries) {
-    const { width, height } = entry.contentRect;
-    updateDimensionDisplay(Math.round(width), Math.round(height));
-  }
-});
-observer.observe(canvas);
+        // ========== تهيئة OpenCV ==========
+        
+        /**
+         * انتظار تحميل OpenCV
+         */
+        function waitForCv() {
+            if (typeof cv !== 'undefined' && cv.getBuildInformation) {
+                cvReady = true;
+                document.getElementById('cvState').innerHTML = '✅ OpenCV جاهز';
+                showToast('تم تحميل OpenCV بنجاح', 2000);
+            } else {
+                setTimeout(waitForCv, 100);
+            }
+        }
 
-// ✅ تحميل أولي
-window.addEventListener('load', () => {
-  updateStatusFixed("✅ جاهز للاستخدام", "success");
-  setProgressFixed(0);
-});
-</script>
+        // بدء انتظار OpenCV
+        waitForCv();
 
+        // ========== إدارة التبويبات ==========
+        
+        document.querySelectorAll('.tabs button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                // إزالة النشاط من جميع الأزرار
+                document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+                
+                // إضافة النشاط للزر المحدد
+                btn.classList.add('active');
+                document.getElementById(btn.dataset.tab).classList.add('active');
+                
+                // إذا كانت التبويبة محاكاة، تهيئة المحاكاة إذا كان هناك G-code
+                if (btn.dataset.tab === "simulation" && document.getElementById('gcodeOut').value) {
+                    initSimulation();
+                }
+            });
+        });
+
+        // ========== معالجة تحميل الصور ==========
+        
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            // التحقق من نوع الملف
+            if (!file.type.match('image.*')) {
+                showToast('الرجاء اختيار ملف صورة فقط');
+                return;
+            }
+            
+            const img = new Image();
+            img.onload = function() {
+                previewCanvas = document.getElementById('canvasOriginal');
+                const ctx = previewCanvas.getContext('2d');
+                
+                // تحديد أبعاد مناسبة للعرض
+                const maxWidth = 600;
+                const maxHeight = 400;
+                let width = img.width;
+                let height = img.height;
+                
+                if (width > maxWidth) {
+                    height = (maxWidth / width) * height;
+                    width = maxWidth;
+                }
+                if (height > maxHeight) {
+                    width = (maxHeight / height) * width;
+                    height = maxHeight;
+                }
+                
+                previewCanvas.width = width;
+                previewCanvas.height = height;
+                
+                // رسم الصورة على Canvas
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // إظهار Canvas وإخفاء العنصر النائب
+                showElement('canvasOriginal', 'originalPlaceholder');
+                
+                if (cvReady) {
+                    detectContours();
+                } else {
+                    showToast('جاري انتظار تحميل OpenCV...');
+                    // إعادة المحاولة بعد ثانية
+                    setTimeout(() => {
+                        if (cvReady) detectContours();
+                    }, 1000);
+                }
+            };
+            
+            img.onerror = function() {
+                showToast('خطأ في تحميل الصورة');
+            };
+            
+            img.src = URL.createObjectURL(file);
+        });
+
+        // ========== معالجة الصور والرؤية الحاسوبية ==========
+        
+        /**
+         * الكشف عن الحواف في الصورة
+         */
+        function detectContours() {
+            if (!cvReady) {
+                showToast('OpenCV غير جاهز بعد');
+                return;
+            }
+            
+            try {
+                showToast('جاري معالجة الصورة...');
+                
+                // تحميل الصورة إلى OpenCV
+                const src = cv.imread(previewCanvas);
+                
+                // تحويل إلى تدرج الرمادي
+                const gray = new cv.Mat();
+                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+                
+                // تطبيق Gaussian Blur لتقليل الضوضاء
+                const blurred = new cv.Mat();
+                cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
+                
+                // كشف الحواف باستخدام Canny مع عتبات متكيفة
+                const edges = new cv.Mat();
+                const median = cv.mean(blurred).w;
+                const lowerThreshold = Math.max(0, (1.0 - 0.33) * median);
+                const upperThreshold = Math.min(255, (1.0 + 0.33) * median);
+                cv.Canny(blurred, edges, lowerThreshold, upperThreshold);
+                
+                // تحسين الحواف باستخدام morphology
+                const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
+                cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel);
+                
+                // إيجاد الكنتورات
+                const contours = new cv.MatVector();
+                const hierarchy = new cv.Mat();
+                cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+                
+                // اختيار أكبر كونتور
+                let maxArea = 0;
+                let maxContourIndex = -1;
+                
+                for (let i = 0; i < contours.size(); i++) {
+                    const cnt = contours.get(i);
+                    const area = cv.contourArea(cnt);
+                    if (area > maxArea) {
+                        maxArea = area;
+                        maxContourIndex = i;
+                    }
+                }
+                
+                if (maxContourIndex >= 0) {
+                    contour = contours.get(maxContourIndex);
+                    
+                    // حفظ الصورة الرمادية للمعالجة اللاحقة
+                    if (grayMat) grayMat.delete();
+                    grayMat = gray.clone();
+                    
+                    // عرض خريطة الحرارة
+                    renderHeatmap(gray);
+                    
+                    // عرض الكنتور
+                    renderContour(gray, contour);
+                    
+                    showToast('تم كشف الحواف بنجاح');
+                } else {
+                    showToast('لم يتم العثور على حواف واضحة في الصورة');
+                }
+                
+                // تنظيف الذاكرة
+                src.delete();
+                blurred.delete();
+                edges.delete();
+                hierarchy.delete();
+                kernel.delete();
+                contours.delete();
+                
+            } catch (error) {
+                console.error('Error in detectContours:', error);
+                showToast('خطأ في معالجة الصورة: ' + error.message);
+            }
+        }
+
+        /**
+         * عرض خريطة الحرارة
+         */
+        function renderHeatmap(gray) {
+            const heatCanvas = document.getElementById('canvasHeatmap');
+            const ctx = heatCanvas.getContext('2d');
+            
+            heatCanvas.width = gray.cols;
+            heatCanvas.height = gray.rows;
+            
+            // إنشاء صورة البيانات
+            const imgData = ctx.createImageData(heatCanvas.width, heatCanvas.height);
+            const data = gray.data;
+            
+            for (let i = 0; i < data.length; i++) {
+                const value = data[i];
+                const idx = i * 4;
+                
+                // تدرج ألوان من الأزرق إلى الأحمر
+                imgData.data[idx] = value;         // الأحمر
+                imgData.data[idx + 1] = 0;         // الأخضر
+                imgData.data[idx + 2] = 255 - value; // الأزرق
+                imgData.data[idx + 3] = 255;       // الشفافية
+            }
+            
+            ctx.putImageData(imgData, 0, 0);
+            showElement('canvasHeatmap', 'heatmapPlaceholder');
+        }
+
+        /**
+         * عرض الكنتور
+         */
+        function renderContour(gray, contour) {
+            const contourCanvas = document.getElementById('canvasContour');
+            const ctx = contourCanvas.getContext('2d');
+            
+            contourCanvas.width = gray.cols;
+            contourCanvas.height = gray.rows;
+            
+            // رسم خريطة الحرارة كخلفية
+            const heatCanvas = document.getElementById('canvasHeatmap');
+            ctx.drawImage(heatCanvas, 0, 0);
+            
+            // رسم الكنتور
+            if (contour) {
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                
+                const data = contour.data32S;
+                for (let i = 0; i < data.length; i += 2) {
+                    const x = data[i];
+                    const y = data[i + 1];
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                
+                ctx.closePath();
+                ctx.stroke();
+            }
+            
+            showElement('canvasContour', 'contourPlaceholder');
+        }
+
+        // ========== توليد G-code ==========
+        
+        /**
+         * توليد كود G للمسح النقطي
+         */
+        function generateRasterGcode(scaleDown = false) {
+            if (!grayMat || !contour) {
+                showToast("لا توجد صورة جاهزة للمعالجة");
+                return "";
+            }
+            
+            try {
+                // قراءة الإعدادات
+                const dir = document.getElementById('scanDir').value;
+                const stepOver = parseFloat(document.getElementById('stepOver').value) || 5;
+                const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3;
+                const feed = parseFloat(document.getElementById('feedRate').value) || 800;
+                const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
+                const invertZ = document.getElementById('invertZ').value === 'yes';
+                
+                // قراءة إعدادات حجم العمل
+                const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30);
+                const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20);
+                const originX = cmToMm(parseFloat(document.getElementById('originX').value) || 0);
+                const originY = cmToMm(parseFloat(document.getElementById('originY').value) || 0);
+
+                // بدء كود G
+                const lines = [];
+                lines.push('G21 G90 G17'); // الوحدات المترية، الإحداثيات المطلقة، مستوى XY
+                lines.push('G0 Z' + safeZ.toFixed(2)); // الانتقال لارتفاع الأمان
+                
+                let totalLen = 0;
+                let step = scaleDown ? stepOver * 4 : stepOver;
+
+                // حساب عوامل القياس
+                const scaleX = workWidth / previewCanvas.width;
+                const scaleY = workHeight / previewCanvas.height;
+
+                // المسح الأفقي
+                if (dir === 'x') {
+                    for (let y = 0; y < previewCanvas.height; y += step) {
+                        let row = [];
+                        
+                        // جمع النقاط داخل الكنتور
+                        for (let x = 0; x < previewCanvas.width; x++) {
+                            const point = new cv.Point(x, y);
+                            const inside = cv.pointPolygonTest(contour, point, false);
+                            
+                            if (inside >= 0) {
+                                const pv = sampleGrayAt(x, y);
+                                let z = -((255 - pv) / 255.0) * maxDepth;
+                                
+                                if (invertZ) {
+                                    z = -z;
+                                }
+                                
+                                // تطبيق القياس ونقطة الأصل
+                                const scaledX = (x * scaleX) + originX;
+                                const scaledY = (y * scaleY) + originY;
+                                
+                                row.push({ x: scaledX, y: scaledY, z });
+                            }
+                        }
+                        
+                        // إذا كان هناك نقاط في الصف
+                        if (row.length > 1) {
+                            // عكس اتجاه الصفوف الفردية
+                            if ((y / step) % 2 !== 0) {
+                                row.reverse();
+                            }
+                            
+                            // الانتقال للنقطة الأولى
+                            lines.push('G0 X' + row[0].x.toFixed(2) + ' Y' + row[0].y.toFixed(2) + ' Z' + safeZ);
+                            lines.push('G1 F' + feed); // تعيين سرعة التغذية
+                            
+                            // رسم المسار
+                            for (let i = 0; i < row.length; i++) {
+                                const p = row[i];
+                                lines.push('G1 X' + p.x.toFixed(2) + ' Y' + p.y.toFixed(2) + ' Z' + p.z.toFixed(3));
+                                
+                                // حساب الطول الإجمالي
+                                if (i > 0) {
+                                    totalLen += Math.hypot(p.x - row[i-1].x, p.y - row[i-1].y);
+                                }
+                            }
+                            
+                            // العودة لارتفاع الأمان
+                            lines.push('G0 Z' + safeZ);
+                        }
+                    }
+                }
+                
+                // نهاية البرنامج
+                lines.push('M5');  // إيقاف المغزل/الليزر
+                lines.push('M30'); // نهاية البرنامج
+                
+                // حساب الوقت التقريبي
+                const timeMin = (totalLen / feed);
+                document.getElementById('estTime').textContent = "⏱️ تقدير الوقت: " + timeMin.toFixed(1) + " دقيقة";
+                
+                return lines.join('\n');
+                
+            } catch (error) {
+                console.error('Error generating G-code:', error);
+                showToast('خطأ في توليد G-code: ' + error.message);
+                return "";
+            }
+        }
+
+        // ========== إدارة الأحداث ==========
+        
+        document.getElementById('btnGen').addEventListener('click', () => {
+            const gcode = generateRasterGcode(false);
+            document.getElementById('gcodeOut').value = gcode;
+            if (gcode) {
+                showToast("تم توليد G-code بنجاح");
+                // التبديل إلى تبويب المحاكاة تلقائياً
+                document.querySelector('[data-tab="simulation"]').click();
+            }
+        });
+        
+        document.getElementById('btnQuick').addEventListener('click', () => {
+            const gcode = generateRasterGcode(true);
+            document.getElementById('gcodeOut').value = gcode;
+            if (gcode) {
+                showToast("تم توليد G-code سريع بنجاح");
+                document.querySelector('[data-tab="simulation"]').click();
+            }
+        });
+        
+        document.getElementById('btnDownload').addEventListener('click', () => {
+            const text = document.getElementById('gcodeOut').value;
+            if (!text) {
+                showToast("لا يوجد G-code لتحميله");
+                return;
+            }
+            
+            const blob = new Blob([text], { type: "text/plain" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "cnc_output.gcode";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast("تم تحميل الملف بنجاح");
+        });
+
+        document.getElementById('btnCenterOrigin').addEventListener('click', () => {
+            const workWidth = parseFloat(document.getElementById('workWidth').value) || 0;
+            const workHeight = parseFloat(document.getElementById('workHeight').value) || 0;
+            
+            document.getElementById('originX').value = (workWidth / 2).toFixed(1);
+            document.getElementById('originY').value = (workHeight / 2).toFixed(1);
+            
+            showToast("تم توسيط نقطة الأصل");
+        });
+
+        document.getElementById('machineType').addEventListener('change', (e) => {
+            const type = e.target.value;
+            const def = machineDefaults[type];
+            
+            if (def) {
+                document.getElementById('feedRate').value = def.feed;
+                document.getElementById('safeZ').value = def.safeZ;
+                document.getElementById('maxDepth').value = def.maxDepth;
+                document.getElementById('stepOver').value = def.stepOver;
+                document.getElementById('machineDescription').textContent = def.description;
+                
+                showToast(`تم تحميل إعدادات ${type}`);
+            }
+        });
+
+        // ========== محاكاة ثلاثية الأبعاد ==========
+        
+        /**
+         * تهيئة المحاكاة ثلاثية الأبعاد
+         */
+        function initSimulation() {
+            const container = document.getElementById('threeContainer');
+            container.innerHTML = '';
+            
+            try {
+                // إخفاء العنصر النائب
+                document.getElementById('simulationPlaceholder').style.display = 'none';
+                
+                // إنشاء المشهد
+                scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x081224);
+                
+                // إنشاء الكاميرا
+                camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+                camera.position.set(100, 100, 100);
+                
+                // إنشاء المُصيِّر
+                renderer = new THREE.WebGLRenderer({ antialias: true });
+                renderer.setSize(container.clientWidth, container.clientHeight);
+                container.appendChild(renderer.domElement);
+                
+                // إضافة التحكم
+                controls = new THREE.OrbitControls(camera, renderer.domElement);
+                
+                // إضافة الإضاءة
+                const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+                scene.add(ambientLight);
+                
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                directionalLight.position.set(50, 100, 50);
+                scene.add(directionalLight);
+                
+                // إنشاء مادة العمل بناءً على إعدادات المستخدم
+                const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30);
+                const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20);
+                const workDepth = parseFloat(document.getElementById('workDepth').value) || 3;
+                
+                const materialGeometry = new THREE.BoxGeometry(workWidth, workDepth, workHeight);
+                const materialMaterial = new THREE.MeshPhongMaterial({ 
+                    color: 0x8B4513,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                const material = new THREE.Mesh(materialGeometry, materialMaterial);
+                material.position.y = workDepth / 2;
+                scene.add(material);
+                
+                // إنشاء نموذج مبسط للأداة
+                const toolGeometry = new THREE.CylinderGeometry(2, 2, 20, 8);
+                const toolMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 });
+                const tool = new THREE.Mesh(toolGeometry, toolMaterial);
+                tool.position.set(0, 25, 0);
+                scene.add(tool);
+                
+                // إنشاء مسارات محاكاة مبسطة
+                const pathGeometry = new THREE.BufferGeometry();
+                const points = [];
+                
+                // إنشاء مسار دائري مبسط للمحاكاة
+                for (let i = 0; i < 100; i++) {
+                    const angle = (i / 100) * Math.PI * 2;
+                    points.push(new THREE.Vector3(
+                        Math.cos(angle) * (workWidth / 3),
+                        workDepth + 2,
+                        Math.sin(angle) * (workHeight / 3)
+                    ));
+                }
+                
+                pathGeometry.setFromPoints(points);
+                const pathMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+                const path = new THREE.Line(pathGeometry, pathMaterial);
+                scene.add(path);
+                
+                // إضافة شبكة المساعدة
+                const gridHelper = new THREE.GridHelper(Math.max(workWidth, workHeight), 10);
+                scene.add(gridHelper);
+                
+                // إضافة محاور
+                const axesHelper = new THREE.AxesHelper(20);
+                scene.add(axesHelper);
+                
+                // التصيير
+                function animate() {
+                    requestAnimationFrame(animate);
+                    controls.update();
+                    renderer.render(scene, camera);
+                }
+                animate();
+                
+                // إضافة عناصر التحكم
+                addSimulationControls();
+                
+                showToast('تم تهيئة المحاكاة بنجاح');
+                
+            } catch (error) {
+                console.error('Error initializing simulation:', error);
+                showToast('خطأ في تهيئة المحاكاة: ' + error.message);
+                document.getElementById('simulationPlaceholder').style.display = 'flex';
+            }
+        }
+
+        /**
+         * إضافة عناصر تحكم المحاكاة
+         */
+        function addSimulationControls() {
+            const container = document.getElementById('threeContainer');
+            
+            const controlsDiv = document.createElement('div');
+            controlsDiv.className = 'simulation-controls';
+            controlsDiv.innerHTML = `
+                <button id="btnPlay">▶ تشغيل</button>
+                <button id="btnPause">⏸ إيقاف</button>
+                <button id="btnReset">⏹ إعادة تعيين</button>
+            `;
+            container.appendChild(controlsDiv);
+            
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'simulation-info';
+            infoDiv.innerHTML = `
+                <div>الحالة: <span id="simStatus">جاهز</span></div>
+                <div>التقدم: <span id="simProgress">0%</span></div>
+            `;
+            container.appendChild(infoDiv);
+            
+            // إضافة مستمعي الأحداث
+            document.getElementById('btnPlay').addEventListener('click', () => {
+                document.getElementById('simStatus').textContent = 'جاري التشغيل';
+                showToast('بدأت المحاكاة');
+            });
+            
+            document.getElementById('btnPause').addEventListener('click', () => {
+                document.getElementById('simStatus').textContent = 'متوقف';
+                showToast('تم إيقاف المحاكاة');
+            });
+            
+            document.getElementById('btnReset').addEventListener('click', () => {
+                document.getElementById('simStatus').textContent = 'جاهز';
+                document.getElementById('simProgress').textContent = '0%';
+                showToast('تم إعادة تعيين المحاكاة');
+            });
+        }
+
+        // ========== التهيئة الأولية ==========
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            // تحديث عرض الأبعاد
+            updateDimensionDisplay();
+            
+            // إضافة مستمعي الأحداث للأبعاد
+            document.getElementById('workWidth').addEventListener('input', updateDimensionDisplay);
+            document.getElementById('workHeight').addEventListener('input', updateDimensionDisplay);
+            
+            showToast('تم تحميل التطبيق بنجاح', 2000);
+        });
+    </script>
 </body>
 </html>
-
-
-
-
-
-
-
