@@ -781,12 +781,8 @@
             testMat.delete(); // تنظيف الذاكرة
             
             // تحديث واجهة المستخدم
-              try {
-    const _cvStateEl = document.getElementById('cvState');
-    if (_cvStateEl) _cvStateEl.innerHTML = '✅ OpenCV جاهز';
-    if (typeof showToast === 'function') showToast('تم تحميل OpenCV بنجاح', 1400);
-  } catch(e) { console.warn('waitForCv UI update failed', e); }
-
+            document.getElementById('cvState').innerHTML = '✅ OpenCV جاهز';
+            showToast('تم تحميل OpenCV بنجاح', 1400);
             
             // محاولة الحصول على معلومات الإصدار إذا كانت متوفرة
             try {
@@ -2684,5 +2680,236 @@
     });
 
   </script>
+
+<!-- === Added in v1.0.1 — Non-intrusive UI & helper enhancements === -->
+<script>
+(function(){
+  'use strict';
+  // Safety: do not modify existing functions; add helpers only
+
+  // ----- px -> mm unified conversion -----
+  function getWorkDimsMm() {
+    const workWidthCm = parseFloat(document.getElementById('workWidth')?.value || document.getElementById('laserWorkWidth')?.value || 0);
+    const workHeightCm = parseFloat(document.getElementById('workHeight')?.value || document.getElementById('laserWorkHeight')?.value || 0);
+    return { workWidthMm: workWidthCm * 10, workHeightMm: workHeightCm * 10 };
+  }
+
+  window.pxToMm = function(x, y) {
+    try {
+      if (!window.grayMat) return { mmX: x, mmY: y };
+      const dims = getWorkDimsMm();
+      const gw = window.grayMat.cols || 1;
+      const gh = window.grayMat.rows || 1;
+      const pxToMmX = (dims.workWidthMm || 1) / gw;
+      const pxToMmY = (dims.workHeightMm || 1) / gh;
+      return { mmX: x * pxToMmX, mmY: y * pxToMmY };
+    } catch (e) {
+      console.warn('pxToMm failed', e);
+      return { mmX: x, mmY: y };
+    }
+  };
+
+  // ----- Save / restore settings (safe, non-intrusive) -----
+  function collectInputs() {
+    const inputs = document.querySelectorAll('input, select, textarea');
+    const data = {};
+    inputs.forEach(i => {
+      if (!i.id) return;
+      if (i.type === 'checkbox') data[i.id] = i.checked;
+      else data[i.id] = i.value;
+    });
+    return data;
+  }
+  function applySettings(data) {
+    if (!data) return;
+    for (const key in data) {
+      try {
+        const el = document.getElementById(key);
+        if (!el) continue;
+        if (el.type === 'checkbox') el.checked = !!data[key];
+        else el.value = data[key];
+      } catch(e){}
+    }
+    // update dimension displays if present
+    try { if (window.updateDimensionDisplay) window.updateDimensionDisplay(); } catch(e){}
+  }
+
+  window.saveCncAiSettings = function() {
+    try {
+      const data = collectInputs();
+      localStorage.setItem('CncAi_Settings_v1.0.1', JSON.stringify(data));
+      console.log('CncAi settings saved');
+    } catch(e){ console.warn('save settings error', e); }
+  };
+  window.restoreCncAiSettings = function() {
+    try {
+      const raw = localStorage.getItem('CncAi_Settings_v1.0.1');
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      applySettings(data);
+      console.log('CncAi settings restored');
+    } catch(e){ console.warn('restore settings error', e); }
+  };
+
+  window.addEventListener('load', function(){ try{ restoreCncAiSettings(); } catch(e){} });
+  window.addEventListener('beforeunload', function(){ try{ saveCncAiSettings(); } catch(e){} });
+
+  // ----- Safe timing wrapper for tasks -----
+  (function enhanceTaskTiming(){
+    try {
+      if (!window.TaskManager) return;
+      const TP = TaskManager.prototype;
+      if (!TP) return;
+      // Create storage for timings
+      window._cncTaskTimings = window._cncTaskTimings || [];
+      const originalAdd = TP.addTask;
+      TP.addTask = function(taskFn, description='مهمة') {
+        // Wrap the taskFn so timing is measured per-task without altering original semantics
+        const wrapped = async () => {
+          const label = `task:${description}:${Date.now()}`;
+          console.time(label);
+          const start = performance.now ? performance.now() : Date.now();
+          try {
+            const res = await taskFn();
+            return res;
+          } finally {
+            const end = performance.now ? performance.now() : Date.now();
+            console.timeEnd(label);
+            window._cncTaskTimings.push({ description, durationMs: Math.round(end - start), ts: new Date().toISOString() });
+            // keep only recent 200 entries
+            if (window._cncTaskTimings.length > 200) window._cncTaskTimings.shift();
+          }
+        };
+        return originalAdd.call(this, wrapped, description);
+      };
+    } catch(e) { console.warn('enhanceTaskTiming failed', e); }
+  })();
+
+  // ----- Debug Overlay: performance panel -----
+  function ensurePerfPanel() {
+    try {
+      const overlay = document.getElementById('debugOverlay');
+      if (!overlay) return;
+      let perf = document.getElementById('cncPerfPanel');
+      if (!perf) {
+        perf = document.createElement('div');
+        perf.id = 'cncPerfPanel';
+        perf.style.padding = '8px';
+        perf.style.borderTop = '1px solid rgba(255,255,255,0.02)';
+        perf.style.fontSize = '12px';
+        perf.style.color = '#cfeaf2';
+        overlay.appendChild(perf);
+      }
+      // update loop
+      setInterval(()=>{
+        try {
+          const timings = window._cncTaskTimings || [];
+          const last = timings.slice(-5);
+          const avg = timings.length ? Math.round(timings.reduce((s,t)=>s+t.durationMs,0)/timings.length) : 0;
+          perf.innerHTML = `<div style="opacity:0.9"><b>📊 أداء</b> — إجمالي سجلات: ${timings.length} — متوسط: ${avg} ms</div>` +
+                           `<div style="margin-top:6px;line-height:1.2;"><b>آخر المهام:</b> ${last.map(l=>`${l.description} (${l.durationMs}ms)`).join(' • ')}</div>`;
+        } catch(e){}
+      }, 1500);
+    } catch(e){ console.warn('ensurePerfPanel error', e); }
+  }
+  window.addEventListener('load', ensurePerfPanel);
+
+  // ----- Legend for TopView (non-intrusive) -----
+  function addDepthLegend() {
+    try {
+      if (document.getElementById('depthLegend')) return;
+      const container = document.getElementById('topViewContainer') || document.body;
+      const legend = document.createElement('canvas');
+      legend.id = 'depthLegend';
+      legend.width = 220;
+      legend.height = 24;
+      legend.style.border = '1px solid rgba(255,255,255,0.03)';
+      legend.style.borderRadius = '6px';
+      legend.style.marginTop = '8px';
+      legend.title = 'مقياس العمق (Z) — الألوان تتبع اختيار Colormap';
+      const ctx = legend.getContext('2d');
+      // draw gradient based on known colormaps - approximate jet
+      const grad = ctx.createLinearGradient(0,0,legend.width,0);
+      grad.addColorStop(0, '#0000ff');
+      grad.addColorStop(0.33, '#00ffff');
+      grad.addColorStop(0.66, '#ffff00');
+      grad.addColorStop(1, '#ff0000');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0,0,legend.width,legend.height);
+      ctx.fillStyle = '#cfeaf2';
+      ctx.font = '12px sans-serif';
+      ctx.fillText('عمق Z (مم):', 4, legend.height + 12);
+      // append after topViewContainer
+      container.appendChild(legend);
+    } catch(e){ console.warn('addDepthLegend', e); }
+  }
+  window.addEventListener('load', addDepthLegend);
+
+  // ----- Improved toasts (stacking, types) -----
+  (function initToasts(){
+    try {
+      let root = document.getElementById('cncToastsRoot');
+      if (!root) {
+        root = document.createElement('div');
+        root.id = 'cncToastsRoot';
+        root.style.position = 'fixed';
+        root.style.right = '16px';
+        root.style.bottom = '16px';
+        root.style.zIndex = 40000;
+        root.style.display = 'flex';
+        root.style.flexDirection = 'column';
+        root.style.gap = '8px';
+        document.body.appendChild(root);
+      }
+      window._showCncToast = function(msg, type='info', timeout=3500) {
+        try {
+          const el = document.createElement('div');
+          el.className = 'cnc-toast cnc-toast-' + type;
+          el.style.padding = '8px 12px';
+          el.style.borderRadius = '8px';
+          el.style.minWidth = '180px';
+          el.style.background = type === 'error' ? 'linear-gradient(90deg,#ff6b6b,#ff4444)' : (type==='warn' ? 'linear-gradient(90deg,#f5b041,#f39c12)' : 'linear-gradient(90deg,#06b6d4,#0284c7)');
+          el.style.color = type === 'error' ? '#210' : '#021';
+          el.style.boxShadow = '0 8px 24px rgba(2,6,23,0.6)';
+          el.style.fontWeight = '600';
+          el.textContent = msg;
+          root.appendChild(el);
+          setTimeout(()=>{ el.style.transition = 'opacity 0.35s'; el.style.opacity = '0'; setTimeout(()=>el.remove(), 400); }, timeout);
+        } catch(e){ console.warn('toast show failed', e); }
+      };
+      // expose simple alias to existing showToast for backward compatibility
+      window.showToast = window._showCncToast;
+    } catch(e){}
+  })();
+
+  // ----- Smart tooltips: non-intrusive titles for inputs without title -----
+  (function applySmartTooltips(){
+    try {
+      const labels = document.querySelectorAll('label');
+      labels.forEach(l => {
+        try {
+          const forId = l.getAttribute('for');
+          if (!forId) return;
+          const target = document.getElementById(forId);
+          if (!target) return;
+          if (!target.title) {
+            target.title = l.textContent.trim() + ' — اضغط للمزيد';
+          }
+        } catch(e){}
+      });
+    } catch(e){}
+  })();
+
+  // Expose utilities for debugging
+  window.CncAiHelpers = {
+    saveSettings: window.saveCncAiSettings || function(){},
+    restoreSettings: window.restoreCncAiSettings || function(){},
+    pxToMm: window.pxToMm
+  };
+
+})(); // end IIFE
+</script>
+<!-- === End of v1.0.1 additions === -->
+
 </body>
 </html>
