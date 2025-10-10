@@ -497,6 +497,28 @@
   <div id="toast"></div>
 
   <script>
+function clampSforM3(powerPercent) {
+  const sVal = Math.round(powerPercent * 10);
+  return Math.max(0, Math.min(sVal, 1000));
+}
+
+// ======== تعديلات التحويل (MM_TO_SCENE + تحويل بكسل -> مم) ========
+const MM_TO_SCENE = 0.1; // 1 mm -> 0.1 scene unit for Three.js (قابل للتعديل)
+function getWorkScale_mm_per_px() {
+  try {
+    if (!previewCanvas) return {sx:1, sy:1};
+    const workWidthMm = cmToMm(parseFloat(document.getElementById('workWidth').value) || 0);
+    const workHeightMm = cmToMm(parseFloat(document.getElementById('workHeight').value) || 0);
+    const sx = workWidthMm / previewCanvas.width;
+    const sy = workHeightMm / previewCanvas.height;
+    return { sx, sy };
+  } catch (e) { return {sx:1, sy:1}; }
+}
+function pxToMm(dx_px, dy_px) {
+  const s = getWorkScale_mm_per_px();
+  return { dx_mm: dx_px * s.sx, dy_mm: dy_px * s.sy };
+}
+
     // ================= متغيرات عامة =================
     let cvReady = false;
     let grayMat = null;
@@ -1701,7 +1723,12 @@
             else zVal = -((255 - pv) / 255.0) * maxDepth;
             if (invertZ) zVal = -zVal;
             lines.push(`G1 X${px} Y${py} Z${zVal.toFixed(3)}`);
-            totalLen += Math.hypot(x - x0, y - y0);
+            { 
+  const _dx_px = (x - x0);
+  const _dy_px = (y - y0);
+  const _mm = pxToMm(_dx_px, _dy_px);
+  { const _dx_px = (_mm.dx_mm); const _dy_px = (_mm.dy_mm); const _mm = pxToMm(_dx_px, _dy_px); totalLen += Math.hypot(_mm.dx_mm, _mm.dy_mm); };
+};
             x0 = x; y0 = y;
           }
 
@@ -1744,7 +1771,7 @@
         const lines = [];
         lines.push('G21 G90');
         lines.push('G0 X0 Y0');
-        lines.push('M3 S' + Math.round(laserPower * 10)); // تشغيل الليزر مرة واحدة
+        lines.push('M3 S' + clampSforM3(laserPower)); // تشغيل الليزر مرة واحدة
         
         const scaleX = workWidth / previewCanvas.width;
         const scaleY = workHeight / previewCanvas.height;
@@ -1917,7 +1944,7 @@
             const startY = (y0 * scaleY + originY).toFixed(2);
 
             lines.push(`G0 X${startX} Y${startY}`);
-            lines.push(`M3 S${Math.round(laserPower * 10)}`);
+            lines.push(`M3 S${clampSforM3(laserPower)}`);
             lines.push(`G1 F${laserSpeed.toFixed(0)}`);
 
             for (let i = 2; i < data.length; i += 2) {
@@ -1925,7 +1952,12 @@
               const px = (x * scaleX + originX).toFixed(2);
               const py = (y * scaleY + originY).toFixed(2);
               lines.push(`G1 X${px} Y${py}`);
-              totalLen += Math.hypot(x - x0, y - y0);
+              { 
+  const _dx_px = (x - x0);
+  const _dy_px = (y - y0);
+  const _mm = pxToMm(_dx_px, _dy_px);
+  { const _dx_px = (_mm.dx_mm); const _dy_px = (_mm.dy_mm); const _mm = pxToMm(_dx_px, _dy_px); totalLen += Math.hypot(_mm.dx_mm, _mm.dy_mm); };
+};
               x0 = x; y0 = y;
             }
 
@@ -2178,7 +2210,7 @@
 
     function createToolPathVisualization(pathPoints, dir) {
       if (!pathPoints || pathPoints.length < 2) return null;
-      const points = pathPoints.map(p => new THREE.Vector3(p.x / 10, -p.z, p.y / 10));
+      const points = pathPoints.map(p => new THREE.Vector3(p.x * MM_TO_SCENE, -p.z, p.y * MM_TO_SCENE));
       const geometry = new THREE.BufferGeometry().setFromPoints(points);
       let color = 0x10b981; // x
       if (dir === 'y') color = 0x3b82f6;
@@ -2342,7 +2374,7 @@
       const i = Math.floor(index);
       const p = simulation.pathPoints[i];
       if (!p) return;
-      simulation.tool.position.set(p.x / 10, -p.z, p.y / 10);
+      simulation.tool.position.set(p.x * MM_TO_SCENE, -p.z, p.y * MM_TO_SCENE);
     }
 
     function initSimulation() {
@@ -2438,7 +2470,7 @@
         // إنشاء مسار مرئي مبسط
         if (simulation.pathPoints.length > 1) {
           const points = simulation.pathPoints.map(p => 
-            new THREE.Vector3(p.x / 10, -p.z, p.y / 10)
+            new THREE.Vector3(p.x * MM_TO_SCENE, -p.z, p.y * MM_TO_SCENE)
           );
           const geometry = new THREE.BufferGeometry().setFromPoints(points);
           const material = new THREE.LineBasicMaterial({ 
