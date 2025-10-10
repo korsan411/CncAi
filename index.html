@@ -34,6 +34,7 @@
     button { background:#1e293b; color:#e6eef6; border:none; padding:10px; border-radius:8px; cursor:pointer }
     button.primary { background:#06b6d4; color:#021; font-weight:bold }
     button.secondary { background:#334155; }
+    button:disabled { opacity:0.6; cursor:not-allowed; }
     #toast { position:fixed; left:16px; bottom:16px; background:rgba(0,0,0,0.85); color:#fff; padding:10px 14px; border-radius:8px; display:none; z-index:10000 }
     .canvas-placeholder { width:100%; min-height:260px; background:#000; border-radius:6px; display:flex; align-items:center; justify-content:center; color:#9bb0c8; border:1px solid #334155 }
     .small-meta { font-size:12px; color:#9bb0c8; margin-top:6px }
@@ -156,8 +157,32 @@
       color: white;
       font-size: 16px;
     }
+    .progress-details {
+      color: #cfeaf2;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    /* Cancel button */
+    .cancel-btn {
+      background: #ef4444 !important;
+      color: white !important;
+      margin-top: 10px;
+    }
 
     @keyframes spin { 0%{transform:rotate(0)}100%{transform:rotate(360deg)} }
+
+    /* Performance warning */
+    .performance-warning {
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid #f59e0b;
+      border-radius: 6px;
+      padding: 8px;
+      margin: 8px 0;
+      color: #f59e0b;
+      font-size: 12px;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -474,6 +499,8 @@
   <div class="progress-overlay" id="progressOverlay">
     <div class="progress-spinner"></div>
     <div class="progress-text" id="progressText">جاري المعالجة...</div>
+    <div class="progress-details" id="progressDetails"></div>
+    <button id="btnCancel" class="cancel-btn">إلغاء العملية</button>
   </div>
 
   <!-- Debug Overlay -->
@@ -505,7 +532,8 @@
     let additionalContours = []; // {contour, area}
     let lastScanDir = 'x';
     let lastGeneratedGcode = '';
-    let isProcessing = false; // منع المعالجة المزدوجة
+    let isProcessing = false;
+    let currentTaskId = null;
 
     // colormap current
     let currentColormap = 'jet';
@@ -520,11 +548,18 @@
         this.queue = [];
         this.isRunning = false;
         this.currentTask = null;
+        this.maxConcurrent = 1; // مهمة واحدة فقط في الوقت نفسه
+        this.concurrentTasks = 0;
+        this.cancelRequested = false;
+        this.taskIdCounter = 0;
       }
 
       async addTask(taskFn, description = 'مهمة') {
+        const taskId = ++this.taskIdCounter;
+        currentTaskId = taskId;
+        
         return new Promise((resolve, reject) => {
-          this.queue.push({ taskFn, description, resolve, reject });
+          this.queue.push({ taskFn, description, resolve, reject, taskId });
           if (!this.isRunning) {
             this.processQueue();
           }
@@ -532,63 +567,113 @@
       }
 
       async processQueue() {
-        if (this.queue.length === 0) {
+        if (this.queue.length === 0 || this.concurrentTasks >= this.maxConcurrent) {
           this.isRunning = false;
           return;
         }
 
         this.isRunning = true;
+        this.concurrentTasks++;
         const task = this.queue.shift();
         this.currentTask = task;
 
         try {
           showProgress(task.description);
-          console.log(`بدء المهمة: ${task.description}`);
+          this.cancelRequested = false;
+          console.log(`بدء المهمة: ${task.description} (ID: ${task.taskId})`);
+          
           const result = await task.taskFn();
-          task.resolve(result);
-          console.log(`اكتملت المهمة: ${task.description}`);
+          
+          if (this.cancelRequested) {
+            console.log(`تم إلغاء المهمة: ${task.description}`);
+            task.reject(new Error('تم إلغاء المهمة'));
+          } else {
+            task.resolve(result);
+            console.log(`اكتملت المهمة: ${task.description}`);
+          }
         } catch (error) {
-          console.error(`فشل في ${task.description}:`, error);
-          showToast(`فشل في ${task.description}: ${error.message}`, 5000);
-          task.reject(error);
+          if (!this.cancelRequested) {
+            console.error(`فشل في ${task.description}:`, error);
+            showToast(`فشل في ${task.description}: ${error.message}`, 5000);
+            task.reject(error);
+          }
         } finally {
           this.currentTask = null;
+          this.concurrentTasks--;
           hideProgress();
+          currentTaskId = null;
+          
           // تأخير بسيط بين المهام لمنع ازدحام المتصفح
-          setTimeout(() => this.processQueue(), 100);
+          setTimeout(() => this.processQueue(), 50);
         }
+      }
+
+      cancelCurrentTask() {
+        if (this.currentTask) {
+          this.cancelRequested = true;
+          this.concurrentTasks = 0;
+          this.queue = []; // مسح قائمة الانتظار
+          console.log('تم طلب إلغاء المهمة الحالية');
+          return true;
+        }
+        return false;
       }
 
       clear() {
         this.queue = [];
         this.isRunning = false;
         this.currentTask = null;
+        this.concurrentTasks = 0;
+        this.cancelRequested = false;
       }
 
       getQueueLength() {
         return this.queue.length;
       }
+
+      getCurrentTask() {
+        return this.currentTask;
+      }
     }
 
     const taskManager = new TaskManager();
 
-    // ================= نظام التقدم =================
-    function showProgress(message = 'جاري المعالجة...') {
+    // ================= نظام التقدم المحسن =================
+    function showProgress(message = 'جاري المعالجة...', details = '') {
       const progressText = document.getElementById('progressText');
+      const progressDetails = document.getElementById('progressDetails');
       const progressOverlay = document.getElementById('progressOverlay');
+      const btnCancel = document.getElementById('btnCancel');
       
-      if (progressText && progressOverlay) {
-        progressText.textContent = message;
-        progressOverlay.style.display = 'flex';
+      if (progressText) progressText.textContent = message;
+      if (progressDetails) progressDetails.textContent = details;
+      if (progressOverlay) progressOverlay.style.display = 'flex';
+      if (btnCancel) btnCancel.style.display = 'block';
+    }
+
+    function updateProgressDetails(details) {
+      const progressDetails = document.getElementById('progressDetails');
+      if (progressDetails) {
+        progressDetails.textContent = details;
       }
     }
 
     function hideProgress() {
       const progressOverlay = document.getElementById('progressOverlay');
-      if (progressOverlay) {
-        progressOverlay.style.display = 'none';
-      }
+      const btnCancel = document.getElementById('btnCancel');
+      if (progressOverlay) progressOverlay.style.display = 'none';
+      if (btnCancel) btnCancel.style.display = 'none';
     }
+
+    // زر الإلغاء
+    document.getElementById('btnCancel').addEventListener('click', () => {
+      if (taskManager.cancelCurrentTask()) {
+        showToast('جاري إلغاء المهمة...');
+        isProcessing = false;
+        memoryManager.comprehensiveCleanup();
+        cleanupSimulation();
+      }
+    });
 
     // ================= نظام التحقق من الصحة المحسن =================
     class InputValidator {
@@ -625,7 +710,7 @@
       static validateImageSize(canvas) {
         if (!canvas) return false;
         
-        const maxPixels = 2000000; // 2MP للحد من استهلاك الذاكرة
+        const maxPixels = 1000000; // 1MP للحد من استهلاك الذاكرة
         const currentPixels = canvas.width * canvas.height;
         
         if (currentPixels > maxPixels) {
@@ -637,6 +722,8 @@
           const tempCtx = tempCanvas.getContext('2d');
           tempCanvas.width = newWidth;
           tempCanvas.height = newHeight;
+          
+          // استخدام تقنية أفضل لتقليل الحجم
           tempCtx.drawImage(canvas, 0, 0, newWidth, newHeight);
           
           const ctx = canvas.getContext('2d');
@@ -645,9 +732,26 @@
           ctx.drawImage(tempCanvas, 0, 0);
           
           showToast('تم تقليل حجم الصورة للأداء الأفضل');
+          console.log(`تم تقليل الصورة من ${currentPixels} إلى ${newWidth * newHeight} بكسل`);
           return true;
         }
         return false;
+      }
+
+      static validateProcessingPerformance(canvas) {
+        const maxPixels = 800000; // 0.8MP كحد آمن للمعالجة
+        const currentPixels = canvas.width * canvas.height;
+        
+        if (currentPixels > maxPixels) {
+          return {
+            needsReduction: true,
+            currentPixels,
+            maxPixels,
+            ratio: Math.sqrt(maxPixels / currentPixels)
+          };
+        }
+        
+        return { needsReduction: false, currentPixels };
       }
 
       static validateLaserSettings() {
@@ -682,7 +786,9 @@
     class MemoryManager {
       constructor() {
         this.mats = new Set();
-        this.maxMats = 15; // تقليل الحد الأقصى لتوفير الذاكرة
+        this.maxMats = 12; // تقليل الحد الأقصى لتوفير الذاكرة
+        this.cleanupInterval = null;
+        this.startCleanupMonitor();
       }
 
       track(mat) {
@@ -700,6 +806,7 @@
           const oldest = this.mats.values().next().value;
           this.safeDelete(oldest);
           this.mats.delete(oldest);
+          console.log('تنظيف أقدم مصفوفة من الذاكرة');
         }
       }
 
@@ -707,46 +814,106 @@
         if (mat && !mat.isDeleted && mat.delete) {
           try {
             mat.delete();
+            return true;
           } catch (e) {
             console.warn('Error deleting mat:', e);
           }
         }
+        return false;
       }
 
       cleanupAll() {
         console.log('تنظيف جميع مصفوفات OpenCV...');
-        this.mats.forEach(mat => this.safeDelete(mat));
+        let deletedCount = 0;
+        this.mats.forEach(mat => {
+          if (this.safeDelete(mat)) {
+            deletedCount++;
+          }
+        });
         this.mats.clear();
+        console.log(`تم حذف ${deletedCount} مصفوفة`);
+        
+        // تنظيف إضافي للذاكرة
+        this.forceGarbageCollection();
       }
 
       cleanupMats() {
         console.log('تنظيف المصفوفات المؤقتة...');
-        try {
-          if (grayMat && !grayMat.isDeleted) { 
-            this.safeDelete(grayMat);
-            grayMat = null; 
-          }
-        } catch (e) { console.warn('cleanup grayMat', e); }
+        let deletedCount = 0;
         
-        try {
-          if (contour && !contour.isDeleted && contour.delete) {
-            this.safeDelete(contour);
-            contour = null;
+        const matsToClean = [grayMat, contour, ...additionalContours.map(c => c.contour)];
+        matsToClean.forEach(mat => {
+          if (this.safeDelete(mat)) {
+            deletedCount++;
           }
-        } catch (e) { console.warn('cleanup contour', e); }
+        });
         
-        try {
-          additionalContours.forEach(item => {
-            if (item && item.contour && !item.contour.isDeleted) {
-              this.safeDelete(item.contour);
-            }
-          });
-          additionalContours = [];
-        } catch (e) { console.warn('cleanup additionalContours', e); }
+        grayMat = null;
+        contour = null;
+        additionalContours = [];
+        
+        console.log(`تم تنظيف ${deletedCount} مصفوفة مؤقتة`);
+        this.forceGarbageCollection();
+      }
+
+      comprehensiveCleanup() {
+        this.cleanupMats();
+        this.cleanupAll();
+      }
+
+      forceGarbageCollection() {
+        // محاولة إجبار جمع القمامة
+        if (cv && typeof cv.getGarbageCollection === 'function') {
+          try {
+            cv.getGarbageCollection();
+            console.log('تم تشغيل جمع القمامة لـ OpenCV');
+          } catch (e) {
+            console.log('OpenCV GC not available');
+          }
+        }
+        
+        // محاولة مع المتصفح
+        if (window.gc) {
+          try {
+            window.gc();
+            console.log('تم تشغيل جمع القمامة للمتصفح');
+          } catch (e) {
+            console.log('Browser GC not available');
+          }
+        }
+      }
+
+      startCleanupMonitor() {
+        // مراقبة الذاكرة كل 30 ثانية
+        this.cleanupInterval = setInterval(() => {
+          if (this.mats.size > this.maxMats * 0.8) {
+            console.log(`تحذير: الذاكرة مرتفعة (${this.mats.size} مصفوفة)`);
+            this.cleanupOldest();
+          }
+        }, 30000);
+      }
+
+      stopCleanupMonitor() {
+        if (this.cleanupInterval) {
+          clearInterval(this.cleanupInterval);
+          this.cleanupInterval = null;
+        }
       }
 
       getMemoryUsage() {
         return this.mats.size;
+      }
+
+      checkMemoryLeaks() {
+        console.log(`الذاكرة المستخدمة: ${this.mats.size} مصفوفة`);
+        let leaked = 0;
+        this.mats.forEach(mat => {
+          if (mat.isDeleted) {
+            console.warn('مصفوفة محذوفة لا تزال في الذاكرة');
+            leaked++;
+          }
+        });
+        return leaked;
       }
     }
 
@@ -756,7 +923,7 @@
     function waitForCv() {
       return new Promise((resolve, reject) => {
         let attempts = 0;
-        const maxAttempts = 100; // 10 ثواني كحد أقصى
+        const maxAttempts = 150; // 15 ثانية كحد أقصى
         
         function check() {
           attempts++;
@@ -1129,15 +1296,15 @@
       }
       
       // تحقق من حجم الملف
-      if (file.size > 10 * 1024 * 1024) { // 10MB
-        showToast('حجم الملف كبير جداً. الرجاء اختيار صورة أصغر من 10MB');
+      if (file.size > 8 * 1024 * 1024) { // 8MB
+        showToast('حجم الملف كبير جداً. الرجاء اختيار صورة أصغر من 8MB');
         return;
       }
       
       await taskManager.addTask(async () => {
         try {
           isProcessing = true;
-          memoryManager.cleanupMats();
+          memoryManager.comprehensiveCleanup();
           
           const img = new Image();
           const imageLoadPromise = new Promise((resolve, reject) => {
@@ -1160,8 +1327,13 @@
 
           let w = img.width, h = img.height;
           
-          // تحقق من حجم الصورة وقللها إذا لزم الأمر
-          InputValidator.validateImageSize(previewCanvas);
+          // تحقق من أداء المعالجة
+          const performanceCheck = InputValidator.validateProcessingPerformance(img);
+          if (performanceCheck.needsReduction) {
+            showToast('الصورة كبيرة جداً، جاري تحسين الأداء...');
+            w = Math.floor(w * performanceCheck.ratio);
+            h = Math.floor(h * performanceCheck.ratio);
+          }
 
           previewCanvas.width = w;
           previewCanvas.height = h;
@@ -1204,16 +1376,19 @@
       let src = null, gray = null, blurred = null, edges = null, hierarchy = null, contours = null, kernel = null;
       
       try {
+        updateProgressDetails('جاري تحميل الصورة...');
         src = cv.imread(previewCanvas);
         if (src.empty()) {
           throw new Error('الصورة غير صالحة للمعالجة');
         }
         memoryManager.track(src);
         
+        updateProgressDetails('جاري تحويل الصورة إلى تدرج رمادي...');
         gray = new cv.Mat();
         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
         memoryManager.track(gray);
         
+        updateProgressDetails('جاري تنعيم الصورة...');
         blurred = new cv.Mat();
         cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
         memoryManager.track(blurred);
@@ -1230,6 +1405,7 @@
         edges = new cv.Mat();
         memoryManager.track(edges);
         
+        updateProgressDetails('جاري كشف الحواف...');
         if (mode === 'sobel') {
           const gradX = new cv.Mat(), gradY = new cv.Mat();
           cv.Sobel(blurred, gradX, cv.CV_16S, 1, 0, 3, 1, 0, cv.BORDER_DEFAULT);
@@ -1257,6 +1433,7 @@
         memoryManager.track(contours);
         memoryManager.track(hierarchy);
 
+        updateProgressDetails('جاري تحليل الكنتور...');
         const minArea = (gray.cols * gray.rows) * 0.01; // default 1%
         const validContours = [];
         for (let i = 0; i < contours.size(); i++) {
@@ -1284,6 +1461,7 @@
         grayMat = gray.clone();
         memoryManager.track(grayMat);
 
+        updateProgressDetails('جاري عرض النتائج...');
         renderHeatmap(); // uses currentColormap
         renderContour(gray, contour);
 
@@ -1291,14 +1469,9 @@
         console.error('detectContours error', err);
         throw new Error('فشل في تحليل الصورة: ' + err.message);
       } finally {
-        // تنظيف المصفوفات المؤقتة
-        memoryManager.safeDelete(src);
-        memoryManager.safeDelete(blurred);
-        memoryManager.safeDelete(edges);
-        memoryManager.safeDelete(hierarchy);
-        memoryManager.safeDelete(contours);
-        memoryManager.safeDelete(kernel);
-        memoryManager.safeDelete(gray);
+        // تنظيف المصفوفات المؤقتة بشكل شامل
+        const matsToClean = [src, gray, blurred, edges, hierarchy, contours, kernel];
+        matsToClean.forEach(mat => memoryManager.safeDelete(mat));
       }
     }
 
@@ -1314,12 +1487,14 @@
       let src = null, gray = null, edges = null, hierarchy = null, contours = null;
       
       try {
+        updateProgressDetails('جاري تحميل الصورة للليزر...');
         src = cv.imread(previewCanvas);
         if (src.empty()) {
           throw new Error('الصورة غير صالحة للمعالجة');
         }
         memoryManager.track(src);
         
+        updateProgressDetails('جاري تحويل الصورة إلى تدرج رمادي...');
         gray = new cv.Mat();
         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
         memoryManager.track(gray);
@@ -1330,6 +1505,7 @@
         edges = new cv.Mat();
         memoryManager.track(edges);
         
+        updateProgressDetails('جاري معالجة الصورة للليزر...');
         if (mode === 'adaptive') {
           const adaptive = new cv.Mat();
           const blockSize = Math.max(3, 2 * Math.floor(detailLevel) + 1);
@@ -1411,6 +1587,7 @@
         memoryManager.track(contours);
         memoryManager.track(hierarchy);
 
+        updateProgressDetails('جاري تحليل كونتور الليزر...');
         const minArea = (gray.cols * gray.rows) * 0.002;
         const validContours = [];
         
@@ -1439,6 +1616,7 @@
         grayMat = gray.clone();
         memoryManager.track(grayMat);
 
+        updateProgressDetails('جاري عرض نتائج الليزر...');
         renderHeatmap();
         renderContour(gray, contour);
 
@@ -1446,12 +1624,9 @@
         console.error('detectLaserContours error', err);
         throw new Error('فشل في تحليل الصورة للليزر: ' + err.message);
       } finally {
-        // تنظيف الذاكرة
-        memoryManager.safeDelete(src);
-        memoryManager.safeDelete(gray);
-        memoryManager.safeDelete(edges);
-        memoryManager.safeDelete(hierarchy);
-        memoryManager.safeDelete(contours);
+        // تنظيف الذاكرة بشكل شامل
+        const matsToClean = [src, gray, edges, hierarchy, contours];
+        matsToClean.forEach(mat => memoryManager.safeDelete(mat));
       }
     }
 
@@ -1699,8 +1874,11 @@
         const scaleX = workWidth / previewCanvas.width;
         const scaleY = workHeight / previewCanvas.height;
 
+        updateProgressDetails('جاري توليد مسارات Raster...');
         if (dir === 'x') {
           for (let y = 0; y < previewCanvas.height; y += step) {
+            if (taskManager.cancelRequested) break;
+            
             const rowPoints = [];
             let inContour = false;
             let segmentStart = -1;
@@ -1718,9 +1896,16 @@
               processRowPoints(rowPoints, lines, feed, safeZ, (y / step) % 2 !== 0);
               totalLen += calculateRowLength(rowPoints);
             }
+            
+            // تحديث التقدم
+            if (y % 20 === 0) {
+              updateProgressDetails(`جاري معالجة الصف ${y}/${previewCanvas.height}`);
+            }
           }
         } else if (dir === 'y') {
           for (let x = 0; x < previewCanvas.width; x += step) {
+            if (taskManager.cancelRequested) break;
+            
             const colPoints = [];
             let inContour = false;
             let segmentStart = -1;
@@ -1738,7 +1923,16 @@
               processRowPoints(colPoints, lines, feed, safeZ, (x / step) % 2 !== 0);
               totalLen += calculateRowLength(colPoints);
             }
+            
+            // تحديث التقدم
+            if (x % 20 === 0) {
+              updateProgressDetails(`جاري معالجة العمود ${x}/${previewCanvas.width}`);
+            }
           }
+        }
+
+        if (taskManager.cancelRequested) {
+          throw new Error('تم إلغاء العملية');
         }
 
         lines.push('M5');
@@ -1791,7 +1985,10 @@
         const contoursToUse = (mode === 'outer') ? [contour] : [contour, ...additionalContours.map(c => c.contour)];
         let totalLen = 0;
 
+        updateProgressDetails('جاري توليد مسارات Contour...');
         for (const cnt of contoursToUse) {
+          if (taskManager.cancelRequested) break;
+          
           const data = cnt.data32S;
           if (!data || data.length < 4) continue;
 
@@ -1810,6 +2007,8 @@
           lines.push(`G1 Z${zStart.toFixed(3)}`);
 
           for (let i = 2; i < data.length; i += 2) {
+            if (taskManager.cancelRequested) break;
+            
             const x = data[i], y = data[i + 1];
             const px = (x * scaleX + originX).toFixed(2);
             const py = (y * scaleY + originY).toFixed(2);
@@ -1823,8 +2022,14 @@
             x0 = x; y0 = y;
           }
 
+          if (taskManager.cancelRequested) break;
+
           lines.push(`G1 X${startX} Y${startY} Z${zStart.toFixed(3)}`);
           lines.push(`G0 Z${safeZ.toFixed(2)}`);
+        }
+
+        if (taskManager.cancelRequested) {
+          throw new Error('تم إلغاء العملية');
         }
 
         lines.push('M5');
@@ -1875,7 +2080,10 @@
         let totalLen = 0;
         let pointCount = 0;
 
+        updateProgressDetails('جاري توليد كود الليزر...');
         for (let y = 0; y < previewCanvas.height; y += stepOver) {
+          if (taskManager.cancelRequested) break;
+          
           const rowPoints = [];
           
           for (let x = 0; x < previewCanvas.width; x += 3) { // خطوات كبيرة
@@ -1912,6 +2120,15 @@
           }
           
           if (pointCount > 2000) break;
+          
+          // تحديث التقدم
+          if (y % 20 === 0) {
+            updateProgressDetails(`جاري معالجة الصف ${y}/${previewCanvas.height} - ${pointCount} نقطة`);
+          }
+        }
+
+        if (taskManager.cancelRequested) {
+          throw new Error('تم إلغاء العملية');
         }
 
         lines.push('M5');
@@ -1957,7 +2174,10 @@
         let totalLen = 0;
         let pointCount = 0;
 
+        updateProgressDetails('جاري توليد كود الليزر السريع...');
         for (let y = 0; y < previewCanvas.height; y += stepOver) {
+          if (taskManager.cancelRequested) break;
+          
           const rowPoints = [];
           
           for (let x = 0; x < previewCanvas.width; x += 5) {
@@ -1990,6 +2210,15 @@
           }
           
           if (pointCount > 1000) break;
+          
+          // تحديث التقدم
+          if (y % 20 === 0) {
+            updateProgressDetails(`جاري المعالجة السريعة - ${pointCount} نقطة`);
+          }
+        }
+
+        if (taskManager.cancelRequested) {
+          throw new Error('تم إلغاء العملية');
         }
 
         lines.push('M5');
@@ -2034,8 +2263,11 @@
         const contoursToUse = [contour, ...additionalContours.map(c => c.contour)];
         let totalLen = 0;
 
+        updateProgressDetails('جاري توليد كود قص الليزر...');
         for (let pass = 0; pass < laserPasses; pass++) {
           for (const cnt of contoursToUse) {
+            if (taskManager.cancelRequested) break;
+            
             const data = cnt.data32S;
             if (!data || data.length < 4) continue;
 
@@ -2048,6 +2280,8 @@
             lines.push(`G1 F${laserSpeed.toFixed(0)}`);
 
             for (let i = 2; i < data.length; i += 2) {
+              if (taskManager.cancelRequested) break;
+              
               const x = data[i], y = data[i + 1];
               const px = (x * scaleX + originX).toFixed(2);
               const py = (y * scaleY + originY).toFixed(2);
@@ -2056,9 +2290,15 @@
               x0 = x; y0 = y;
             }
 
+            if (taskManager.cancelRequested) break;
+
             lines.push(`G1 X${startX} Y${startY}`);
             lines.push('M5');
           }
+        }
+
+        if (taskManager.cancelRequested) {
+          throw new Error('تم إلغاء العملية');
         }
 
         if (airAssist) lines.push('M9');
@@ -2267,6 +2507,12 @@
             const dbgBtn = document.getElementById('dbgToggleSize');
             if (dbgBtn) dbgBtn.click(); 
             break;
+          case 'escape':
+            e.preventDefault();
+            if (taskManager.cancelCurrentTask()) {
+              showToast('جاري إلغاء المهمة...');
+            }
+            break;
         }
       }
     });
@@ -2305,7 +2551,7 @@
       const path = [];
       let pos = { x: 0, y: 0, z: 0 };
       let pointCount = 0;
-      const maxPoints = 1000; // تقليل الحد الأقصى للأداء
+      const maxPoints = 800; // تقليل الحد الأقصى للأداء
       
       for (let line of lines) {
         if (pointCount >= maxPoints) break;
@@ -2323,7 +2569,7 @@
           if (zm) pos.z = parseFloat(zm[1]);
           
           // أخذ عينات أقل للتحسين
-          if (pointCount % 10 === 0) {
+          if (pointCount % 12 === 0) {
             path.push({ x: pos.x, y: pos.y, z: pos.z });
           }
           pointCount++;
@@ -2346,13 +2592,30 @@
       return line;
     }
 
-    // دالة مساعدة لتنظيف المحاكاة
+    // دالة مساعدة لتنظيف المحاكاة بشكل شامل
     function cleanupSimulation() {
       simulation.isPlaying = false;
       simulation.animationFrame && cancelAnimationFrame(simulation.animationFrame);
       simulation.animationFrame = null;
       simulation.index = 0;
       simulation.pathPoints = [];
+      
+      if (scene) {
+        // تنظيف شامل للمشهد
+        scene.traverse(object => {
+          if (object.geometry) {
+            object.geometry.dispose();
+          }
+          if (object.material) {
+            if (Array.isArray(object.material)) {
+              object.material.forEach(material => material.dispose());
+            } else {
+              object.material.dispose();
+            }
+          }
+        });
+        scene = null;
+      }
       
       if (controls) {
         controls.dispose();
@@ -2365,16 +2628,21 @@
             renderer.domElement.parentNode.removeChild(renderer.domElement);
           }
           renderer.dispose();
+          renderer.forceContextLoss();
           renderer = null;
         } catch (e) {
           console.warn('Error disposing renderer:', e);
         }
       }
       
-      scene = null;
       camera = null;
       simulation.tool = null;
       simulation.toolPath = null;
+      
+      // تنظيف ذاكرة WebGL
+      if (window.performance && window.performance.memory) {
+        console.log('تم تنظيف ذاكرة المحاكاة');
+      }
     }
 
     // Simulation controls UI will be created inside the three container
@@ -2518,7 +2786,8 @@
 
         renderer = new THREE.WebGLRenderer({ 
           antialias: false,
-          preserveDrawingBuffer: true // للمساعدة في الأداء
+          preserveDrawingBuffer: true,
+          powerPreference: "low-power" // توفير الطاقة
         });
         renderer.setSize(containerW, containerH);
         container.appendChild(renderer.domElement);
@@ -2560,9 +2829,9 @@
         const pathPoints = parseGcodeForSimulation(gcode);
         
         // إذا كان المسار كبير جداً، نخففه أكثر
-        if (pathPoints.length > 2000) {
+        if (pathPoints.length > 1500) {
           const simplifiedPoints = [];
-          for (let i = 0; i < pathPoints.length; i += 10) {
+          for (let i = 0; i < pathPoints.length; i += 15) {
             simplifiedPoints.push(pathPoints[i]);
           }
           simulation.pathPoints = simplifiedPoints;
@@ -2608,6 +2877,7 @@
 
         // حلقة التصيير
         (function renderLoop() {
+          if (!renderer) return;
           requestAnimationFrame(renderLoop);
           if (controls) controls.update();
           renderer.render(scene, camera);
@@ -2844,8 +3114,14 @@
 
     // تنظيف الذاكرة عند إغلاق الصفحة
     window.addEventListener('beforeunload', () => {
-      memoryManager.cleanupAll();
+      memoryManager.comprehensiveCleanup();
       cleanupSimulation();
+      memoryManager.stopCleanupMonitor();
+    });
+
+    // تنظيف الذاكرة عند فقدان التركيز (لتحسين الأداء)
+    window.addEventListener('blur', () => {
+      memoryManager.forceGarbageCollection();
     });
 
   </script>
