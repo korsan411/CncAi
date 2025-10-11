@@ -3267,6 +3267,50 @@
   // monitor CV status
   setInterval(updateCV,2000);
 })();
+
+<script>
+/* 🧠 CncAi v1.0.3 - OpenCV Smart Integration Fix */
+(function(){
+  // مراقبة نظام OpenCV القديم
+  let retryCount = 0;
+  const originalWarn = console.warn;
+  console.warn = function(...args){
+    try{
+      const msg = args.join(' ');
+      if(msg.includes('OpenCV test failed')) {
+        retryCount++;
+        if(window.appendDebug) appendDebug('Retry '+retryCount+' • CV not ready');
+        if(retryCount > 3 && window.safeRetryCv) {
+          appendDebug('Switching to Smart Debug retry...');
+          safeRetryCv();
+        }
+      }
+    }catch(e){}
+    originalWarn.apply(console, args);
+  };
+
+  // عند نجاح التحميل
+  const originalLog = console.log;
+  console.log = function(...args){
+    if(args.join(' ').includes('OpenCV build info available')){
+      if(window.appendDebug) appendDebug('✅ OpenCV build info detected');
+      if(window.updateCvState) updateCvState();
+    }
+    originalLog.apply(console, args);
+  };
+
+  // فحص تلقائي كل ثانيتين
+  setInterval(()=>{
+    try{
+      if(window.cv && cv.Mat){
+        if(window.appendDebug) appendDebug('✅ OpenCV operational');
+        if(window.updateCvState) updateCvState();
+      }
+    }catch(e){}
+  },2000);
+})();
+</script>
+  
 </script>
 <!-- === End of CncAi v1.0.3 injection === -->
 
