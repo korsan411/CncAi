@@ -1,79 +1,336 @@
-<!DOCTYPE html>
-<html lang="ar">
+<!doctype html>
+<html lang="ar" dir="rtl">
 <head>
-<meta charset="UTF-8">
-<title>CncAi Local Assembler</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CncAi Local Assembler v4 — Mobile Smart Edition</title>
 <style>
-  body {
-    font-family: system-ui, sans-serif;
-    background: #0f172a;
-    color: #f1f5f9;
-    padding: 20px;
-    direction: rtl;
-  }
-  textarea {
-    width: 100%;
-    height: 300px;
-    background: #1e293b;
-    color: #e2e8f0;
-    border: 1px solid #334155;
-    border-radius: 10px;
-    padding: 10px;
-    font-family: monospace;
-    font-size: 14px;
-  }
-  button {
-    background: linear-gradient(90deg,#0ea5e9,#0284c7);
-    border: none;
-    color: white;
-    padding: 10px 18px;
-    border-radius: 8px;
-    margin-top: 12px;
-    font-size: 16px;
-    cursor: pointer;
-  }
-  button:hover {
-    opacity: 0.9;
-  }
-  .result {
-    margin-top: 20px;
-    padding: 10px;
-    background: #1e293b;
-    border-radius: 8px;
-    font-size: 14px;
-  }
+  :root{--bg:#071126;--panel:#0f1724;--muted:#9fb6c6;--accent:#06b6d4}
+  body{margin:0;font-family:system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;background:linear-gradient(180deg,#02111b,#061526);color:#e6f7ff;padding:12px}
+  .wrap{max-width:920px;margin:0 auto}
+  header{display:flex;gap:8px;align-items:center;justify-content:space-between}
+  h1{font-size:18px;margin:6px 0;color:#dffaff}
+  small{color:var(--muted)}
+  .panel{background:var(--panel);border-radius:10px;padding:12px;margin-top:12px;box-shadow:0 8px 30px rgba(0,0,0,0.6)}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+  input,select,textarea,button{font-size:15px}
+  input[type="file"]{color:transparent}
+  textarea{width:100%;min-height:160px;background:#071726;border:1px solid rgba(255,255,255,0.03);color:#eaf6ff;padding:8px;border-radius:8px;resize:vertical;font-family:monospace}
+  .controls{display:flex;gap:8px;flex-wrap:wrap}
+  button{background:linear-gradient(90deg,var(--accent),#0b84b8);color:#001;border:0;padding:10px 12px;border-radius:10px;font-weight:700}
+  button.alt{background:transparent;border:1px solid rgba(255,255,255,0.05);color:var(--muted)}
+  .muted{color:var(--muted);font-size:13px}
+  .parts{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+  .part{background:#081726;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.02);display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .part pre{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0;max-width:60%}
+  .kbd{background:#031a27;padding:6px 8px;border-radius:6px;font-family:monospace}
+  footer{margin-top:12px;color:var(--muted);font-size:13px;text-align:center}
+  @media (max-width:640px){ .row{flex-direction:column} .part pre{max-width:55%} }
 </style>
 </head>
 <body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>CncAi Local Assembler v4</h1>
+      <small>Mobile Smart Edition — Android · Chrome — عربي / English</small>
+    </div>
+    <div style="text-align:left">
+      <small>Auto-save: <span id="autosaveState">On</span></small>
+    </div>
+  </header>
 
-<h2>🧩 CncAi Local Assembler</h2>
-<p>انسخ الكود الذي أرسله لك (حتى لو مجزأ)، ثم اضغط "دمج وحفظ" لإنشاء الملف الكامل محليًا.</p>
+  <div class="panel">
+    <label>1) رفع ملفات (Upload files) — اختر أجزاء .txt أو ملفات HTML/JS</label>
+    <div class="row">
+      <input id="filePicker" type="file" multiple accept=".html,.htm,.js,.txt" />
+      <button id="importFilesBtn" class="alt">Import & Add</button>
+      <button id="mergeFilesBtn">Merge Uploaded → دمج</button>
+      <button id="downloadMergedBtn" class="alt">Download Merged</button>
+    </div>
+    <div class="muted" style="margin-top:6px">يمكنك اختيار ملفات الأجزاء التي قسمناها (part1, part2, ...). سيُضاف كل ملف كجزء منفصل في الذاكرة المؤقتة.</div>
+  </div>
 
-<textarea id="codeInput" placeholder="ألصق هنا الكود الذي أرسله لك..."></textarea>
-<br>
-<button id="mergeBtn">💾 دمج وحفظ</button>
+  <div class="panel">
+    <label>2) لصق / إضافة أجزاء يدوياً (Paste parts)</label>
+    <textarea id="pasteArea" placeholder="ألصق هنا جزءًا من الكود — ثم اضغط Add Part أو Add & Merge"></textarea>
+    <div class="row" style="margin-top:8px">
+      <button id="addPartBtn">➕ Add Part • إضافة جزء</button>
+      <button id="addMergeBtn" class="alt">➕⚡ Add & Merge</button>
+      <button id="clearPasteBtn" class="alt">🗑️ Clear</button>
+    </div>
+    <div class="muted" style="margin-top:8px">الأداة تحفظ الأجزاء وتمنع التكرار. يمكنك إعادة ترتيب الأجزاء أو حذفها قبل الدمج.</div>
+  </div>
 
-<div class="result" id="resultBox"></div>
+  <div class="panel">
+    <label>3) الأجزاء الحالية (Current Parts)</label>
+    <div id="partsList" class="parts">
+      <!-- dynamic list -->
+    </div>
+    <div style="margin-top:10px" class="row">
+      <button id="mergeAllBtn">Merge All • دمج الكل</button>
+      <button id="clearPartsBtn" class="alt">Clear All • مسح الكل</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <label>4) تقسيم ملف كبير (Split large file)</label>
+    <div class="row">
+      <input id="splitFilePicker" type="file" accept=".html,.htm,.js,.txt" />
+      <label class="muted">حجم الجزء (KB)</label>
+      <input id="splitSize" type="number" value="30" style="width:90px" />
+      <button id="doSplitBtn" class="alt">✂️ Split • تقسيم</button>
+    </div>
+    <div class="muted" style="margin-top:6px">سيتم تنزيل أجزاء نصية جاهزة للإرسال (part1, part2, ...)</div>
+  </div>
+
+  <div class="panel">
+    <label>5) معاينة الملف المدموج (Preview merged)</label>
+    <textarea id="mergedPreview" placeholder="Preview of merged file..." readonly></textarea>
+    <div class="row" style="margin-top:8px">
+      <button id="saveMergedBtn">Save Merged • حفظ</button>
+      <button id="copyMergedBtn" class="alt">Copy Merged • نسخ</button>
+      <button id="exportPartsZipBtn" class="alt">Export .zip (parts)</button>
+    </div>
+    <div id="status" class="muted" style="margin-top:8px"></div>
+  </div>
+
+  <footer>
+    <small>مصمم للعمل محليًا على موبايل — كل البيانات تبقى محليًا ولا تُرسَل إلى أي سيرفر.</small>
+  </footer>
+</div>
 
 <script>
-document.getElementById("mergeBtn").onclick = function(){
-  const content = document.getElementById("codeInput").value.trim();
-  if(!content){
-    alert("يرجى لصق الكود أولًا.");
-    return;
+(function(){
+  // State
+  const parts = []; // {id, title, content}
+  const partsListEl = document.getElementById('partsList');
+  const mergedPreview = document.getElementById('mergedPreview');
+  const statusEl = document.getElementById('status');
+  const autosaveKey = 'CncAi_v4_parts';
+  const autosaveStateEl = document.getElementById('autosaveState');
+
+  // Utility: generate id
+  function uid(){ return 'p'+Math.random().toString(36).slice(2,9); }
+
+  // Load autosave
+  function loadAutosave(){
+    try{
+      const raw = localStorage.getItem(autosaveKey);
+      if(!raw) return;
+      const arr = JSON.parse(raw);
+      if(Array.isArray(arr)){
+        arr.forEach(a=>{
+          if(a && a.content) parts.push({id:uid(), title:a.title||'part', content:a.content});
+        });
+        renderParts();
+        setStatus('Recovered autosave: ' + parts.length + ' parts');
+      }
+    }catch(e){ console.warn('loadAutosave', e); }
+  }
+  loadAutosave();
+
+  // Save autosave
+  function saveAutosave(){
+    try{
+      const toSave = parts.map(p=>({title:p.title, content:p.content}));
+      localStorage.setItem(autosaveKey, JSON.stringify(toSave));
+      autosaveStateEl.innerText = 'On';
+    }catch(e){ console.warn('saveAutosave', e); autosaveStateEl.innerText = 'Err'; }
   }
 
-  const blob = new Blob([content], {type: "text/html"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  const fileName = "CncAi_merged_" + new Date().toISOString().replace(/[:.]/g,"-") + ".html";
-  a.download = fileName;
-  a.click();
+  // Helpers
+  function setStatus(msg, timeout=3500){
+    statusEl.innerText = msg||'';
+    if(timeout>0) setTimeout(()=>{ if(statusEl.innerText===msg) statusEl.innerText=''; }, timeout);
+  }
 
-  document.getElementById("resultBox").innerHTML = 
-    `✅ تم حفظ الملف بنجاح باسم: <b>${fileName}</b><br>يمكنك الآن فتحه في المتصفح مباشرة.`;
-};
+  function renderParts(){
+    partsListEl.innerHTML = '';
+    parts.forEach((p, idx)=>{
+      const el = document.createElement('div');
+      el.className = 'part';
+      const pre = document.createElement('pre');
+      pre.textContent = (p.title || 'part') + ' — ' + (p.content.slice(0,120).replace(/\n/g,'␤ '));
+      const actions = document.createElement('div');
+      actions.style.display='flex'; actions.style.gap='8px';
+      const up = document.createElement('button'); up.className='alt'; up.textContent='↑';
+      const down = document.createElement('button'); down.className='alt'; down.textContent='↓';
+      const del = document.createElement('button'); del.className='alt'; del.textContent='✖';
+      const view = document.createElement('button'); view.className='alt'; view.textContent='View';
+      const save = document.createElement('button'); save.className='alt'; save.textContent='Save';
+      // actions
+      up.onclick = ()=>{ if(idx>0){ parts.splice(idx,1); parts.splice(idx-1,0,p); renderParts(); saveAutosave(); } };
+      down.onclick = ()=>{ if(idx<parts.length-1){ parts.splice(idx,1); parts.splice(idx+1,0,p); renderParts(); saveAutosave(); } };
+      del.onclick = ()=>{ if(confirm('حذف الجزء؟ Confirm delete?')){ parts.splice(idx,1); renderParts(); saveAutosave(); } };
+      view.onclick = ()=>{ mergedPreview.value = p.content; setStatus('Previewing '+(p.title||'part')); };
+      save.onclick = ()=>{ downloadText((p.title||'part')+'.txt', p.content); setStatus('Saved '+(p.title||'part')); };
+      actions.appendChild(view); actions.appendChild(save); actions.appendChild(up); actions.appendChild(down); actions.appendChild(del);
+      el.appendChild(pre); el.appendChild(actions);
+      partsListEl.appendChild(el);
+    });
+    mergedPreview.value = parts.map(p=>p.content).join('\n\n');
+  }
+
+  function downloadText(name, text){
+    const blob = new Blob([text], {type:'text/plain'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  }
+
+  // Add part from text
+  document.getElementById('addPartBtn').addEventListener('click', ()=>{
+    const text = document.getElementById('pasteArea').value.trim();
+    if(!text){ alert('ألصق جزء من الشيفرة أولاً / Paste content first'); return; }
+    const cleaned = text.replace(/\uFEFF/g,'').trim();
+    // prevent duplicate large blocks (basic)
+    if(parts.some(p=>p.content === cleaned)){
+      setStatus('This part already exists • الجزء مكرر'); return;
+    }
+    parts.push({id:uid(), title:'part'+(parts.length+1), content:cleaned});
+    renderParts(); saveAutosave();
+    document.getElementById('pasteArea').value = '';
+    setStatus('Added part • تم الإضافة');
+  });
+
+  // Add & Merge
+  document.getElementById('addMergeBtn').addEventListener('click', ()=>{
+    document.getElementById('addPartBtn').click();
+    setTimeout(()=>{ document.getElementById('mergeAllBtn').click(); }, 250);
+  });
+
+  // Clear paste
+  document.getElementById('clearPasteBtn').addEventListener('click', ()=>{ document.getElementById('pasteArea').value = ''; });
+
+  // Merge All
+  document.getElementById('mergeAllBtn').addEventListener('click', ()=>{
+    if(parts.length===0){ alert('No parts to merge — لا توجد أجزاء للدمج'); return; }
+    const merged = parts.map(p=>p.content).join('\n\n');
+    mergedPreview.value = merged;
+    // provide download name
+    const fileName = 'CncAi_merged_' + new Date().toISOString().replace(/[:.]/g,'-') + '.html';
+    downloadText(fileName, merged);
+    setStatus('Merged & downloaded: ' + fileName);
+  });
+
+  // Clear all parts
+  document.getElementById('clearPartsBtn').addEventListener('click', ()=>{
+    if(!confirm('Clear all parts? مسح جميع الأجزاء؟')) return;
+    parts.length = 0; renderParts(); saveAutosave(); setStatus('All parts cleared');
+  });
+
+  // Save merged button (preview)
+  document.getElementById('saveMergedBtn').addEventListener('click', ()=>{
+    const content = mergedPreview.value || parts.map(p=>p.content).join('\n\n');
+    if(!content){ alert('Nothing to save'); return; }
+    const fileName = 'CncAi_merged_' + new Date().toISOString().replace(/[:.]/g,'-') + '.html';
+    downloadText(fileName, content);
+    setStatus('Saved: ' + fileName);
+  });
+
+  // Copy merged
+  document.getElementById('copyMergedBtn').addEventListener('click', async ()=>{
+    try{
+      await navigator.clipboard.writeText(mergedPreview.value || parts.map(p=>p.content).join('\n\n'));
+      setStatus('Copied to clipboard • النسخة في الحافظة');
+    }catch(e){ setStatus('Copy failed'); }
+  });
+
+  // Import files (filePicker)
+  document.getElementById('importFilesBtn').addEventListener('click', ()=> document.getElementById('filePicker').click());
+  document.getElementById('filePicker').addEventListener('change', async (ev)=>{
+    const files = Array.from(ev.target.files || []);
+    if(files.length===0) return;
+    setStatus('Importing ' + files.length + ' file(s) ...');
+    for(const f of files){
+      try{
+        const txt = await f.text();
+        // small cleaning
+        const cleaned = txt.replace(/\uFEFF/g,'').trim();
+        // avoid exact duplicates
+        if(parts.some(p=>p.content === cleaned)){ setStatus('Skipped duplicate: '+f.name); continue; }
+        parts.push({id:uid(), title:f.name, content:cleaned});
+        renderParts(); saveAutosave();
+      }catch(e){ console.warn('read file', e); }
+    }
+    setStatus('Imported ' + files.length + ' files');
+    // reset input
+    ev.target.value = '';
+  });
+
+  // Merge uploaded files button triggers file input
+  document.getElementById('mergeFilesBtn').addEventListener('click', async ()=>{
+    // if there are no current parts but user selected files earlier, open picker
+    if(parts.length===0){
+      document.getElementById('filePicker').click();
+      setStatus('Choose files to import then press Merge Uploaded → دمج');
+      return;
+    }
+    // else just merge existing parts
+    document.getElementById('mergeAllBtn').click();
+  });
+
+  // Download merged (quick)
+  document.getElementById('downloadMergedBtn').addEventListener('click', ()=>{
+    if(parts.length===0){ alert('No parts to download'); return; }
+    const merged = parts.map(p=>p.content).join('\n\n');
+    const name = 'CncAi_merged_' + new Date().toISOString().replace(/[:.]/g,'-') + '.html';
+    downloadText(name, merged);
+    setStatus('Downloaded ' + name);
+  });
+
+  // Split large file
+  document.getElementById('doSplitBtn').addEventListener('click', ()=>{
+    const file = document.getElementById('splitFilePicker').files[0];
+    if(!file){ alert('اختر ملفًا أولًا — choose a file'); return; }
+    const kb = parseInt(document.getElementById('splitSize').value) || 30;
+    const chunk = kb * 1024;
+    const reader = new FileReader();
+    reader.onload = function(e){
+      const txt = e.target.result;
+      let part = 0;
+      for(let i=0;i<txt.length;i+=chunk){
+        part++;
+        const segment = txt.slice(i, i+chunk);
+        const name = file.name.replace(/\.[^.]+$/,'') + '_part' + part + '.txt';
+        downloadText(name, segment);
+      }
+      setStatus('Split into ' + part + ' parts • تم التقسيم');
+    };
+    reader.readAsText(file);
+  });
+
+  // Export parts as zip (optional lightweight - uses JSZip if available)
+  document.getElementById('exportPartsZipBtn').addEventListener('click', async ()=>{
+    if(parts.length===0){ alert('No parts'); return; }
+    // If JSZip available use it, else download parts individually
+    if(window.JSZip){
+      const zip = new JSZip();
+      parts.forEach((p,i)=> zip.file((p.title||'part') + '_' + (i+1) + '.txt', p.content));
+      const blob = await zip.generateAsync({type:'blob'});
+      const name = 'CncAi_parts_' + new Date().toISOString().replace(/[:.]/g,'-') + '.zip';
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+      setStatus('Exported ZIP');
+    } else {
+      // fallback: download each part separately
+      parts.forEach((p,i)=> downloadText((p.title||'part') + '_' + (i+1) + '.txt', p.content));
+      setStatus('Downloaded ' + parts.length + ' files');
+    }
+  });
+
+  // Auto-save interval
+  setInterval(()=> saveAutosave(), 4000);
+
+  // initial render
+  renderParts();
+  setStatus('Ready — جاهز');
+
+  // expose simple API for debug
+  window.CncAiAssembler = {
+    parts, addPart: (t,c)=>{ parts.push({id:uid(),title:t,content:c}); renderParts(); saveAutosave(); },
+    clear: ()=>{ parts.length=0; renderParts(); saveAutosave(); }
+  };
+})();
 </script>
-
 </body>
 </html>
