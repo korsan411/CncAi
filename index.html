@@ -3230,6 +3230,236 @@
     } else {
       initApp();
     }
+// ----------------- CNCController: طبقة واقعية للراوتر (non-destructive) -----------------
+(function(){
+  if (window.CNCController) return; // لا تعيد التعريف إذا كان موجود
+
+  const defaults = {
+    maxFeed: 4000,           // mm/min - حد أعلى واقعي (قابل للتعديل)
+    maxRapid: 6000,          // mm/min - G0 limit
+    accel: 1000,             // mm/min^2 (مستخدم فقط للترميز/تعليقات)
+    toolDia: 3.175,          // mm (1/8") افتراضي
+    depthPerPass: 1.0,       // mm لكل تمريرة
+    spindleRPM: 12000,       // RPM افتراضي للمغزل
+    spindleStartDelayMs: 300 // ms للتأكد من دوران المغزل
+  };
+
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+
+  // آمن: يلف أي معالج زر بحيث نخزن القديم (undo-friendly)
+  function safeReplaceButtonHandler(btnId, newHandler) {
+    try {
+      const btn = document.getElementById(btnId);
+      if (!btn) return null;
+      // احفظ المستدعي القديم
+      const old = btn._oldClickHandler || null;
+      if (!old) {
+        // انتبه: لا نستخدم onclick لأنه قد يكون غير معرف؛ نستخدم addEventListener ونخزنه
+        const listeners = getEventListeners && getEventListeners(btn).click;
+      }
+      // نزيل مستمعات click المعرفة عبر addEventListener بطريقة آمنة عبر استبدال clone
+      const clone = btn.cloneNode(true);
+      btn.parentNode.replaceChild(clone, btn);
+      clone.addEventListener('click', newHandler);
+      clone._oldClickHandler = old;
+      return { btn: clone, old };
+    } catch (e) {
+      console.warn('safeReplaceButtonHandler failed for', btnId, e);
+      return null;
+    }
+  }
+
+  // إضافة lead-in/out بسيط (يحرك من نقطة منسوبة للخارج ثم يبدأ المسار)
+  function makeLeadIn(x,y,dir,leadLen) {
+    // dir: 'in' أو 'out' ، لكن هنا نعيد نقطة ابتدائية قصيرة خارج المسار (بسيط)
+    const sign = -1;
+    const dx = leadLen * sign;
+    return { x: (x + dx), y: y };
+  }
+
+  // حساب طول صفوف (مقتبس/متوافق مع مشروعك)
+  function calculateLineLen(points) {
+    let len = 0;
+    for (let i=1;i<points.length;i++){
+      const a = points[i-1], b = points[i];
+      const dx = (b.x - a.x), dy = (b.y - a.y);
+      len += Math.hypot(dx,dy);
+    }
+    return len;
+  }
+
+  // post-process raster/contour gcode to add multi-pass Z, spindle, feed clamps, lead-ins
+  function postProcessGcodeForRouter(gcode, opts = {}) {
+    try {
+      if (!gcode || gcode.trim().length === 0) return gcode;
+      const cfg = Object.assign({}, defaults, opts || {});
+      // احسب أقصى عمق من واجهة المستخدم (إن وجدت)
+      const maxDepth = parseFloat(document.getElementById('maxDepth')?.value) || 3.0;
+      const safeZ = parseFloat(document.getElementById('safeZ')?.value) || 5.0;
+      const feedUI = parseFloat(document.getElementById('feedRate')?.value) || 800;
+      const feed = clamp(feedUI, 10, cfg.maxFeed);
+
+      const depthPerPass = Math.min(cfg.depthPerPass, Math.abs(maxDepth));
+      const passes = Math.max(1, Math.ceil(Math.abs(maxDepth)/depthPerPass));
+      const zSteps = [];
+      for (let p=1;p<=passes;p++){
+        let z = - (p * depthPerPass);
+        if (p === passes) z = -Math.abs(maxDepth); // last pass exact
+        zSteps.push(parseFloat(z.toFixed(3)));
+      }
+
+      const lines = gcode.split(/\r?\n/);
+      const out = [];
+      // Add header: units, spindle on
+      out.push('; -- Post-processed by CNCController (realistic mode)');
+      out.push('G21 G90 G17 ; mm absolute plane XY');
+      out.push(`; spindle RPM suggestion: S${cfg.spindleRPM}`);
+      out.push(`M3 S${Math.round(cfg.spindleRPM)} ; spindle on`);
+      out.push(`G4 P${Math.max(0, Math.floor(cfg.spindleStartDelayMs/1000))} ; dwell for spindle spinup`);
+
+      // We will scan input G-code and inject multi-pass Z where we detect plunge moves (Z negative)
+      // Strategy: whenever we see a path that contains Z moves to negative, split into passes
+      let currentBlock = [];
+      for (let i=0;i<lines.length;i++){
+        const L = lines[i].trim();
+        if (!L) continue;
+        // preserve comments and non-move commands
+        if (/^(M30|M2|;|%)/i.test(L)) {
+          currentBlock.push(L);
+          continue;
+        }
+
+        // detect start of a contour/raster move block by G0/G1 with X/Y coordinates
+        if (/^(G0|G1)\b/i.test(L) && /X[-\d.]+/i.test(L) && /Y[-\d.]+/i.test(L)) {
+          // accumulate contiguous XY moves as a polyline
+          const poly = [];
+          // if there's a Z on same line, keep it too (we'll handle)
+          let j = i;
+          while (j < lines.length) {
+            const Lj = lines[j].trim();
+            if (!/^(G0|G1)\b/i.test(Lj)) break;
+            if (!/X[-\d.]+/i.test(Lj) && !/Y[-\d.]+/i.test(Lj)) break;
+            poly.push(Lj);
+            j++;
+          }
+          // move i forward
+          i = j - 1;
+
+          // convert poly lines to points
+          const pts = poly.map(ln=>{
+            const xm = ln.match(/X([-\d.]+)/i);
+            const ym = ln.match(/Y([-\d.]+)/i);
+            const zm = ln.match(/Z([-\d.]+)/i);
+            return {
+              x: xm ? parseFloat(xm[1]) : null,
+              y: ym ? parseFloat(ym[1]) : null,
+              z: zm ? parseFloat(zm[1]) : null,
+              raw: ln
+            };
+          });
+
+          // if any z in this poly is negative -> it's a cutting pass; we apply multi-pass
+          const hasCut = pts.some(p => p.z !== null && p.z < 0);
+          if (!hasCut) {
+            // clamp feed speeds and pass through
+            poly.forEach(ln=>{
+              const lineWithFeed = ln.replace(/F([-\d.]+)/i, `F${Math.round(feed)}`);
+              out.push(lineWithFeed);
+            });
+          } else {
+            // perform passes: for each zStep, we write safeZ rapid to startpoint then plunge to zStep and follow XY
+            // find first XY target
+            const first = pts.find(p=>p.x!==null && p.y!==null);
+            if (!first) continue;
+
+            // lead-in (small offset) to avoid direct corner plunge
+            out.push(`G0 Z${safeZ.toFixed(3)}`);
+            out.push(`G0 X${first.x.toFixed(3)} Y${first.y.toFixed(3)}`);
+            for (let passIdx=0; passIdx<zSteps.length; passIdx++){
+              const zTarget = zSteps[passIdx];
+              out.push(`; Pass ${passIdx+1}/${zSteps.length} Z=${zTarget.toFixed(3)}`);
+              out.push(`G1 F${Math.round(feed)}`);
+              out.push(`G1 Z${zTarget.toFixed(3)}`); // plunge
+              // follow poly XY but maintain the zTarget value
+              for (const p of pts) {
+                const X = (p.x !== null) ? `X${p.x.toFixed(3)}` : '';
+                const Y = (p.y !== null) ? `Y${p.y.toFixed(3)}` : '';
+                out.push(`G1 ${X} ${Y} Z${zTarget.toFixed(3)}`);
+              }
+              // retract to safeZ between passes (optionally shallow retract)
+              out.push(`G0 Z${(safeZ).toFixed(3)}`);
+            }
+          }
+        } else {
+          // clamp feed rates in other G1 lines
+          if (/^G1\b/i.test(L)) {
+            const newL = L.replace(/F([-\d.]+)/i, `F${Math.round(feed)}`);
+            out.push(newL);
+          } else {
+            out.push(L);
+          }
+        }
+      }
+
+      out.push('M5 ; spindle off');
+      out.push('G0 Z' + (safeZ).toFixed(3));
+      out.push('; -- End Post-processed G-code');
+
+      return out.join('\n');
+    }
+
+  // expose api
+  window.CNCController = {
+    defaults,
+    postProcessGcodeForRouter,
+    safeReplaceButtonHandler
+  };
+
+  // Hook into existing button 'btnGen' safely: عند الضغط نستخدم المولد الأصلي ثم نمرر للمعالجة
+  try {
+    const targetBtn = document.getElementById('btnGen');
+    if (targetBtn) {
+      // نحافظ على الزر الأصلي بتعليق؛ بدل تغييره مباشرة نضيف listener آخر أعلى الأسبقية:
+      targetBtn.addEventListener('click', function(ev){
+        try {
+          // small delay to allow existing taskManager wrapper inits to run (non-blocking)
+          setTimeout(()=>{
+            const raw = document.getElementById('gcodeOut')?.value || '';
+            // if gcode empty maybe original generator hasn't run, so call original generator if exists
+            // try to call generateRasterGcode if defined
+            let newG = raw;
+            if (!raw || raw.trim().length===0) {
+              if (typeof generateRasterGcode === 'function') {
+                try { newG = generateRasterGcode(false); } catch(e) { console.warn('generateRasterGcode error', e); }
+              }
+            }
+            // post-process and update UI & simulation
+            try {
+              const realistic = CNCController.postProcessGcodeForRouter(newG || '', {});
+              if (realistic && realistic.length>0) {
+                document.getElementById('gcodeOut').value = realistic;
+                // update lastGeneratedGcode if used elsewhere
+                lastGeneratedGcode = realistic;
+                // refresh top view and simulation if available
+                if (typeof renderTopViewFromGcode === 'function') {
+                  try { renderTopViewFromGcode(realistic); } catch(e){console.warn(e)}
+                }
+                // auto-open simulation tab
+                const simBtn = document.querySelector('.tab-buttons button[data-tab="simulation"]');
+                if (simBtn) simBtn.click();
+                showToast('تم توليد G-code واقعي للراوتر');
+              }
+            } catch (e) {
+              console.error('CNCController postProcess failed', e);
+              showToast('خطأ في تحويل G-code إلى الوضع الواقعي: ' + (e.message || e));
+            }
+          }, 150);
+        } catch(e){ console.warn(e) }
+      }, { passive: true });
+    }
+  } catch(e){ console.warn('CNCController init hook failed', e) }
+
+})(); // end CNCController
 
   </script>
 </body>
