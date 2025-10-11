@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>CNC AI — Final (Debug+, Contour, TopView, Simulation Controls)</title>
+  <title>CNC AI — CNC Router & Laser Engraving</title>
 
   <!-- مكتبات -->
   <script src="https://docs.opencv.org/4.8.0/opencv.js" async></script>
@@ -18,9 +18,10 @@
     .grid { display:grid; grid-template-columns:1fr 520px; gap:16px }
     @media (max-width:1100px){ .grid{ grid-template-columns:1fr } }
     .panel { background:#0b1320; padding:16px; border-radius:10px; border:1px solid #1e293b }
-    .tabs { display:flex; margin-top:12px; border-bottom:1px solid #1e293b }
-    .tabs button { margin-left:6px; padding:8px 14px; border:none; border-radius:6px 6px 0 0; cursor:pointer; background:transparent; color:#9bb0c8; font-size:0.9rem }
-    .tabs button.active { background:#06b6d4; color:#021 }
+    /* tabs improved */
+    .tab-buttons { display:flex; gap:8px; margin-top:12px; background: rgba(14,23,33,0.6); padding:6px; border-radius:8px }
+    .tab-buttons button { flex:1; border:none; padding:8px 10px; border-radius:6px; background:transparent; color:#9bb0c8; cursor:pointer }
+    .tab-buttons button.active { background:#0f172a; color:#e6eef6; box-shadow: inset 0 -3px 0 #06b6d4; }
     .tab-content { display:none; margin-top:12px }
     .tab-content.active { display:block }
     canvas { max-width:100%; border-radius:6px; background:#000; display:block; margin:0 auto; border:1px solid #334155 }
@@ -77,9 +78,84 @@
     .sim-controls button { background:rgba(0,0,0,0.55); color:white; border:1px solid #06b6d4; border-radius:4px; padding:6px 8px; cursor:pointer; font-size:0.9rem }
     .sim-progress { position:absolute; bottom:10px; left:10px; z-index:120; background:rgba(0,0,0,0.35); padding:6px 8px;border-radius:6px; color:#cfeaf2; font-size:12px }
 
-    /* Top view */
-    #topViewContainer { margin-top:12px; display:flex; gap:8px; align-items:center; }
+    /* Top view + legend */
+    #topViewContainer { margin-top:12px; display:flex; flex-direction:column; gap:6px; align-items:center; }
     #topView { width:100%; height:200px; background:#0d1722; border-radius:6px; border:1px solid #334155; display:block }
+    #topLegend { width:100%; height:18px; border-radius:6px; border:1px solid #2b3844; background:linear-gradient(90deg,#ddd,#333); }
+
+    /* colormap buttons */
+    .colormap-section {
+      margin: 16px 0;
+      padding: 16px;
+      background: rgba(14, 23, 33, 0.8);
+      border-radius: 10px;
+      border: 1px solid #334155;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+    .colormap-title {
+      text-align: center;
+      margin-bottom: 12px;
+      color: #cfeaf2;
+      font-weight: bold;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .colormap-buttons { display:flex; gap:8px; justify-content:center; margin-top:8px; flex-wrap:wrap; }
+    .colormap-buttons button {
+      background:#141b22; color:#cfeaf2; border:1px solid #26343f; padding:10px 16px; border-radius:8px; 
+      cursor:pointer; font-size:14px; font-weight:bold; transition:all 0.3s ease; min-width:80px;
+    }
+    .colormap-buttons button:hover { background:#1e293b; border-color:#06b6d4; transform:translateY(-2px); }
+    .colormap-buttons button.active { background:#06b6d4; color:#021; border-color:#06b6d4; box-shadow:0 4px 12px rgba(6,182,212,0.3); }
+
+    /* Machine category styles */
+    .machine-settings { transition: all 0.3s ease; }
+    .laser-specific { border-left: 3px solid #ff4444; padding-left: 10px; margin: 8px 0; background: rgba(255, 0, 0, 0.05); }
+    .router-specific { border-left: 3px solid #06b6d4; padding-left: 10px; margin: 8px 0; background: rgba(6, 182, 212, 0.05); }
+    .laser-edge-settings {
+      border: 1px solid #ff4444;
+      border-radius: 6px;
+      padding: 10px;
+      margin: 8px 0;
+      background: rgba(255, 68, 68, 0.05);
+    }
+    .laser-mode-description {
+      font-size: 11px;
+      color: #9bb0c8;
+      margin-top: 4px;
+      line-height: 1.3;
+    }
+
+    /* Progress indicator */
+    .progress-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.7);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 30000;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .progress-spinner {
+      width: 50px;
+      height: 50px;
+      border: 5px solid #f3f3f3;
+      border-top: 5px solid #06b6d4;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    .progress-text {
+      color: white;
+      font-size: 16px;
+    }
 
     @keyframes spin { 0%{transform:rotate(0)}100%{transform:rotate(360deg)} }
   </style>
@@ -87,7 +163,7 @@
 <body>
   <div class="app">
     <header>
-      <h1>CNC AI — Multi Machine Raster Engraving (Final)</h1>
+      <h1>CNC AI — CNC Router & Laser Engraving</h1>
       <div id="cvState">
         <span class="loading" style="display:inline-block;width:16px;height:16px;border:3px solid #f3f3f3;border-top:3px solid #06b6d4;border-radius:50%;animation:spin 1s linear infinite;margin-left:8px;"></span>
         جاري تحميل OpenCV...
@@ -95,12 +171,13 @@
     </header>
 
     <div class="grid">
-      <!-- LEFt panel -->
+      <!-- LEFT panel -->
       <div class="panel">
         <div style="display:flex;gap:8px;align-items:center;">
           <input id="fileInput" type="file" accept="image/*"/>
           <label class="file-input-label" for="fileInput" style="display:inline-block;padding:8px 12px;background:#1e293b;border-radius:6px;color:#e6eef6;cursor:pointer;border:1px dashed #334155">📁 اختر صورة</label>
           <div style="flex:1"></div>
+
           <label for="edgeMode" style="font-weight:normal;color:#9bb0c8">Edge Mode:</label>
           <select id="edgeMode" style="width:140px">
             <option value="auto">Canny (عادي)</option>
@@ -109,10 +186,55 @@
           </select>
         </div>
 
-        <div class="tabs">
+        <!-- Edge sensitivity slider -->
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+          <label style="margin:0;color:#9bb0c8">حساسية الحواف:</label>
+          <input id="edgeSensitivity" type="range" min="0.1" max="1.0" step="0.05" value="0.33" style="flex:1">
+          <div id="edgeValue" style="min-width:44px;text-align:center;color:#cfeaf2">0.33</div>
+        </div>
+
+        <!-- ========== أزرار الـ Colormap الثابتة ========== -->
+        <div class="colormap-section">
+          <div class="colormap-title">
+            <span>🎨</span>
+            خيارات تدرج الألوان
+            <span>🎨</span>
+          </div>
+          <div class="colormap-buttons" id="colormapButtons">
+            <button data-map="jet" class="active" title="Jet - الأزرق إلى الأحمر">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+                <div>Jet</div>
+                <div style="width:100%;height:4px;background:linear-gradient(90deg,#0000ff,#00ffff,#ffff00,#ff0000);border-radius:2px"></div>
+              </div>
+            </button>
+            <button data-map="hot" title="Hot - الأسود إلى الأحمر إلى الأصفر">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+                <div>Hot</div>
+                <div style="width:100%;height:4px;background:linear-gradient(90deg,#000000,#ff0000,#ffff00,#ffffff);border-radius:2px"></div>
+              </div>
+            </button>
+            <button data-map="cool" title="Cool - السماوي إلى الأرجواني">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+                <div>Cool</div>
+                <div style="width:100%;height:4px;background:linear-gradient(90deg,#00ffff,#ff00ff);border-radius:2px"></div>
+              </div>
+            </button>
+            <button data-map="gray" title="Gray - التدرج الرمادي">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+                <div>Gray</div>
+                <div style="width:100%;height:4px;background:linear-gradient(90deg,#000000,#ffffff);border-radius:2px"></div>
+              </div>
+            </button>
+          </div>
+          <div class="small-meta" style="text-align: center; margin-top: 8px;">
+            التغيير يطبق على: Heatmap • Top View • Contours • كل المعاينات
+          </div>
+        </div>
+
+        <div class="tab-buttons" role="tablist">
           <button data-tab="original" class="active">🖼️ الأصلية</button>
           <button data-tab="heatmap">🔥 Heatmap</button>
-          <button data-tab="contour">📐 Canny/Contours</button>
+          <button data-tab="contour">📐 Contours</button>
           <button data-tab="topview">🔝 Top View</button>
           <button data-tab="simulation">🎬 المحاكاة</button>
         </div>
@@ -130,14 +252,15 @@
         <div id="contour" class="tab-content">
           <div class="canvas-placeholder" id="contourPlaceholder">Contours ستظهر هنا</div>
           <canvas id="canvasContour" style="display:none;"></canvas>
-          <div class="small-meta">يمكن تغيير وضع كشف الحواف من أعلى (Canny / Sobel / Laplace)</div>
+          <div class="small-meta">تبديل وضع كشف الحواف أو تحريك حساسية الحواف يحدث إعادة معالجة تلقائية</div>
         </div>
 
         <div id="topview" class="tab-content">
           <div id="topViewContainer">
             <canvas id="topView"></canvas>
+            <div id="topLegend" title="عمق النقش — الألوان فقط"></div>
           </div>
-          <div class="small-meta">معاينة من الأعلى للعمق المتوقع بعد تنفيذ G-code</div>
+          <div class="small-meta">معاينة من الأعلى للعمق المتوقع بعد تنفيذ G-code (الألوان تتبع اختيار Colormap)</div>
         </div>
 
         <div id="simulation" class="tab-content">
@@ -149,76 +272,191 @@
 
       <!-- RIGHT panel -->
       <div class="panel">
-        <h3>⚙️ إعدادات</h3>
+        <h3>⚙️ إعدادات الماكينة</h3>
 
-        <label for="machineType">نوع الماكينة</label>
-        <select id="machineType">
-          <option value="router">Router CNC</option>
-          <option value="laser">Laser Engraver</option>
-          <option value="plasma">Plasma Cutter</option>
-          <option value="3dprinter">3D Printer</option>
+        <!-- Machine Category Selection -->
+        <label for="machineCategory">نوع الماكينة الرئيسي</label>
+        <select id="machineCategory">
+          <option value="router">CNC Router (نحت خشب)</option>
+          <option value="laser">Laser Engraver (نقش ليزر)</option>
         </select>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div>
-            <label for="workWidth">عرض العمل (سم)</label>
-            <input id="workWidth" type="number" value="30" step="0.1" min="1" max="200"/>
-            <div class="small-meta" id="widthMm">300.0 مم</div>
+        <!-- CNC Router Settings -->
+        <div id="routerSettings" class="machine-settings">
+          <h4 class="router-specific">🔄 إعدادات CNC Router</h4>
+          
+          <label for="workWidth">عرض العمل (سم)</label>
+          <input id="workWidth" type="number" value="30" step="0.1" min="1" max="200"/>
+          <div class="small-meta" id="widthMm">300.0 مم</div>
+
+          <label for="workHeight">ارتفاع العمل (سم)</label>
+          <input id="workHeight" type="number" value="20" step="0.1" min="1" max="200"/>
+          <div class="small-meta" id="heightMm">200.0 مم</div>
+
+          <label for="workDepth">عمق العمل (مم)</label>
+          <input id="workDepth" type="number" value="3.0" step="0.1" min="0.1" max="50"/>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div>
+              <label for="originX">نقطة الأصل X (سم)</label>
+              <input id="originX" type="number" value="0" step="0.1"/>
+            </div>
+            <div>
+              <label for="originY">نقطة الأصل Y (سم)</label>
+              <input id="originY" type="number" value="0" step="0.1"/>
+            </div>
           </div>
-          <div>
-            <label for="workHeight">ارتفاع العمل (سم)</label>
-            <input id="workHeight" type="number" value="20" step="0.1" min="1" max="200"/>
-            <div class="small-meta" id="heightMm">200.0 مم</div>
+          <div style="margin-top:6px"><button id="btnCenterOrigin" class="secondary">🎯 توسيط نقطة الأصل</button></div>
+
+          <hr style="border-color:#122433;margin:12px 0"/>
+
+          <label for="feedRate">سرعة التغذية (مم/دقيقة)</label>
+          <input id="feedRate" type="number" value="800" min="10" max="5000"/>
+          <label for="safeZ">ارتفاع الأمان (مم)</label>
+          <input id="safeZ" type="number" value="5" step="0.1" min="0" max="100"/>
+
+          <label for="scanDir">اتجاه المسارات (Raster)</label>
+          <select id="scanDir">
+            <option value="x">أفقي (X)</option>
+            <option value="y">رأسي (Y)</option>
+          </select>
+
+          <label for="stepOver">خطوة المسح (مم)</label>
+          <input id="stepOver" type="number" value="5" step="0.1" min="0.1" max="50"/>
+          <label for="maxDepth">أقصى عمق (مم)</label>
+          <input id="maxDepth" type="number" value="3.0" step="0.1" min="0.1" max="50"/>
+
+          <!-- Fixed Z + Invert Z -->
+          <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+            <label style="font-weight:normal;"><input id="fixedZ" type="checkbox" /> استخدام Z ثابت</label>
+            <input id="fixedZValue" type="number" value="-1.0" step="0.1" style="width:120px" />
           </div>
-        </div>
-
-        <label for="workDepth">عمق العمل (مم)</label>
-        <input id="workDepth" type="number" value="3.0" step="0.1" min="0.1" max="50"/>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div>
-            <label for="originX">نقطة الأصل X (سم)</label>
-            <input id="originX" type="number" value="0" step="0.1"/>
-          </div>
-          <div>
-            <label for="originY">نقطة الأصل Y (سم)</label>
-            <input id="originY" type="number" value="0" step="0.1"/>
-          </div>
-        </div>
-        <div style="margin-top:6px"><button id="btnCenterOrigin" class="secondary">🎯 توسيط نقطة الأصل</button></div>
-
-        <hr style="border-color:#122433;margin:12px 0"/>
-
-        <label for="feedRate">سرعة التغذية (مم/دقيقة)</label>
-        <input id="feedRate" type="number" value="800" min="10" max="5000"/>
-        <label for="safeZ">ارتفاع الأمان (مم)</label>
-        <input id="safeZ" type="number" value="5" step="0.1" min="0" max="100"/>
-        <label for="scanDir">اتجاه المسارات (Raster)</label>
-        <select id="scanDir">
-          <option value="x">أفقي (X)</option>
-          <option value="y">رأسي (Y)</option>
-        </select>
-        <label for="stepOver">خطوة المسح (مم)</label>
-        <input id="stepOver" type="number" value="5" step="0.1" min="0.1" max="50"/>
-        <label for="maxDepth">أقصى عمق (مم)</label>
-        <input id="maxDepth" type="number" value="3.0" step="0.1" min="0.1" max="50"/>
-
-        <div class="button-group">
-          <div class="button-row">
-            <button id="btnGen" class="primary">⚡ توليد G-code (Raster)</button>
-            <button id="btnQuick" class="secondary">🧪 اختبار سريع</button>
-          </div>
-
-          <div style="margin-top:8px">
-            <label for="contourMode">نطاق الحواف (Contour)</label>
-            <select id="contourMode">
-              <option value="outer">الخارجية فقط</option>
-              <option value="all">كل الحواف</option>
+          <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+            <label style="font-weight:normal;"><input id="invertZ" type="checkbox" /> عكس Z</label>
+            <div style="flex:1"></div>
+            <label style="font-weight:normal;color:#9bb0c8">لون الخشب:</label>
+            <select id="woodColor" style="width:140px">
+              <option value="#deb887">خشب فاتح</option>
+              <option value="#a0522d" selected>خشب متوسط</option>
+              <option value="#d2b48c">بيج</option>
+              <option value="#8b5a2b">ماهوجني</option>
             </select>
-            <div style="height:8px"></div>
+          </div>
+
+          <div class="button-group">
             <div class="button-row">
-              <button id="btnContour" class="secondary">🌀 توليد G-code (Contour)</button>
-              <button id="btnDownload" class="secondary">💾 تحميل G-code</button>
+              <button id="btnGen" class="primary">⚡ توليد G-code (Raster)</button>
+              <button id="btnQuick" class="secondary">🧪 اختبار سريع</button>
+            </div>
+
+            <div style="margin-top:8px">
+              <label for="contourMode">نطاق الحواف (Contour)</label>
+              <select id="contourMode">
+                <option value="outer">الخارجية فقط</option>
+                <option value="all">كل الحواف</option>
+              </select>
+              <div style="height:8px"></div>
+              <div class="button-row">
+                <button id="btnContour" class="secondary">🌀 توليد G-code (Contour)</button>
+                <button id="btnDownload" class="secondary">💾 تحميل G-code</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Laser Engraver Settings -->
+        <div id="laserSettings" class="machine-settings" style="display:none;">
+          <h4 class="laser-specific">⚡ إعدادات Laser Engraver</h4>
+          
+          <label for="laserWorkWidth">عرض العمل (سم)</label>
+          <input id="laserWorkWidth" type="number" value="30" step="0.1" min="1" max="200"/>
+          <div class="small-meta" id="laserWidthMm">300.0 مم</div>
+
+          <label for="laserWorkHeight">ارتفاع العمل (سم)</label>
+          <input id="laserWorkHeight" type="number" value="20" step="0.1" min="1" max="200"/>
+          <div class="small-meta" id="laserHeightMm">200.0 مم</div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div>
+              <label for="laserOriginX">نقطة الأصل X (سم)</label>
+              <input id="laserOriginX" type="number" value="0" step="0.1"/>
+            </div>
+            <div>
+              <label for="laserOriginY">نقطة الأصل Y (سم)</label>
+              <input id="laserOriginY" type="number" value="0" step="0.1"/>
+            </div>
+          </div>
+          <div style="margin-top:6px"><button id="btnLaserCenterOrigin" class="secondary">🎯 توسيط نقطة الأصل</button></div>
+
+          <!-- Laser Edge Detection Settings -->
+          <div class="laser-edge-settings">
+            <label for="laserEdgeMode">نمط كشف الحواف للليزر</label>
+            <select id="laserEdgeMode">
+              <option value="canny">Canny (عادي)</option>
+              <option value="adaptive">Adaptive Threshold (للنقش)</option>
+              <option value="morphological">Morphological (للتفاصيل الدقيقة)</option>
+              <option value="gradient">Gradient-Based (للتدرجات)</option>
+            </select>
+            <div class="laser-mode-description" id="laserModeDesc">
+              Adaptive Threshold - ممتاز للصور ذات الإضاءة غير المتجانسة
+            </div>
+
+            <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+              <label style="margin:0;color:#9bb0c8">دقة الليزر:</label>
+              <input id="laserDetail" type="range" min="1" max="10" value="5" step="1" style="flex:1">
+              <div id="laserDetailValue" style="min-width:44px;text-align:center;color:#ff4444">5</div>
+            </div>
+          </div>
+
+          <div style="margin-top: 8px;">
+            <button id="btnRedetectLaser" class="secondary">🔄 إعادة كشف حواف الليزر</button>
+          </div>
+
+          <hr style="border-color:#ff4444;margin:12px 0"/>
+
+          <!-- Laser Power -->
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+            <label style="margin:0;color:#9bb0c8">قوة الليزر:</label>
+            <input id="laserPower" type="range" min="0" max="100" value="80" step="1" style="flex:1">
+            <div id="laserPowerValue" style="min-width:44px;text-align:center;color:#ff4444">80%</div>
+          </div>
+
+          <label for="laserMode">وضع الليزر</label>
+          <select id="laserMode">
+            <option value="engrave">نقش (Grayscale)</option>
+            <option value="cut">قص (Contour)</option>
+            <option value="combine">نقش + قص</option>
+          </select>
+
+          <label for="laserSpeed">سرعة الليزر (مم/دقيقة)</label>
+          <input id="laserSpeed" type="number" value="2000" min="100" max="10000"/>
+
+          <label for="laserPasses">عدد المرات</label>
+          <input id="laserPasses" type="number" value="1" min="1" max="10"/>
+
+          <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+            <label style="font-weight:normal;">
+              <input id="laserDynamic" type="checkbox" checked /> 
+              قوة ديناميكية (حسب الظلام)
+            </label>
+          </div>
+
+          <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+            <label style="font-weight:normal;">
+              <input id="laserAirAssist" type="checkbox" /> 
+              Air Assist
+            </label>
+          </div>
+
+          <!-- Laser Buttons -->
+          <div class="button-group">
+            <div class="button-row">
+              <button id="btnLaserEngrave" class="primary" style="background:#ff4444; display:none;">⚡ توليد كود ليزر (نقش)</button>
+              <button id="btnLaserQuick" class="secondary" style="display:none;">🧪 نقش سريع</button>
+            </div>
+            <div class="button-row">
+              <button id="btnLaserCut" class="secondary" style="display:none;">✂️ توليد كود ليزر (قص)</button>
+              <button id="btnLaserDownload" class="secondary" style="display:none;">💾 تحميل كود الليزر</button>
             </div>
           </div>
         </div>
@@ -230,6 +468,12 @@
 
       </div>
     </div>
+  </div>
+
+  <!-- Progress Overlay -->
+  <div class="progress-overlay" id="progressOverlay">
+    <div class="progress-spinner"></div>
+    <div class="progress-text" id="progressText">جاري المعالجة...</div>
   </div>
 
   <!-- Debug Overlay -->
@@ -260,11 +504,143 @@
     let previewCanvas = null;
     let additionalContours = []; // {contour, area}
     let lastScanDir = 'x';
+    let lastGeneratedGcode = '';
+    let isProcessing = false; // منع المعالجة المزدوجة
+
+    // colormap current
+    let currentColormap = 'jet';
 
     // Simulation / Three
     let scene, camera, renderer, controls;
     let simulation = { isPlaying: false, animationFrame: null, tool: null, toolPath: null, pathPoints: [], index: 0, speed: 1 };
-    let autoOrbit = false; // we will support both auto orbit and manual controls (kept non-destructive)
+
+    // ================= نظام إدارة المهام =================
+    class TaskManager {
+      constructor() {
+        this.queue = [];
+        this.isRunning = false;
+      }
+
+      async addTask(taskFn, description = 'مهمة') {
+        return new Promise((resolve, reject) => {
+          this.queue.push({ taskFn, description, resolve, reject });
+          if (!this.isRunning) {
+            this.processQueue();
+          }
+        });
+      }
+
+      async processQueue() {
+        if (this.queue.length === 0) {
+          this.isRunning = false;
+          return;
+        }
+
+        this.isRunning = true;
+        const task = this.queue.shift();
+
+        try {
+          showProgress(task.description);
+          const result = await task.taskFn();
+          task.resolve(result);
+        } catch (error) {
+          console.error(`فشل في ${task.description}:`, error);
+          showToast(`فشل في ${task.description}: ${error.message}`);
+          task.reject(error);
+        } finally {
+          hideProgress();
+          this.processQueue();
+        }
+      }
+
+      clear() {
+        this.queue = [];
+        this.isRunning = false;
+      }
+    }
+
+    const taskManager = new TaskManager();
+
+    // ================= نظام التقدم =================
+    function showProgress(message = 'جاري المعالجة...') {
+      document.getElementById('progressText').textContent = message;
+      document.getElementById('progressOverlay').style.display = 'flex';
+    }
+
+    function hideProgress() {
+      document.getElementById('progressOverlay').style.display = 'none';
+    }
+
+    // ================= نظام التحقق من الصحة =================
+    class InputValidator {
+      static validateNumberInput(inputId, min, max) {
+        const input = document.getElementById(inputId);
+        const value = parseFloat(input.value);
+        
+        if (isNaN(value)) {
+          showToast(`القيمة في ${inputId} غير صالحة`);
+          input.value = min;
+          return min;
+        }
+        
+        if (value < min) {
+          showToast(`القيمة في ${inputId} أقل من المسموح (${min})`);
+          input.value = min;
+          return min;
+        }
+        
+        if (value > max) {
+          showToast(`القيمة في ${inputId} أكبر من المسموح (${max})`);
+          input.value = max;
+          return max;
+        }
+        
+        return value;
+      }
+
+      static validateImageSize(canvas) {
+        const maxPixels = 4000000; // 4MP للحد من استهلاك الذاكرة
+        const currentPixels = canvas.width * canvas.height;
+        
+        if (currentPixels > maxPixels) {
+          const ratio = Math.sqrt(maxPixels / currentPixels);
+          const newWidth = Math.floor(canvas.width * ratio);
+          const newHeight = Math.floor(canvas.height * ratio);
+          
+          const tempCanvas = document.createElement('canvas');
+          const tempCtx = tempCanvas.getContext('2d');
+          tempCanvas.width = newWidth;
+          tempCanvas.height = newHeight;
+          tempCtx.drawImage(canvas, 0, 0, newWidth, newHeight);
+          
+          const ctx = canvas.getContext('2d');
+          canvas.width = newWidth;
+          canvas.height = newHeight;
+          ctx.drawImage(tempCanvas, 0, 0);
+          
+          showToast('تم تقليل حجم الصورة للأداء الأفضل');
+          return true;
+        }
+        return false;
+      }
+
+      static validateLaserSettings() {
+        const power = this.validateNumberInput('laserPower', 0, 100);
+        const speed = this.validateNumberInput('laserSpeed', 100, 10000);
+        const passes = this.validateNumberInput('laserPasses', 1, 10);
+        
+        return { power, speed, passes };
+      }
+
+      static validateRouterSettings() {
+        const feedRate = this.validateNumberInput('feedRate', 10, 5000);
+        const safeZ = this.validateNumberInput('safeZ', 0, 100);
+        const maxDepth = this.validateNumberInput('maxDepth', 0.1, 50);
+        const stepOver = this.validateNumberInput('stepOver', 0.1, 50);
+        
+        return { feedRate, safeZ, maxDepth, stepOver };
+      }
+    }
 
     // ================= Debug overlay system =================
     (function initDebugOverlay(){
@@ -325,7 +701,7 @@
         dbgToggleSize.textContent = debugOverlay.classList.contains('minimized') ? '🔼' : '🔽';
       });
 
-      // Click on minimized overlay to restore
+      // Click restore when minimized
       debugOverlay.addEventListener('click', (ev) => {
         if (debugOverlay.classList.contains('minimized')) {
           debugOverlay.classList.remove('minimized');
@@ -376,6 +752,12 @@
       const heightCm = parseFloat(document.getElementById('workHeight').value) || 0;
       document.getElementById('widthMm').textContent = cmToMm(widthCm).toFixed(1) + ' مم';
       document.getElementById('heightMm').textContent = cmToMm(heightCm).toFixed(1) + ' مم';
+      
+      // Update laser dimensions too
+      const laserWidthCm = parseFloat(document.getElementById('laserWorkWidth').value) || 0;
+      const laserHeightCm = parseFloat(document.getElementById('laserWorkHeight').value) || 0;
+      document.getElementById('laserWidthMm').textContent = cmToMm(laserWidthCm).toFixed(1) + ' مم';
+      document.getElementById('laserHeightMm').textContent = cmToMm(laserHeightCm).toFixed(1) + ' مم';
     }
 
     function showElement(elementId, hidePlaceholderId) {
@@ -387,43 +769,122 @@
       }
     }
 
-    // ================= OpenCV readiness =================
+    // ================= OpenCV readiness - الإصدار المحسن =================
     function waitForCv() {
-      if (typeof cv !== 'undefined' && cv.getBuildInformation) {
-        cvReady = true;
-        document.getElementById('cvState').innerHTML = '✅ OpenCV جاهز';
-        showToast('تم تحميل OpenCV بنجاح', 1400);
+      if (typeof cv !== 'undefined') {
+        // استخدام طريقة آمنة للتحقق من جاهزية OpenCV
+        try {
+          // اختبار بسيط للتأكد من أن OpenCV يعمل
+          const testMat = new cv.Mat();
+          if (testMat) {
+            cvReady = true;
+            testMat.delete(); // تنظيف الذاكرة
+            
+            // تحديث واجهة المستخدم
+            document.getElementById('cvState').innerHTML = '✅ OpenCV جاهز';
+            showToast('تم تحميل OpenCV بنجاح', 1400);
+            
+            // محاولة الحصول على معلومات الإصدار إذا كانت متوفرة
+            try {
+              if (cv.getBuildInformation) {
+                console.log('OpenCV build info available');
+              }
+            } catch (e) {
+              console.log('OpenCV loaded (version info not available)');
+            }
+          }
+        } catch (error) {
+          console.warn('OpenCV test failed, retrying...', error);
+          setTimeout(waitForCv, 100);
+        }
       } else {
         setTimeout(waitForCv, 100);
       }
     }
+
+    // إضافة معالج أخطاء لتحميل OpenCV
+    window.addEventListener('error', function(e) {
+      if (e.filename && e.filename.includes('opencv.js')) {
+        document.getElementById('cvState').innerHTML = '❌ فشل تحميل OpenCV';
+        showToast('فشل في تحميل OpenCV. تأكد من الاتصال بالإنترنت', 5000);
+      }
+    });
+
+    // بدء تحميل OpenCV
     waitForCv();
 
-    // ================= Clean Mats =================
-    function cleanupMats() {
-      try {
-        if (grayMat && !grayMat.isDeleted) { grayMat.delete(); grayMat = null; }
-      } catch (e) { console.warn('cleanup grayMat', e); }
-      try {
-        if (contour && !contour.isDeleted && contour.delete) {
-          contour.delete();
-          contour = null;
-        }
-      } catch (e) { console.warn('cleanup contour', e); }
-      try {
-        additionalContours.forEach(item => {
-          if (item && item.contour && !item.contour.isDeleted) {
-            item.contour.delete();
+    // ================= نظام إدارة الذاكرة المحسن =================
+    class MemoryManager {
+      constructor() {
+        this.mats = new Set();
+        this.maxMats = 20; // الحد الأقصى للمصفوفات المخزنة
+      }
+
+      track(mat) {
+        if (mat && !mat.isDeleted) {
+          this.mats.add(mat);
+          // تنظيف الذاكرة إذا تجاوزنا الحد
+          if (this.mats.size > this.maxMats) {
+            this.cleanupOldest();
           }
-        });
-      } catch (e) { console.warn('cleanup additionalContours', e); }
-      additionalContours = [];
+        }
+      }
+
+      cleanupOldest() {
+        if (this.mats.size > 0) {
+          const oldest = this.mats.values().next().value;
+          this.safeDelete(oldest);
+          this.mats.delete(oldest);
+        }
+      }
+
+      safeDelete(mat) {
+        if (mat && !mat.isDeleted && mat.delete) {
+          try {
+            mat.delete();
+          } catch (e) {
+            console.warn('Error deleting mat:', e);
+          }
+        }
+      }
+
+      cleanupAll() {
+        this.mats.forEach(mat => this.safeDelete(mat));
+        this.mats.clear();
+      }
+
+      cleanupMats() {
+        try {
+          if (grayMat && !grayMat.isDeleted) { 
+            this.safeDelete(grayMat);
+            grayMat = null; 
+          }
+        } catch (e) { console.warn('cleanup grayMat', e); }
+        
+        try {
+          if (contour && !contour.isDeleted && contour.delete) {
+            this.safeDelete(contour);
+            contour = null;
+          }
+        } catch (e) { console.warn('cleanup contour', e); }
+        
+        try {
+          additionalContours.forEach(item => {
+            if (item && item.contour && !item.contour.isDeleted) {
+              this.safeDelete(item.contour);
+            }
+          });
+          additionalContours = [];
+        } catch (e) { console.warn('cleanup additionalContours', e); }
+      }
     }
 
+    const memoryManager = new MemoryManager();
+
     // ================= Tabs behavior =================
-    document.querySelectorAll('.tabs button').forEach(btn => {
+    document.querySelectorAll('.tab-buttons button').forEach(btn => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-buttons button').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
         btn.classList.add('active');
         document.getElementById(btn.dataset.tab).classList.add('active');
@@ -434,70 +895,241 @@
       });
     });
 
-    // ================= Load image =================
-    document.getElementById('fileInput').addEventListener('change', async function (e) {
-      const file = e.target.files[0];
-      if (!file) return;
-      if (!file.type.match('image.*')) {
-        showToast('الرجاء اختيار ملف صورة فقط');
-        return;
+    // ================= Machine Category Control =================
+    document.getElementById('machineCategory').addEventListener('change', function(e) {
+      const isLaser = e.target.value === 'laser';
+      
+      // إظهار/إخفاء الأقسام
+      document.getElementById('routerSettings').style.display = isLaser ? 'none' : 'block';
+      document.getElementById('laserSettings').style.display = isLaser ? 'block' : 'none';
+      
+      // تحديث واجهة الأزرار
+      updateButtonVisibility(isLaser);
+      
+      // إذا كانت صورة محملة، نعيد كشف الحواف بالنظام المناسب
+      if (previewCanvas && cvReady && !isProcessing) {
+        taskManager.addTask(async () => {
+          if (isLaser) {
+            await detectLaserContours();
+          } else {
+            await detectContours();
+          }
+        }, 'تبديل وضع الماكينة');
       }
-      try {
-        cleanupMats();
-        const img = new Image();
-        img.src = URL.createObjectURL(file);
-        await img.decode();
+      
+      showToast(isLaser ? 'تم التبديل إلى وضع الليزر' : 'تم التبديل إلى وضع الرواتر');
+    });
 
-        previewCanvas = document.getElementById('canvasOriginal');
-        const ctx = previewCanvas.getContext('2d');
+    function updateButtonVisibility(isLaser) {
+      const rasterBtn = document.getElementById('btnGen');
+      const contourBtn = document.getElementById('btnContour');
+      const quickBtn = document.getElementById('btnQuick');
+      const laserEngraveBtn = document.getElementById('btnLaserEngrave');
+      const laserQuickBtn = document.getElementById('btnLaserQuick');
+      const laserCutBtn = document.getElementById('btnLaserCut');
+      const laserDownloadBtn = document.getElementById('btnLaserDownload');
+      const redetectLaserBtn = document.getElementById('btnRedetectLaser');
+      
+      if (isLaser) {
+        rasterBtn.style.display = 'none';
+        contourBtn.style.display = 'none';
+        quickBtn.style.display = 'none';
+        laserEngraveBtn.style.display = 'block';
+        laserQuickBtn.style.display = 'block';
+        laserCutBtn.style.display = 'block';
+        laserDownloadBtn.style.display = 'block';
+        redetectLaserBtn.style.display = 'block';
+      } else {
+        rasterBtn.style.display = 'block';
+        contourBtn.style.display = 'block';
+        quickBtn.style.display = 'block';
+        laserEngraveBtn.style.display = 'none';
+        laserQuickBtn.style.display = 'none';
+        laserCutBtn.style.display = 'none';
+        laserDownloadBtn.style.display = 'none';
+        redetectLaserBtn.style.display = 'none';
+      }
+    }
 
-        const maxPixels = 1024 * 1024; // 1MP
-        let w = img.width, h = img.height;
-        const currentPixels = w * h;
-        if (currentPixels > maxPixels) {
-          const ratio = Math.sqrt(maxPixels / currentPixels);
-          w = Math.floor(w * ratio);
-          h = Math.floor(h * ratio);
-          showToast('تم تحسين حجم الصورة للأداء الأفضل');
-        }
+    // Laser power slider update
+    document.getElementById('laserPower').addEventListener('input', function(e) {
+      document.getElementById('laserPowerValue').textContent = e.target.value + '%';
+      document.getElementById('laserPowerValue').style.color = `hsl(${e.target.value * 1.2}, 100%, 60%)`;
+    });
 
-        previewCanvas.width = w;
-        previewCanvas.height = h;
-        ctx.drawImage(img, 0, 0, w, h);
-        showElement('canvasOriginal', 'originalPlaceholder');
+    // Laser detail slider update
+    document.getElementById('laserDetail').addEventListener('input', function(e) {
+      document.getElementById('laserDetailValue').textContent = e.target.value;
+    });
 
-        if (cvReady) {
-          await detectContours();
-        } else {
-          showToast('في انتظار OpenCV...');
-          setTimeout(async () => { if (cvReady) await detectContours(); }, 800);
-        }
-      } catch (error) {
-        console.error('image load error', error);
-        showToast('فشل في تحميل الصورة');
+    // Laser edge mode descriptions
+    const laserModeDescriptions = {
+      canny: 'Canny - كشف حواف تقليدي مناسب للصور العامة',
+      adaptive: 'Adaptive Threshold - ممتاز للصور ذات الإضاءة غير المتجانسة',
+      morphological: 'Morphological - للحواف الدقيقة والناعمة والتفاصيل الصغيرة',
+      gradient: 'Gradient-Based - للتدرجات اللونية والصور ذات التباين العالي'
+    };
+
+    document.getElementById('laserEdgeMode').addEventListener('change', function(e) {
+      document.getElementById('laserModeDesc').textContent = laserModeDescriptions[e.target.value] || '';
+      if (!previewCanvas || isProcessing) return;
+      const isLaser = document.getElementById('machineCategory').value === 'laser';
+      if (isLaser && cvReady && previewCanvas && previewCanvas.width > 0) {
+        taskManager.addTask(detectLaserContours, 'تحديث كشف حواف الليزر');
       }
     });
 
-    // ================= Edge detection & contours =================
-    async function detectContours() {
-      if (!cvReady) {
-        showToast('OpenCV غير جاهز بعد');
+    // Laser center origin
+    document.getElementById('btnLaserCenterOrigin').addEventListener('click', () => {
+      const workWidth = parseFloat(document.getElementById('laserWorkWidth').value) || 0;
+      const workHeight = parseFloat(document.getElementById('laserWorkHeight').value) || 0;
+      document.getElementById('laserOriginX').value = (workWidth / 2).toFixed(1);
+      document.getElementById('laserOriginY').value = (workHeight / 2).toFixed(1);
+      showToast("تم توسيط نقطة الأصل للليزر");
+    });
+
+    // Laser redetect button
+    document.getElementById('btnRedetectLaser').addEventListener('click', () => {
+      if (!previewCanvas) {
+        showToast('لا توجد صورة محملة');
         return;
       }
+      if (cvReady && !isProcessing) {
+        taskManager.addTask(detectLaserContours, 'إعادة كشف حواف الليزر');
+      }
+    });
+
+    // ================= Load image =================
+    document.getElementById('fileInput').addEventListener('change', async function (e) {
+      if (isProcessing) {
+        showToast('جاري معالجة صورة سابقة...');
+        return;
+      }
+
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      // تحقق من نوع الملف
+      if (!file.type.match('image.*')) {
+        showToast('الرجاء اختيار ملف صورة فقط (JPEG, PNG, etc.)');
+        return;
+      }
+      
+      // تحقق من حجم الملف
+      if (file.size > 20 * 1024 * 1024) { // 20MB
+        showToast('حجم الملف كبير جداً. الرجاء اختيار صورة أصغر من 20MB');
+        return;
+      }
+      
+      await taskManager.addTask(async () => {
+        try {
+          isProcessing = true;
+          memoryManager.cleanupMats();
+          const img = new Image();
+          
+          img.onerror = function() {
+            throw new Error('فشل في تحميل الصورة. تأكد من أن الملف صالح');
+          };
+          
+          img.src = URL.createObjectURL(file);
+          await img.decode();
+
+          previewCanvas = document.getElementById('canvasOriginal');
+          const ctx = previewCanvas.getContext('2d');
+
+          let w = img.width, h = img.height;
+          
+          // تحقق من حجم الصورة وقللها إذا لزم الأمر
+          const maxPixels = 4000000; // 4MP
+          const currentPixels = w * h;
+          if (currentPixels > maxPixels) {
+            const ratio = Math.sqrt(maxPixels / currentPixels);
+            w = Math.floor(w * ratio);
+            h = Math.floor(h * ratio);
+          }
+
+          previewCanvas.width = w;
+          previewCanvas.height = h;
+          ctx.drawImage(img, 0, 0, w, h);
+          showElement('canvasOriginal', 'originalPlaceholder');
+
+          // تحرير الذاكرة
+          URL.revokeObjectURL(img.src);
+
+          if (cvReady) {
+            const isLaser = document.getElementById('machineCategory').value === 'laser';
+            if (isLaser) {
+              await detectLaserContours();
+            } else {
+              await detectContours();
+            }
+          } else {
+            showToast('في انتظار OpenCV...');
+            await new Promise(resolve => {
+              const checkCv = setInterval(() => {
+                if (cvReady) {
+                  clearInterval(checkCv);
+                  resolve();
+                }
+              }, 100);
+            });
+            
+            const isLaser = document.getElementById('machineCategory').value === 'laser';
+            if (isLaser) {
+              await detectLaserContours();
+            } else {
+              await detectContours();
+            }
+          }
+        } catch (error) {
+          console.error('image load error', error);
+          throw new Error('فشل في تحميل الصورة: ' + error.message);
+        } finally {
+          isProcessing = false;
+        }
+      }, 'تحميل الصورة');
+    });
+
+    // ================= Edge detection & contours للراوتر =================
+    async function detectContours() {
+      if (!cvReady) {
+        throw new Error('OpenCV غير جاهز بعد');
+      }
+      
+      // التحقق من وجود صورة صالحة
+      if (!previewCanvas || previewCanvas.width === 0 || previewCanvas.height === 0) {
+        throw new Error('لا توجد صورة صالحة للمعالجة');
+      }
+      
+      let src = null, gray = null, blurred = null, edges = null, hierarchy = null, contours = null, kernel = null;
+      
       try {
-        const src = cv.imread(previewCanvas);
-        const gray = new cv.Mat();
+        src = cv.imread(previewCanvas);
+        if (src.empty()) {
+          throw new Error('الصورة غير صالحة للمعالجة');
+        }
+        memoryManager.track(src);
+        
+        gray = new cv.Mat();
         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-        const blurred = new cv.Mat();
+        memoryManager.track(gray);
+        
+        blurred = new cv.Mat();
         cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
+        memoryManager.track(blurred);
 
         // pick edge mode
         const mode = document.getElementById('edgeMode').value || 'auto';
-        const median = cv.mean(blurred)[0];
-        const lowerThreshold = Math.max(0, (1.0 - 0.33) * median);
-        const upperThreshold = Math.min(255, (1.0 + 0.33) * median);
+        // sensitivity
+        const sens = parseFloat(document.getElementById('edgeSensitivity').value) || 0.33;
 
-        let edges = new cv.Mat();
+        const median = cv.mean(blurred)[0];
+        const lowerThreshold = Math.max(0, (1.0 - sens) * median);
+        const upperThreshold = Math.min(255, (1.0 + sens) * median);
+
+        edges = new cv.Mat();
+        memoryManager.track(edges);
+        
         if (mode === 'sobel') {
           const gradX = new cv.Mat(), gradY = new cv.Mat();
           cv.Sobel(blurred, gradX, cv.CV_16S, 1, 0, 3, 1, 0, cv.BORDER_DEFAULT);
@@ -505,7 +1137,8 @@
           cv.convertScaleAbs(gradX, gradX);
           cv.convertScaleAbs(gradY, gradY);
           cv.addWeighted(gradX, 0.5, gradY, 0.5, 0, edges);
-          gradX.delete(); gradY.delete();
+          memoryManager.safeDelete(gradX);
+          memoryManager.safeDelete(gradY);
         } else if (mode === 'laplace') {
           cv.Laplacian(blurred, edges, cv.CV_16S, 3, 1, 0, cv.BORDER_DEFAULT);
           cv.convertScaleAbs(edges, edges);
@@ -514,12 +1147,15 @@
         }
 
         // improve edges
-        const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
+        kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
         cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel);
+        memoryManager.track(kernel);
 
-        const contours = new cv.MatVector();
-        const hierarchy = new cv.Mat();
+        contours = new cv.MatVector();
+        hierarchy = new cv.Mat();
         cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+        memoryManager.track(contours);
+        memoryManager.track(hierarchy);
 
         const minArea = (gray.cols * gray.rows) * 0.01; // default 1%
         const validContours = [];
@@ -529,7 +1165,7 @@
           if (area > minArea) {
             validContours.push({ contour: cnt, area });
           } else {
-            try { cnt.delete(); } catch (e) {}
+            memoryManager.safeDelete(cnt);
           }
         }
 
@@ -539,46 +1175,281 @@
           additionalContours = validContours.slice(1).map(v => ({ contour: v.contour, area: v.area }));
           showToast(`تم كشف ${validContours.length} كونتور`);
         } else {
-          showToast('لم يتم العثور على حواف واضحة في الصورة');
-          src.delete(); blurred.delete(); edges.delete(); hierarchy.delete(); contours.delete(); kernel.delete();
-          gray.delete();
-          return;
+          throw new Error('لم يتم العثور على حواف واضحة في الصورة');
         }
 
-        if (grayMat) { try { grayMat.delete(); } catch(e){} }
+        if (grayMat) { 
+          memoryManager.safeDelete(grayMat);
+        }
         grayMat = gray.clone();
+        memoryManager.track(grayMat);
 
-        renderHeatmap(gray);
+        renderHeatmap(); // uses currentColormap
         renderContour(gray, contour);
-
-        // cleanup temporaries
-        src.delete(); blurred.delete(); edges.delete(); hierarchy.delete(); contours.delete(); kernel.delete();
-        gray.delete();
 
       } catch (err) {
         console.error('detectContours error', err);
-        showToast('فشل في تحليل الصورة');
+        throw new Error('فشل في تحليل الصورة: ' + err.message);
+      } finally {
+        // تنظيف المصفوفات المؤقتة
+        memoryManager.safeDelete(src);
+        memoryManager.safeDelete(blurred);
+        memoryManager.safeDelete(edges);
+        memoryManager.safeDelete(hierarchy);
+        memoryManager.safeDelete(contours);
+        memoryManager.safeDelete(kernel);
+        memoryManager.safeDelete(gray);
       }
     }
 
-    // ================= Rendering heatmap & contour =================
-    function renderHeatmap(gray) {
+    // ================= Laser-Specific Edge Detection =================
+    async function detectLaserContours() {
+      if (!cvReady) {
+        throw new Error('OpenCV غير جاهز بعد');
+      }
+      
+      // التحقق من وجود صورة صالحة
+      if (!previewCanvas || previewCanvas.width === 0 || previewCanvas.height === 0) {
+        throw new Error('لا توجد صورة صالحة للمعالجة');
+      }
+      
+      let src = null, gray = null, edges = null, hierarchy = null, contours = null;
+      
+      try {
+        src = cv.imread(previewCanvas);
+        if (src.empty()) {
+          throw new Error('الصورة غير صالحة للمعالجة');
+        }
+        memoryManager.track(src);
+        
+        gray = new cv.Mat();
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+        memoryManager.track(gray);
+        
+        const mode = document.getElementById('laserEdgeMode').value || 'adaptive';
+        const detailLevel = parseInt(document.getElementById('laserDetail').value) || 5;
+        
+        edges = new cv.Mat();
+        memoryManager.track(edges);
+        
+        if (mode === 'adaptive') {
+          const adaptive = new cv.Mat();
+          const blockSize = Math.max(3, 2 * Math.floor(detailLevel) + 1);
+          cv.adaptiveThreshold(gray, adaptive, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, blockSize, 2);
+          memoryManager.track(adaptive);
+          
+          const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(3, 3));
+          cv.morphologyEx(adaptive, edges, cv.MORPH_CLOSE, kernel);
+          memoryManager.track(kernel);
+          
+          memoryManager.safeDelete(adaptive);
+          memoryManager.safeDelete(kernel);
+          
+        } else if (mode === 'morphological') {
+          const blurred = new cv.Mat();
+          cv.GaussianBlur(gray, blurred, new cv.Size(3, 3), 0);
+          memoryManager.track(blurred);
+          
+          const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(3, 3));
+          const dilated = new cv.Mat();
+          const eroded = new cv.Mat();
+          
+          cv.dilate(blurred, dilated, kernel);
+          cv.erode(blurred, eroded, kernel);
+          cv.subtract(dilated, eroded, edges);
+          
+          cv.normalize(edges, edges, 0, 255, cv.NORM_MINMAX);
+          
+          memoryManager.safeDelete(blurred);
+          memoryManager.safeDelete(kernel);
+          memoryManager.safeDelete(dilated);
+          memoryManager.safeDelete(eroded);
+          
+        } else if (mode === 'gradient') {
+          const blurred = new cv.Mat();
+          cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
+          memoryManager.track(blurred);
+          
+          const gradX = new cv.Mat();
+          const gradY = new cv.Mat();
+          const absGradX = new cv.Mat();
+          const absGradY = new cv.Mat();
+          
+          cv.Sobel(blurred, gradX, cv.CV_16S, 1, 0, 3, 1, 0, cv.BORDER_DEFAULT);
+          cv.Sobel(blurred, gradY, cv.CV_16S, 0, 1, 3, 1, 0, cv.BORDER_DEFAULT);
+          
+          cv.convertScaleAbs(gradX, absGradX);
+          cv.convertScaleAbs(gradY, absGradY);
+          cv.addWeighted(absGradX, 0.5, absGradY, 0.5, 0, edges);
+          
+          const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(2, 2));
+          cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel);
+          memoryManager.track(kernel);
+          
+          memoryManager.safeDelete(blurred);
+          memoryManager.safeDelete(gradX);
+          memoryManager.safeDelete(gradY);
+          memoryManager.safeDelete(absGradX);
+          memoryManager.safeDelete(absGradY);
+          memoryManager.safeDelete(kernel);
+          
+        } else {
+          const blurred = new cv.Mat();
+          cv.GaussianBlur(gray, blurred, new cv.Size(3, 3), 0);
+          cv.Canny(blurred, edges, 50, 150);
+          memoryManager.safeDelete(blurred);
+        }
+
+        if (detailLevel > 5) {
+          const kernelSize = Math.min(3, Math.floor(detailLevel / 3));
+          const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(kernelSize, kernelSize));
+          cv.morphologyEx(edges, edges, cv.MORPH_CLOSE, kernel);
+          memoryManager.safeDelete(kernel);
+        }
+
+        contours = new cv.MatVector();
+        hierarchy = new cv.Mat();
+        cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+        memoryManager.track(contours);
+        memoryManager.track(hierarchy);
+
+        const minArea = (gray.cols * gray.rows) * 0.002;
+        const validContours = [];
+        
+        for (let i = 0; i < contours.size(); i++) {
+          const cnt = contours.get(i);
+          const area = cv.contourArea(cnt);
+          if (area > minArea) {
+            validContours.push({ contour: cnt, area });
+          } else {
+            memoryManager.safeDelete(cnt);
+          }
+        }
+
+        if (validContours.length > 0) {
+          validContours.sort((a,b)=> b.area - a.area);
+          contour = validContours[0].contour;
+          additionalContours = validContours.slice(1).map(v => ({ contour: v.contour, area: v.area }));
+          showToast(`تم كشف ${validContours.length} كونتور للليزر`);
+        } else {
+          throw new Error('لم يتم العثور على حواف مناسبة للليزر');
+        }
+
+        if (grayMat) { 
+          memoryManager.safeDelete(grayMat);
+        }
+        grayMat = gray.clone();
+        memoryManager.track(grayMat);
+
+        renderHeatmap();
+        renderContour(gray, contour);
+
+      } catch (err) {
+        console.error('detectLaserContours error', err);
+        throw new Error('فشل في تحليل الصورة للليزر: ' + err.message);
+      } finally {
+        // تنظيف الذاكرة
+        memoryManager.safeDelete(src);
+        memoryManager.safeDelete(gray);
+        memoryManager.safeDelete(edges);
+        memoryManager.safeDelete(hierarchy);
+        memoryManager.safeDelete(contours);
+      }
+    }
+
+    // live update when edge mode or sensitivity changed للراوتر
+    document.getElementById('edgeMode').addEventListener('change', () => {
+      if (!previewCanvas || isProcessing) return;
+      const isLaser = document.getElementById('machineCategory').value === 'laser';
+      if (!isLaser && cvReady && previewCanvas && previewCanvas.width > 0) {
+        taskManager.addTask(detectContours, 'تحديث كشف الحواف');
+      }
+    });
+    
+    document.getElementById('edgeSensitivity').addEventListener('input', (e) => {
+      document.getElementById('edgeValue').textContent = parseFloat(e.target.value).toFixed(2);
+      if (!previewCanvas || isProcessing) return;
+      const isLaser = document.getElementById('machineCategory').value === 'laser';
+      if (!isLaser && cvReady && previewCanvas && previewCanvas.width > 0) {
+        taskManager.addTask(detectContours, 'تحديث حساسية الحواف');
+      }
+    });
+
+    // ================= Colormap utilities =================
+    function clamp(v, a=0, b=1){ return Math.max(a, Math.min(b, v)); }
+    function getColormapColor(t, map) {
+      // t in [0,1]
+      t = clamp(t);
+      if (map === 'hot') {
+        // hot: black->red->yellow->white
+        if (t < 0.33) return { r: Math.round(t/0.33*128), g: 0, b: 0 };
+        if (t < 0.66) return { r: Math.round(128 + (t-0.33)/0.33*127), g: Math.round((t-0.33)/0.33*128), b: 0 };
+        return { r: 255, g: Math.round(128 + (t-0.66)/0.34*127), b: Math.round((t-0.66)/0.34*127) };
+      } else if (map === 'cool') {
+        // cool: cyan -> magenta-ish
+        return { r: Math.round(255 * t), g: Math.round(255 * (1 - t)), b: 255 };
+      } else if (map === 'gray') {
+        const v = Math.round(255 * t);
+        return { r: v, g: v, b: v };
+      } else {
+        // jet-like approximation: blue->cyan->yellow->red
+        const r = Math.round(255 * clamp(1.5 - Math.abs(1.0 - 4.0*(t-0.5)), 0, 1));
+        const g = Math.round(255 * clamp(1.5 - Math.abs(0.5 - 4.0*(t-0.25)), 0, 1));
+        const b = Math.round(255 * clamp(1.5 - Math.abs(0.5 - 4.0*(t)), 0, 1));
+        // fallback simpler jet:
+        if (!r && !g && !b) {
+          const jr = Math.round(255 * clamp(1.5 - Math.abs(1 - 4*(t-0.5))));
+          const jg = Math.round(255 * clamp(1.5 - Math.abs(0.5 - 4*(t-0.25))));
+          const jb = Math.round(255 * clamp(1.5 - Math.abs(0.5 - 4*t)));
+          return { r: jr, g: jg, b: jb };
+        }
+        return { r, g, b };
+      }
+    }
+
+    function hexToRgb(hex) {
+      if (!hex) return { r:160, g:82, b:45 };
+      const h = hex.replace('#','');
+      const hh = (h.length===3) ? h.split('').map(c=>c+c).join('') : h;
+      const bigint = parseInt(hh, 16);
+      return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
+    }
+    function mixColors(c1, c2, t) {
+      return {
+        r: Math.round(c1.r * (1 - t) + c2.r * t),
+        g: Math.round(c1.g * (1 - t) + c2.g * t),
+        b: Math.round(c1.b * (1 - t) + c2.b * t)
+      };
+    }
+
+    // ================= Rendering heatmap & contour (colormaps) =================
+    function renderHeatmap() {
+      if (!grayMat || !previewCanvas) return;
       const heatCanvas = document.getElementById('canvasHeatmap');
       const ctx = heatCanvas.getContext('2d');
-      heatCanvas.width = gray.cols;
-      heatCanvas.height = gray.rows;
+      heatCanvas.width = grayMat.cols;
+      heatCanvas.height = grayMat.rows;
       const imgData = ctx.createImageData(heatCanvas.width, heatCanvas.height);
-      const data = gray.data;
+      const data = grayMat.data;
       for (let i = 0; i < data.length; i++) {
-        const value = data[i];
+        const value = data[i]; // 0..255
+        const t = value / 255.0; // normalized
+        const col = getColormapColor(t, currentColormap);
         const idx = i * 4;
-        imgData.data[idx] = value;
-        imgData.data[idx + 1] = 0;
-        imgData.data[idx + 2] = 255 - value;
+        imgData.data[idx] = col.r;
+        imgData.data[idx + 1] = col.g;
+        imgData.data[idx + 2] = col.b;
         imgData.data[idx + 3] = 255;
       }
       ctx.putImageData(imgData, 0, 0);
       showElement('canvasHeatmap', 'heatmapPlaceholder');
+
+      // also update contour view (overlay)
+      try {
+        if (contour) renderContour(grayMat, contour);
+      } catch(e){}
+      // update top view if G-code exists
+      if (lastGeneratedGcode) renderTopViewFromGcode(lastGeneratedGcode);
     }
 
     function renderContour(gray, mainContour) {
@@ -587,7 +1458,14 @@
       contourCanvas.width = gray.cols;
       contourCanvas.height = gray.rows;
       const heatCanvas = document.getElementById('canvasHeatmap');
-      ctx.drawImage(heatCanvas, 0, 0);
+      // draw heatmap first (so contours overlay on top)
+      try {
+        ctx.drawImage(heatCanvas, 0, 0);
+      } catch(e) {
+        // fallback: fill with gray
+        ctx.fillStyle = '#222';
+        ctx.fillRect(0,0,contourCanvas.width, contourCanvas.height);
+      }
       if (mainContour) {
         ctx.strokeStyle = '#00ff00';
         ctx.lineWidth = 2;
@@ -637,10 +1515,15 @@
     }
 
     // ================= Raster helpers =================
-    function addSegmentPoints(rowPoints, startX, endX, y, scaleX, scaleY, originX, originY, maxDepth, invertZ) {
+    function addSegmentPoints(rowPoints, startX, endX, y, scaleX, scaleY, originX, originY, maxDepth, invertZ, useFixedZ, fixedZValue) {
       for (let x = startX; x <= endX; x += 2) {
         const pv = sampleGrayAt(x, y);
-        let z = -((255 - pv) / 255.0) * maxDepth;
+        let z;
+        if (useFixedZ) {
+          z = fixedZValue;
+        } else {
+          z = -((255 - pv) / 255.0) * maxDepth;
+        }
         if (invertZ) z = -z;
         const scaledX = (x * scaleX) + originX;
         const scaledY = (y * scaleY) + originY;
@@ -667,20 +1550,25 @@
       return length;
     }
 
-    // ================= Generate Raster G-code =================
+    // ================= Generate Raster G-code للراوتر =================
     function generateRasterGcode(scaleDown = false) {
       if (!grayMat || !contour) {
-        showToast("لا توجد صورة جاهزة للالمعالجة");
-        return "";
+        throw new Error("لا توجد صورة جاهزة للالمعالجة");
       }
+      
       try {
+        InputValidator.validateRouterSettings();
+        
         const dir = document.getElementById('scanDir').value;
         lastScanDir = dir;
         const stepOver = parseFloat(document.getElementById('stepOver').value) || 5;
         const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3;
         const feed = parseFloat(document.getElementById('feedRate').value) || 800;
         const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
-        const invertZ = false;
+
+        const useFixedZ = document.getElementById('fixedZ').checked;
+        const fixedZValue = parseFloat(document.getElementById('fixedZValue').value) || -1.0;
+        const invertZ = document.getElementById('invertZ').checked;
 
         const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30);
         const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20);
@@ -706,11 +1594,11 @@
               const inside = cv.pointPolygonTest(contour, pt, false) >= 0;
               if (inside && !inContour) { segmentStart = x; inContour = true; }
               else if (!inside && inContour) {
-                addSegmentPoints(rowPoints, segmentStart, x - 1, y, scaleX, scaleY, originX, originY, maxDepth, invertZ);
+                addSegmentPoints(rowPoints, segmentStart, x - 1, y, scaleX, scaleY, originX, originY, maxDepth, invertZ, useFixedZ, fixedZValue);
                 inContour = false;
               }
             }
-            if (inContour) addSegmentPoints(rowPoints, segmentStart, previewCanvas.width - 1, y, scaleX, scaleY, originX, originY, maxDepth, invertZ);
+            if (inContour) addSegmentPoints(rowPoints, segmentStart, previewCanvas.width - 1, y, scaleX, scaleY, originX, originY, maxDepth, invertZ, useFixedZ, fixedZValue);
             if (rowPoints.length > 1) {
               processRowPoints(rowPoints, lines, feed, safeZ, (y / step) % 2 !== 0);
               totalLen += calculateRowLength(rowPoints);
@@ -726,11 +1614,11 @@
               const inside = cv.pointPolygonTest(contour, pt, false) >= 0;
               if (inside && !inContour) { segmentStart = y; inContour = true; }
               else if (!inside && inContour) {
-                addSegmentPoints(colPoints, x, x, segmentStart, scaleX, scaleY, originX, originY, maxDepth, invertZ);
+                addSegmentPoints(colPoints, x, x, segmentStart, scaleX, scaleY, originX, originY, maxDepth, invertZ, useFixedZ, fixedZValue);
                 inContour = false;
               }
             }
-            if (inContour) addSegmentPoints(colPoints, x, x, previewCanvas.height - 1, scaleX, scaleY, originX, originY, maxDepth, invertZ);
+            if (inContour) addSegmentPoints(colPoints, x, x, previewCanvas.height - 1, scaleX, scaleY, originX, originY, maxDepth, invertZ, useFixedZ, fixedZValue);
             if (colPoints.length > 1) {
               processRowPoints(colPoints, lines, feed, safeZ, (x / step) % 2 !== 0);
               totalLen += calculateRowLength(colPoints);
@@ -748,23 +1636,28 @@
         return lines.join('\n');
       } catch (error) {
         console.error('generateRasterGcode error', error);
-        showToast('فشل في توليد G-code (Raster)');
-        return "";
+        throw new Error('فشل في توليد G-code (Raster): ' + error.message);
       }
     }
 
-    // ================= Generate Contour G-code =================
+    // ================= Generate Contour G-code للراوتر =================
     function generateContourGcode() {
       if (!grayMat || !contour) {
-        showToast("لا توجد بيانات حواف لتوليد الكود");
-        return "";
+        throw new Error("لا توجد بيانات حواف لتوليد الكود");
       }
+      
       try {
+        InputValidator.validateRouterSettings();
+        
         const mode = document.getElementById('contourMode').value || 'outer';
         lastScanDir = 'contour';
         const feed = parseFloat(document.getElementById('feedRate').value) || 800;
         const safeZ = parseFloat(document.getElementById('safeZ').value) || 5;
         const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3;
+
+        const useFixedZ = document.getElementById('fixedZ').checked;
+        const fixedZValue = parseFloat(document.getElementById('fixedZValue').value) || -1.0;
+        const invertZ = document.getElementById('invertZ').checked;
 
         const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30);
         const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20);
@@ -788,7 +1681,11 @@
           const startX = (x0 * scaleX + originX).toFixed(2);
           const startY = (y0 * scaleY + originY).toFixed(2);
           const startGray = sampleGrayAt(x0, y0);
-          let zStart = -((255 - startGray) / 255.0) * maxDepth;
+
+          let zStart;
+          if (useFixedZ) zStart = fixedZValue;
+          else zStart = -((255 - startGray) / 255.0) * maxDepth;
+          if (invertZ) zStart = -zStart;
 
           lines.push(`G0 X${startX} Y${startY} Z${safeZ.toFixed(2)}`);
           lines.push(`G1 F${feed.toFixed(0)}`);
@@ -799,7 +1696,10 @@
             const px = (x * scaleX + originX).toFixed(2);
             const py = (y * scaleY + originY).toFixed(2);
             const pv = sampleGrayAt(x, y);
-            const zVal = -((255 - pv) / 255.0) * maxDepth;
+            let zVal;
+            if (useFixedZ) zVal = fixedZValue;
+            else zVal = -((255 - pv) / 255.0) * maxDepth;
+            if (invertZ) zVal = -zVal;
             lines.push(`G1 X${px} Y${py} Z${zVal.toFixed(3)}`);
             totalLen += Math.hypot(x - x0, y - y0);
             x0 = x; y0 = y;
@@ -819,59 +1719,350 @@
 
       } catch (error) {
         console.error('generateContourGcode error', error);
-        showToast('فشل في توليد G-code (Contour)');
-        return "";
+        throw new Error('فشل في توليد G-code (Contour): ' + error.message);
+      }
+    }
+
+    // ================= Laser G-code Generation =================
+    function generateLaserEngraveGcode() {
+      if (!grayMat || !contour) {
+        throw new Error("لا توجد صورة جاهزة للمعالجة");
+      }
+
+      try {
+        InputValidator.validateLaserSettings();
+        
+        const laserPower = parseInt(document.getElementById('laserPower').value) || 80;
+        const laserSpeed = parseInt(document.getElementById('laserSpeed').value) || 2000;
+        const dynamicPower = document.getElementById('laserDynamic').checked;
+
+        const workWidth = cmToMm(parseFloat(document.getElementById('laserWorkWidth').value) || 30);
+        const workHeight = cmToMm(parseFloat(document.getElementById('laserWorkHeight').value) || 20);
+        const originX = cmToMm(parseFloat(document.getElementById('laserOriginX').value) || 0);
+        const originY = cmToMm(parseFloat(document.getElementById('laserOriginY').value) || 0);
+
+        const lines = [];
+        lines.push('G21 G90');
+        lines.push('G0 X0 Y0');
+        lines.push('M3 S' + Math.round(laserPower * 10)); // تشغيل الليزر مرة واحدة
+        
+        const scaleX = workWidth / previewCanvas.width;
+        const scaleY = workHeight / previewCanvas.height;
+        
+        // إعدادات مخففة جداً
+        const stepOver = 3.0; // خطوات كبيرة
+        let totalLen = 0;
+        let pointCount = 0;
+
+        for (let y = 0; y < previewCanvas.height; y += stepOver) {
+          const rowPoints = [];
+          
+          for (let x = 0; x < previewCanvas.width; x += 3) { // خطوات كبيرة
+            const pt = new cv.Point(x, y);
+            const inside = cv.pointPolygonTest(contour, pt, false) >= 0;
+            
+            if (inside) {
+              const pv = sampleGrayAt(x, y);
+              const power = dynamicPower ? Math.round((pv / 255) * laserPower) : laserPower;
+              const scaledX = (x * scaleX) + originX;
+              const scaledY = (y * scaleY) + originY;
+              rowPoints.push({ x: scaledX, y: scaledY, power });
+              pointCount++;
+              
+              // حد أقصى لعدد النقاط
+              if (pointCount > 2000) break;
+            }
+          }
+          
+          if (rowPoints.length > 1) {
+            // اتجاه متعرج
+            const reverse = (y / stepOver) % 2 !== 0;
+            if (reverse) rowPoints.reverse();
+            
+            lines.push('G0 X' + rowPoints[0].x.toFixed(2) + ' Y' + rowPoints[0].y.toFixed(2));
+            lines.push('G1 F' + laserSpeed.toFixed(0));
+            
+            for (let i = 0; i < rowPoints.length; i++) {
+              const p = rowPoints[i];
+              lines.push('G1 X' + p.x.toFixed(2) + ' Y' + p.y.toFixed(2));
+            }
+            
+            totalLen += calculateRowLength(rowPoints);
+          }
+          
+          if (pointCount > 2000) break;
+        }
+
+        lines.push('M5');
+        lines.push('M30');
+
+        const timeMin = totalLen / laserSpeed;
+        document.getElementById('estTime').innerHTML = "⏱️ تقدير وقت الليزر: " + timeMin.toFixed(1) + " دقيقة | " + pointCount + " نقطة";
+
+        return lines.join('\n');
+      } catch (error) {
+        console.error('generateLaserEngraveGcode error', error);
+        throw new Error('فشل في توليد كود الليزر: ' + error.message);
+      }
+    }
+
+    function generateLaserQuickGcode() {
+      if (!grayMat || !contour) {
+        throw new Error("لا توجد صورة جاهزة للمعالجة");
+      }
+
+      try {
+        const laserPower = 80; // ثابت علشان السرعه
+        const laserSpeed = 3000; // أسرع
+
+        const workWidth = cmToMm(parseFloat(document.getElementById('laserWorkWidth').value) || 30);
+        const workHeight = cmToMm(parseFloat(document.getElementById('laserWorkHeight').value) || 20);
+        const originX = cmToMm(parseFloat(document.getElementById('laserOriginX').value) || 0);
+        const originY = cmToMm(parseFloat(document.getElementById('laserOriginY').value) || 0);
+
+        const lines = [];
+        lines.push('G21 G90');
+        lines.push('G0 X0 Y0');
+        lines.push('M3 S800'); // قوة ثابتة
+        
+        const scaleX = workWidth / previewCanvas.width;
+        const scaleY = workHeight / previewCanvas.height;
+        
+        // إعدادات سريعة جداً
+        const stepOver = 5.0;
+        let totalLen = 0;
+        let pointCount = 0;
+
+        for (let y = 0; y < previewCanvas.height; y += stepOver) {
+          const rowPoints = [];
+          
+          for (let x = 0; x < previewCanvas.width; x += 5) {
+            const pt = new cv.Point(x, y);
+            const inside = cv.pointPolygonTest(contour, pt, false) >= 0;
+            
+            if (inside) {
+              const scaledX = (x * scaleX) + originX;
+              const scaledY = (y * scaleY) + originY;
+              rowPoints.push({ x: scaledX, y: scaledY });
+              pointCount++;
+              
+              if (pointCount > 1000) break;
+            }
+          }
+          
+          if (rowPoints.length > 1) {
+            const reverse = (y / stepOver) % 2 !== 0;
+            if (reverse) rowPoints.reverse();
+            
+            lines.push('G0 X' + rowPoints[0].x.toFixed(2) + ' Y' + rowPoints[0].y.toFixed(2));
+            lines.push('G1 F' + laserSpeed.toFixed(0));
+            
+            for (let i = 0; i < rowPoints.length; i++) {
+              const p = rowPoints[i];
+              lines.push('G1 X' + p.x.toFixed(2) + ' Y' + p.y.toFixed(2));
+            }
+            
+            totalLen += calculateRowLength(rowPoints);
+          }
+          
+          if (pointCount > 1000) break;
+        }
+
+        lines.push('M5');
+        lines.push('M30');
+
+        document.getElementById('estTime').innerHTML = "⏱️ وضع سريع: " + pointCount + " نقطة";
+
+        return lines.join('\n');
+      } catch (error) {
+        console.error('generateLaserQuickGcode error', error);
+        throw new Error('فشل في التوليد السريع: ' + error.message);
+      }
+    }
+
+    function generateLaserCutGcode() {
+      if (!grayMat || !contour) {
+        throw new Error("لا توجد بيانات حواف لتوليد كود القص");
+      }
+
+      try {
+        InputValidator.validateLaserSettings();
+        
+        const laserPower = parseInt(document.getElementById('laserPower').value) || 80;
+        const laserSpeed = parseInt(document.getElementById('laserSpeed').value) || 1000;
+        const laserPasses = parseInt(document.getElementById('laserPasses').value) || 1;
+        const airAssist = document.getElementById('laserAirAssist').checked;
+
+        const workWidth = cmToMm(parseFloat(document.getElementById('laserWorkWidth').value) || 30);
+        const workHeight = cmToMm(parseFloat(document.getElementById('laserWorkHeight').value) || 20);
+        const originX = cmToMm(parseFloat(document.getElementById('laserOriginX').value) || 0);
+        const originY = cmToMm(parseFloat(document.getElementById('laserOriginY').value) || 0);
+        const scaleX = workWidth / previewCanvas.width;
+        const scaleY = workHeight / previewCanvas.height;
+
+        const lines = [];
+        lines.push('G21 G90');
+        if (airAssist) lines.push('M8');
+
+        const contoursToUse = [contour, ...additionalContours.map(c => c.contour)];
+        let totalLen = 0;
+
+        for (let pass = 0; pass < laserPasses; pass++) {
+          for (const cnt of contoursToUse) {
+            const data = cnt.data32S;
+            if (!data || data.length < 4) continue;
+
+            let x0 = data[0], y0 = data[1];
+            const startX = (x0 * scaleX + originX).toFixed(2);
+            const startY = (y0 * scaleY + originY).toFixed(2);
+
+            lines.push(`G0 X${startX} Y${startY}`);
+            lines.push(`M3 S${Math.round(laserPower * 10)}`);
+            lines.push(`G1 F${laserSpeed.toFixed(0)}`);
+
+            for (let i = 2; i < data.length; i += 2) {
+              const x = data[i], y = data[i + 1];
+              const px = (x * scaleX + originX).toFixed(2);
+              const py = (y * scaleY + originY).toFixed(2);
+              lines.push(`G1 X${px} Y${py}`);
+              totalLen += Math.hypot(x - x0, y - y0);
+              x0 = x; y0 = y;
+            }
+
+            lines.push(`G1 X${startX} Y${startY}`);
+            lines.push('M5');
+          }
+        }
+
+        if (airAssist) lines.push('M9');
+        lines.push('M30');
+
+        const timeMin = totalLen / laserSpeed;
+        document.getElementById('estTime').innerHTML = "⏱️ تقدير وقت القص: " + timeMin.toFixed(1) + " دقيقة";
+
+        return lines.join('\n');
+
+      } catch (error) {
+        console.error('generateLaserCutGcode error', error);
+        throw new Error('فشل في توليد كود قص الليزر: ' + error.message);
       }
     }
 
     // ================= Buttons =================
     document.getElementById('btnGen').addEventListener('click', () => {
-      const gcode = generateRasterGcode(false);
-      document.getElementById('gcodeOut').value = gcode;
-      if (gcode) {
-        showToast("تم توليد G-code (Raster)");
-        renderTopViewFromGcode(gcode);
-        document.querySelector('[data-tab="simulation"]').click();
-      }
+      taskManager.addTask(() => {
+        const gcode = generateRasterGcode(false);
+        document.getElementById('gcodeOut').value = gcode;
+        lastGeneratedGcode = gcode;
+        if (gcode) {
+          showToast("تم توليد G-code (Raster)");
+          renderTopViewFromGcode(gcode);
+          document.querySelector('.tab-buttons button[data-tab="simulation"]').click();
+        }
+        return gcode;
+      }, 'توليد G-code (Raster)');
     });
 
     document.getElementById('btnQuick').addEventListener('click', () => {
-      const gcode = generateRasterGcode(true);
-      document.getElementById('gcodeOut').value = gcode;
-      if (gcode) {
-        showToast("تم توليد G-code سريع (Raster)");
-        renderTopViewFromGcode(gcode);
-        document.querySelector('[data-tab="simulation"]').click();
-      }
+      taskManager.addTask(() => {
+        const gcode = generateRasterGcode(true);
+        document.getElementById('gcodeOut').value = gcode;
+        lastGeneratedGcode = gcode;
+        if (gcode) {
+          showToast("تم توليد G-code سريع (Raster)");
+          renderTopViewFromGcode(gcode);
+          document.querySelector('.tab-buttons button[data-tab="simulation"]').click();
+        }
+        return gcode;
+      }, 'توليد G-code سريع');
     });
 
     document.getElementById('btnContour').addEventListener('click', () => {
-      const gcode = generateContourGcode();
-      document.getElementById('gcodeOut').value = gcode;
-      if (gcode) {
-        showToast("تم توليد G-code (Contour)");
-        renderTopViewFromGcode(gcode);
-        document.querySelector('[data-tab="simulation"]').click();
-      }
+      taskManager.addTask(() => {
+        const gcode = generateContourGcode();
+        document.getElementById('gcodeOut').value = gcode;
+        lastGeneratedGcode = gcode;
+        if (gcode) {
+          showToast("تم توليد G-code (Contour)");
+          renderTopViewFromGcode(gcode);
+          document.querySelector('.tab-buttons button[data-tab="simulation"]').click();
+        }
+        return gcode;
+      }, 'توليد G-code (Contour)');
+    });
+
+    // Laser buttons
+    document.getElementById('btnLaserEngrave').addEventListener('click', () => {
+      taskManager.addTask(() => {
+        const gcode = generateLaserEngraveGcode();
+        document.getElementById('gcodeOut').value = gcode;
+        lastGeneratedGcode = gcode;
+        if (gcode) {
+          showToast("تم توليد كود الليزر (نقش)");
+          renderTopViewFromGcode(gcode);
+          document.querySelector('.tab-buttons button[data-tab="simulation"]').click();
+        }
+        return gcode;
+      }, 'توليد كود الليزر (نقش)');
+    });
+
+    document.getElementById('btnLaserQuick').addEventListener('click', () => {
+      taskManager.addTask(() => {
+        const gcode = generateLaserQuickGcode();
+        document.getElementById('gcodeOut').value = gcode;
+        lastGeneratedGcode = gcode;
+        if (gcode) {
+          showToast("تم توليد كود الليزر السريع");
+          renderTopViewFromGcode(gcode);
+          document.querySelector('.tab-buttons button[data-tab="simulation"]').click();
+        }
+        return gcode;
+      }, 'توليد كود الليزر السريع');
+    });
+
+    document.getElementById('btnLaserCut').addEventListener('click', () => {
+      taskManager.addTask(() => {
+        const gcode = generateLaserCutGcode();
+        document.getElementById('gcodeOut').value = gcode;
+        lastGeneratedGcode = gcode;
+        if (gcode) {
+          showToast("تم توليد كود الليزر (قص)");
+          renderTopViewFromGcode(gcode);
+          document.querySelector('.tab-buttons button[data-tab="simulation"]').click();
+        }
+        return gcode;
+      }, 'توليد كود الليزر (قص)');
     });
 
     document.getElementById('btnDownload').addEventListener('click', () => {
       const text = document.getElementById('gcodeOut').value;
-      if (!text) { showToast("لا يوجد G-code لتحميله"); return; }
+      if (!text) { 
+        showToast("لا يوجد G-code لتحميله"); 
+        return; 
+      }
       try {
         const now = new Date();
         const dateStr = now.toISOString().slice(0, 19).replace(/[:.]/g, '-');
-        const filename = `cnc_output_${dateStr}.gcode`;
+        const machineType = document.getElementById('machineCategory').value;
+        const filename = `${machineType}_output_${dateStr}.gcode`;
         const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        a.href = url; 
+        a.download = filename; 
+        document.body.appendChild(a); 
+        a.click(); 
+        document.body.removeChild(a);
         URL.revokeObjectURL(url);
         showToast(`تم تحميل الملف: ${filename}`);
       } catch (error) {
         console.error('file download error', error);
         showToast('فشل في تحميل الملف');
       }
+    });
+
+    document.getElementById('btnLaserDownload').addEventListener('click', () => {
+      document.getElementById('btnDownload').click();
     });
 
     document.getElementById('btnCenterOrigin').addEventListener('click', () => {
@@ -886,32 +2077,102 @@
     document.addEventListener('keydown', function (e) {
       if (e.ctrlKey || e.metaKey) {
         switch (e.key.toLowerCase()) {
-          case 'g': e.preventDefault(); document.getElementById('btnGen').click(); break;
-          case 'r': e.preventDefault(); document.getElementById('btnQuick').click(); break;
+          case 'g': 
+            e.preventDefault(); 
+            if (document.getElementById('machineCategory').value === 'laser') {
+              document.getElementById('btnLaserEngrave').click();
+            } else {
+              document.getElementById('btnGen').click();
+            }
+            break;
+          case 'r': 
+            e.preventDefault(); 
+            if (document.getElementById('machineCategory').value === 'laser') {
+              document.getElementById('btnLaserQuick').click();
+            } else {
+              document.getElementById('btnQuick').click();
+            }
+            break;
           case 'd': e.preventDefault(); document.getElementById('btnDownload').click(); break;
+          case '`': e.preventDefault(); document.getElementById('dbgToggleSize').click(); break;
         }
       }
     });
 
+    // ================= Colormap Event Listeners =================
+    document.querySelectorAll('#colormapButtons button').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        document.querySelectorAll('#colormapButtons button').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        currentColormap = btn.dataset.map;
+        
+        // تحديث الـ heatmap إذا كان ظاهر
+        if (document.getElementById('heatmap').classList.contains('active')) {
+          renderHeatmap();
+        }
+        
+        // تحديث الـ top view إذا كان هناك G-code
+        if (lastGeneratedGcode) {
+          renderTopViewFromGcode(lastGeneratedGcode);
+        }
+        
+        // تحديث الـ contour view إذا كان ظاهر
+        if (document.getElementById('contour').classList.contains('active') && grayMat && contour) {
+          renderContour(grayMat, contour);
+        }
+        
+        showToast('تم تغيير نموذج الألوان إلى ' + currentColormap);
+      });
+    });
+
     // ================= Simulation 3D & Controls =================
 
+    // إضافة تحقق من تحميل المكتبات
+    function checkThreeJSLoaded() {
+      if (typeof THREE === 'undefined') {
+        throw new Error('THREE.js غير محمل');
+      }
+      
+      // التحقق من OrbitControls
+      if (typeof THREE.OrbitControls === 'undefined') {
+        console.warn('OrbitControls غير محمل - ستعمل المحاكاة بدون تحكم بالكاميرا');
+      }
+      
+      return true;
+    }
+
     function parseGcodeForSimulation(gcode) {
+      if (!gcode || gcode.length === 0) return [];
+      
       const lines = gcode.split('\n');
       const path = [];
       let pos = { x: 0, y: 0, z: 0 };
+      let pointCount = 0;
+      const maxPoints = 2000; // تقليل الحد الأقصى للأداء
+      
       for (let line of lines) {
+        if (pointCount >= maxPoints) break;
+        
         line = line.trim();
-        if (!line) continue;
+        if (!line || line.startsWith(';')) continue;
+        
         if (line.startsWith('G0') || line.startsWith('G1')) {
           const xm = line.match(/X([-\d.]+)/i);
           const ym = line.match(/Y([-\d.]+)/i);
           const zm = line.match(/Z([-\d.]+)/i);
+          
           if (xm) pos.x = parseFloat(xm[1]);
           if (ym) pos.y = parseFloat(ym[1]);
           if (zm) pos.z = parseFloat(zm[1]);
-          path.push({ x: pos.x, y: pos.y, z: pos.z });
+          
+          // أخذ عينات أقل للتحسين
+          if (pointCount % 5 === 0) {
+            path.push({ x: pos.x, y: pos.y, z: pos.z });
+          }
+          pointCount++;
         }
       }
+      
       return path;
     }
 
@@ -922,6 +2183,7 @@
       let color = 0x10b981; // x
       if (dir === 'y') color = 0x3b82f6;
       if (dir === 'contour') color = 0xf59e0b;
+      if (dir === 'laser') color = 0xff4444;
       const material = new THREE.LineBasicMaterial({ color: color });
       const line = new THREE.Line(geometry, material);
       return line;
@@ -944,9 +2206,56 @@
       return group;
     }
 
+    function createLaserToolModel() {
+      const group = new THREE.Group();
+      const bodyGeom = new THREE.CylinderGeometry(0.4, 0.4, 8, 12);
+      const bodyMat = new THREE.MeshPhongMaterial({ color: 0xff4444 });
+      const body = new THREE.Mesh(bodyGeom, bodyMat);
+      body.rotation.x = Math.PI / 2;
+      group.add(body);
+      const lensGeom = new THREE.CylinderGeometry(0.6, 0.6, 1, 16);
+      const lensMat = new THREE.MeshPhongMaterial({ color: 0x00ffff });
+      const lens = new THREE.Mesh(lensGeom, lensMat);
+      lens.rotation.x = Math.PI / 2;
+      lens.position.z = 4.5;
+      group.add(lens);
+      group.scale.set(1.2,1.2,1.2);
+      return group;
+    }
+
+    // دالة مساعدة لتنظيف المحاكاة
+    function cleanupSimulation() {
+      simulation.isPlaying = false;
+      simulation.animationFrame && cancelAnimationFrame(simulation.animationFrame);
+      simulation.animationFrame = null;
+      simulation.index = 0;
+      simulation.pathPoints = [];
+      
+      if (controls) {
+        controls.dispose();
+        controls = null;
+      }
+      
+      if (renderer) {
+        try {
+          if (renderer.domElement && renderer.domElement.parentNode) {
+            renderer.domElement.parentNode.removeChild(renderer.domElement);
+          }
+          renderer.dispose();
+          renderer = null;
+        } catch (e) {
+          console.warn('Error disposing renderer:', e);
+        }
+      }
+      
+      scene = null;
+      camera = null;
+      simulation.tool = null;
+      simulation.toolPath = null;
+    }
+
     // Simulation controls UI will be created inside the three container
     function addSimulationControls(container) {
-      // Remove old ones
       const old = container.querySelector('.sim-controls');
       if (old) old.remove();
       const oldInfo = container.querySelector('.sim-progress');
@@ -972,7 +2281,6 @@
         if (!simulation.pathPoints || simulation.pathPoints.length === 0) return;
         if (!simulation.isPlaying) {
           simulation.isPlaying = true;
-          simulation.startTime = performance.now() - (simulation.elapsedTime || 0);
           animateSimPath();
           document.getElementById('simStatus').textContent = 'جاري التشغيل';
           showToast('بدأت المحاكاة');
@@ -982,7 +2290,6 @@
         if (simulation.isPlaying) {
           simulation.isPlaying = false;
           cancelAnimationFrame(simulation.animationFrame);
-          simulation.elapsedTime = performance.now() - (simulation.startTime || performance.now());
           document.getElementById('simStatus').textContent = 'متوقف';
           showToast('أقفلت المحاكاة مؤقتاً');
         }
@@ -1006,15 +2313,12 @@
       });
     }
 
-    // animateSimPath handles speed by stepping indices per frame
     function animateSimPath() {
       if (!simulation.pathPoints || simulation.pathPoints.length === 0) return;
       const total = simulation.pathPoints.length;
       function step() {
         if (!simulation.isPlaying) return;
-        // compute step increment based on speed and delta time
-        // simpler approach: increment by speed factor
-        simulation.index += simulation.speed; // speed acts as "points per frame" multiplier
+        simulation.index += simulation.speed;
         if (simulation.index >= total) {
           simulation.index = total - 1;
           updateToolPosition(simulation.index);
@@ -1038,95 +2342,142 @@
       const i = Math.floor(index);
       const p = simulation.pathPoints[i];
       if (!p) return;
-      // Three scene expects scaled coords (we used x/10, -z, y/10 earlier)
       simulation.tool.position.set(p.x / 10, -p.z, p.y / 10);
     }
 
     function initSimulation() {
       const container = document.getElementById('threeContainer');
-      // cleanup previous
-      if (renderer) {
-        try { container.removeChild(renderer.domElement); renderer.dispose(); } catch(e){}
-        renderer = null; scene = null; camera = null; controls = null;
-        simulation.tool = null; simulation.toolPath = null; simulation.pathPoints = []; simulation.index = 0;
+      
+      // التحقق من تحميل المكتبات
+      if (!checkThreeJSLoaded()) {
+        showToast('المكتبات ثلاثية الأبعاد غير جاهزة. جاري المحاولة مرة أخرى...');
+        setTimeout(initSimulation, 1000);
+        return;
       }
+      
+      // تنظيف المحاكاة السابقة بشكل كامل
+      cleanupSimulation();
+      
       const placeholder = document.getElementById('simulationPlaceholder');
       if (placeholder) placeholder.style.display = 'none';
 
       try {
         const gcode = document.getElementById('gcodeOut').value;
-        if (!gcode) throw new Error('لا يوجد G-code للمحاكاة');
+        if (!gcode || gcode.trim().length === 0) {
+          showToast('لا يوجد G-code للمحاكاة');
+          if (placeholder) placeholder.style.display = 'flex';
+          return;
+        }
 
+        // إنشاء المشهد
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x081224);
 
-        const containerW = container.clientWidth, containerH = container.clientHeight;
+        const containerW = container.clientWidth || 800;
+        const containerH = container.clientHeight || 400;
+        
         camera = new THREE.PerspectiveCamera(60, containerW / containerH, 0.1, 2000);
         camera.position.set(100, 100, 100);
         camera.lookAt(0, 0, 0);
 
-        renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+        renderer = new THREE.WebGLRenderer({ 
+          antialias: false,
+          preserveDrawingBuffer: true // للمساعدة في الأداء
+        });
         renderer.setSize(containerW, containerH);
-        renderer.setClearColor(0x000000, 0);
         container.appendChild(renderer.domElement);
 
-        // keep OrbitControls optional — user can still drag if desired
-        controls = new THREE.OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.05;
+        // استخدام OrbitControls إذا كان متاحاً
+        if (typeof THREE.OrbitControls !== 'undefined') {
+          try {
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = false;
+            controls.screenSpacePanning = true;
+          } catch (e) {
+            console.warn('Failed to initialize OrbitControls:', e);
+          }
+        }
 
-        // lighting
+        // إضاءة مبسطة
         const ambient = new THREE.AmbientLight(0x404040, 0.8);
         scene.add(ambient);
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
-        dirLight.position.set(50,120,50); scene.add(dirLight);
 
-        // material block
-        const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30) / 10;
-        const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20) / 10;
-        const workDepth = (parseFloat(document.getElementById('workDepth').value) || 3) / 10;
-        const materialGeometry = new THREE.BoxGeometry(workWidth, workDepth, workHeight);
-        const materialMaterial = new THREE.MeshPhongMaterial({ color:0x8B4513, transparent:true, opacity:0.9 });
-        const materialMesh = new THREE.Mesh(materialGeometry, materialMaterial);
-        materialMesh.position.set(workWidth/2, -workDepth/2, workHeight/2);
-        scene.add(materialMesh);
+        const isLaser = document.getElementById('machineCategory').value === 'laser';
+        
+        // منصة مبسطة
+        const workWidth = isLaser ? 
+          cmToMm(parseFloat(document.getElementById('laserWorkWidth').value) || 30) / 10 :
+          cmToMm(parseFloat(document.getElementById('workWidth').value) || 30) / 10;
+        const workHeight = isLaser ?
+          cmToMm(parseFloat(document.getElementById('laserWorkHeight').value) || 20) / 10 :
+          cmToMm(parseFloat(document.getElementById('workHeight').value) || 20) / 10;
+        
+        const platformGeometry = new THREE.BoxGeometry(workWidth, 0.5, workHeight);
+        const platformMaterial = new THREE.MeshPhongMaterial({ 
+          color: isLaser ? 0x666666 : 0x8B4513 
+        });
+        const platformMesh = new THREE.Mesh(platformGeometry, platformMaterial);
+        platformMesh.position.set(workWidth/2, -0.25, workHeight/2);
+        scene.add(platformMesh);
 
-        // parse gcode to pathPoints (in mm) and create three line
+        // مسار مبسط
         const pathPoints = parseGcodeForSimulation(gcode);
-        simulation.pathPoints = pathPoints;
-        simulation.toolPath = createToolPathVisualization(pathPoints, lastScanDir);
-        if (simulation.toolPath) scene.add(simulation.toolPath);
+        
+        // إذا كان المسار كبير جداً، نخففه أكثر
+        if (pathPoints.length > 3000) {
+          const simplifiedPoints = [];
+          for (let i = 0; i < pathPoints.length; i += 5) {
+            simplifiedPoints.push(pathPoints[i]);
+          }
+          simulation.pathPoints = simplifiedPoints;
+          showToast('تم تبسيط المسار إلى ' + simplifiedPoints.length + ' نقطة');
+        } else {
+          simulation.pathPoints = pathPoints;
+        }
 
-        // tool
-        simulation.tool = createToolModel();
-        simulation.tool.position.set(0,0,0);
+        // إنشاء مسار مرئي مبسط
+        if (simulation.pathPoints.length > 1) {
+          const points = simulation.pathPoints.map(p => 
+            new THREE.Vector3(p.x / 10, -p.z, p.y / 10)
+          );
+          const geometry = new THREE.BufferGeometry().setFromPoints(points);
+          const material = new THREE.LineBasicMaterial({ 
+            color: isLaser ? 0xff4444 : 0x10b981 
+          });
+          simulation.toolPath = new THREE.Line(geometry, material);
+          scene.add(simulation.toolPath);
+        }
+
+        // أداة مبسطة
+        const toolGeometry = new THREE.CylinderGeometry(0.5, 0.5, 3, 8);
+        const toolMaterial = new THREE.MeshPhongMaterial({ 
+          color: isLaser ? 0xff4444 : 0xffff00 
+        });
+        simulation.tool = new THREE.Mesh(toolGeometry, toolMaterial);
+        simulation.tool.rotation.x = Math.PI / 2;
         scene.add(simulation.tool);
 
-        // helpers
-        const gridSize = Math.max(workWidth, workHeight) * 1.2;
-        const gridHelper = new THREE.GridHelper(gridSize, 10);
-        gridHelper.position.set(gridSize/2, 0, gridSize/2);
+        // شبكة مساعدة
+        const gridHelper = new THREE.GridHelper(Math.max(workWidth, workHeight), 10);
+        gridHelper.position.set(workWidth/2, 0, workHeight/2);
         scene.add(gridHelper);
-        const axesHelper = new THREE.AxesHelper(Math.max(workWidth, workHeight)/2 + 5);
-        scene.add(axesHelper);
 
-        // add controls UI
-        addSimulationControls(container);
-
-        // prepare sim state
+        // إعدادات المحاكاة
         simulation.index = 0;
         simulation.isPlaying = false;
-        simulation.elapsedTime = 0;
         simulation.animationFrame = null;
 
-        // render loop (keeps controls working)
+        // عناصر تحكم مبسطة
+        addSimulationControls(container);
+
+        // حلقة التصيير
         (function renderLoop() {
           requestAnimationFrame(renderLoop);
           if (controls) controls.update();
           renderer.render(scene, camera);
         })();
 
-        showToast('تم تهيئة المحاكاة');
+        showToast('تم تهيئة المحاكاة: ' + simulation.pathPoints.length + ' نقطة');
 
       } catch (error) {
         console.error('initSimulation error', error);
@@ -1135,124 +2486,178 @@
       }
     }
 
-    // ================= Top View rendering =================
-    // Creates a depth map from generated G-code path (approximate) and renders to topView canvas
+    // ================= Top View rendering (colored + inverted Y + legend + colormap blending) =================
     function renderTopViewFromGcode(gcode) {
       try {
         if (!previewCanvas) return;
         const topCanvas = document.getElementById('topView');
+        const legendDiv = document.getElementById('topLegend');
         const tw = previewCanvas.width, th = previewCanvas.height;
         topCanvas.width = tw; topCanvas.height = th;
         const ctx = topCanvas.getContext('2d');
 
-        // initialize depth map (in mm) 2D array
-        const depthMap = new Float32Array(tw * th); // single buffer
+        const depthMap = new Float32Array(tw * th);
         const maxDepth = parseFloat(document.getElementById('maxDepth').value) || 3.0;
 
-        // parse gcode to points in mm
         const points = parseGcodeForSimulation(gcode);
+
+        const isLaser = document.getElementById('machineCategory').value === 'laser';
+        
+        // wood color base for router, dark platform for laser
+        const baseRgb = isLaser ? { r: 40, g: 40, b: 40 } : hexToRgb(document.getElementById('woodColor').value || '#a0522d');
+        const blackRgb = { r: 10, g: 6, b: 3 };
+
+        // mm -> pixel mapping
+        const workWidth = isLaser ? 
+          cmToMm(parseFloat(document.getElementById('laserWorkWidth').value) || 30) :
+          cmToMm(parseFloat(document.getElementById('workWidth').value) || 30);
+        const workHeight = isLaser ?
+          cmToMm(parseFloat(document.getElementById('laserWorkHeight').value) || 20) :
+          cmToMm(parseFloat(document.getElementById('workHeight').value) || 20);
+        const originX = isLaser ?
+          cmToMm(parseFloat(document.getElementById('laserOriginX').value) || 0) :
+          cmToMm(parseFloat(document.getElementById('originX').value) || 0);
+        const originY = isLaser ?
+          cmToMm(parseFloat(document.getElementById('laserOriginY').value) || 0) :
+          cmToMm(parseFloat(document.getElementById('originY').value) || 0);
+
+        function mmToPixel(px_mm_x, px_mm_y) {
+          const xRatio = (px_mm_x - originX) / workWidth;
+          const yRatio = (px_mm_y - originY) / workHeight;
+          const xPix = Math.round(xRatio * (tw - 1));
+          // invert Y to match visual orientation
+          const yPix = th - 1 - Math.round(yRatio * (th - 1));
+          return { x: xPix, y: yPix };
+        }
+
+        // init depth map
+        for (let i=0;i<depthMap.length;i++) depthMap[i]=0;
+
+        // If no points, fallback to grayscale->depth using image
         if (!points || points.length === 0) {
-          // fallback: visualize grayscale as depth
           const imgData = ctx.createImageData(tw, th);
           for (let y=0;y<th;y++){
             for (let x=0;x<tw;x++){
               const v = sampleGrayAt(x,y);
               const depth = ((255 - v)/255.0)*maxDepth;
-              const shade = 255 - Math.round((depth/maxDepth)*200); // darker for deeper
+              const t = depth / maxDepth; // 0..1
+              // colormap color
+              const cmapCol = getColormapColor(t, currentColormap);
+              // blend: base mixed with cmap color
+              const mixed1 = mixColors(baseRgb, blackRgb, t*0.6);
+              const finalCol = mixColors(mixed1, cmapCol, isLaser ? 0.5 : 0.35);
               const idx = (y*tw + x)*4;
-              imgData.data[idx]=shade; imgData.data[idx+1]=shade; imgData.data[idx+2]=shade; imgData.data[idx+3]=255;
+              imgData.data[idx]=finalCol.r; imgData.data[idx+1]=finalCol.g; imgData.data[idx+2]=finalCol.b; imgData.data[idx+3]=255;
             }
           }
           ctx.putImageData(imgData,0,0);
+          drawTopLegend(currentColormap);
           return;
         }
 
-        // read work dims and origin to map mm to pixels
-        const workWidth = cmToMm(parseFloat(document.getElementById('workWidth').value) || 30);
-        const workHeight = cmToMm(parseFloat(document.getElementById('workHeight').value) || 20);
-        const originX = cmToMm(parseFloat(document.getElementById('originX').value) || 0);
-        const originY = cmToMm(parseFloat(document.getElementById('originY').value) || 0);
-
-        // helper: mm coords -> pixel coords on previewCanvas
-        function mmToPixel(px_mm_x, px_mm_y) {
-          const xRatio = (px_mm_x - originX) / workWidth;
-          const yRatio = (px_mm_y - originY) / workHeight;
-          const xPix = Math.round(xRatio * (tw - 1));
-          const yPix = Math.round(yRatio * (th - 1));
-          return { x: xPix, y: yPix };
-        }
-
-        // fill depthMap with 0
-        for (let i=0;i<depthMap.length;i++) depthMap[i]=0;
-
-        // For every point in path, mark depth (use absolute z)
+        // accumulate depths from gcode points
         for (let i=0;i<points.length;i++) {
           const p = points[i];
           if (typeof p.x === 'undefined') continue;
           const coords = mmToPixel(p.x, p.y);
           if (coords.x < 0 || coords.x >= tw || coords.y < 0 || coords.y >= th) continue;
-          const depth = Math.abs(p.z); // z is negative depth
+          const depth = isLaser ? Math.abs(p.z) : Math.min(Math.abs(p.z), maxDepth);
           const idx = coords.y * tw + coords.x;
           depthMap[idx] = Math.max(depthMap[idx], depth);
-          // optionally, spread to neighbors for visibility
-          const spread = 2;
+          const spread = isLaser ? 1 : 2;
           for (let oy=-spread; oy<=spread; oy++) {
             for (let ox=-spread; ox<=spread; ox++) {
               const nx = coords.x + ox, ny = coords.y + oy;
               if (nx<0||nx>=tw||ny<0||ny>=th) continue;
               const nIdx = ny*tw + nx;
-              depthMap[nIdx] = Math.max(depthMap[nIdx], depth * Math.max(0, 1 - (Math.hypot(ox,oy)/ (spread+0.1))));
+              const weight = Math.max(0, 1 - (Math.hypot(ox,oy) / (spread + 0.1)));
+              depthMap[nIdx] = Math.max(depthMap[nIdx], depth * weight);
             }
           }
         }
 
-        // Compose image from depthMap
         const imgData = ctx.createImageData(tw, th);
         for (let y=0;y<th;y++) {
           for (let x=0;x<tw;x++) {
             const idx = y*tw + x;
             const d = Math.min(depthMap[idx], maxDepth);
-            const shade = 255 - Math.round((d / maxDepth) * 230); // deeper -> darker
+            const t = (maxDepth === 0) ? 0 : (d / maxDepth); // 0..1
+            const cmapCol = getColormapColor(t, currentColormap);
+            const mixed1 = mixColors(baseRgb, blackRgb, t*0.6);
+            const finalCol = mixColors(mixed1, cmapCol, isLaser ? 0.5 : 0.35);
             const di = (y*tw + x)*4;
-            imgData.data[di] = shade;
-            imgData.data[di+1] = shade;
-            imgData.data[di+2] = shade;
+            imgData.data[di] = finalCol.r;
+            imgData.data[di+1] = finalCol.g;
+            imgData.data[di+2] = finalCol.b;
             imgData.data[di+3] = 255;
           }
         }
         ctx.putImageData(imgData, 0, 0);
+
+        // draw legend gradient for current colormap
+        drawTopLegend(currentColormap);
 
       } catch (e) {
         console.error('renderTopViewFromGcode error', e);
       }
     }
 
+    function drawTopLegend(map) {
+      try {
+        const legend = document.getElementById('topLegend');
+        // create simple gradient css from colormap: sample t=0..1
+        const steps = 6;
+        const stops = [];
+        for (let i=0;i<=steps;i++){
+          const t = i / steps;
+          const c = getColormapColor(t, map);
+          stops.push(`rgb(${c.r},${c.g},${c.b}) ${Math.round((i/steps)*100)}%`);
+        }
+        legend.style.background = `linear-gradient(90deg, ${stops.join(',')})`;
+      } catch(e){}
+    }
+
     // ================= Init UI and bindings =================
     document.addEventListener('DOMContentLoaded', () => {
       updateDimensionDisplay();
       showToast('تم تحميل التطبيق بنجاح', 1200);
-      document.getElementById('workWidth').addEventListener('input', () => setTimeout(updateDimensionDisplay, 200));
-      document.getElementById('workHeight').addEventListener('input', () => setTimeout(updateDimensionDisplay, 200));
+      
+      // منع التحميل المزدوج للصور
+      document.getElementById('fileInput').addEventListener('click', function(e) {
+        this.value = ''; // Reset file input
+      });
+      
+      // تحديث الأبعاد مع تأخير لمنع التكرار
+      let updateTimeout;
+      const updateDim = () => {
+        clearTimeout(updateTimeout);
+        updateTimeout = setTimeout(updateDimensionDisplay, 200);
+      };
+      
+      document.getElementById('workWidth').addEventListener('input', updateDim);
+      document.getElementById('workHeight').addEventListener('input', updateDim);
+      document.getElementById('laserWorkWidth').addEventListener('input', updateDim);
+      document.getElementById('laserWorkHeight').addEventListener('input', updateDim);
 
       const machineDefaults = {
-        router: { feed: 800, safeZ: 5, maxDepth: 3, stepOver: 5, description: "Router CNC - مناسبة للنحت" },
-        laser: { feed: 1200, safeZ: 0, maxDepth: 0, stepOver: 0.2, description: "Laser Engraver - مناسبة للنقش بالليزر" },
-        plasma: { feed: 1500, safeZ: 3, maxDepth: 0, stepOver: 1, description: "Plasma Cutter" },
-        "3dprinter": { feed: 1000, safeZ: 0.2, maxDepth: 0.2, stepOver: 0.4, description: "3D Printer - FDM" }
+        router: { feed: 800, safeZ: 5, maxDepth: 3, stepOver: 5, description: "CNC Router - للنحت على الخشب والمعادن" },
+        laser: { feed: 2000, safeZ: 0, maxDepth: 0, stepOver: 0.2, description: "Laser Engraver - للنقش والقص بالليزر" }
       };
-      document.getElementById('machineType').addEventListener('change', (e) => {
+      
+      document.getElementById('machineCategory').addEventListener('change', (e) => {
         const def = machineDefaults[e.target.value];
         if (def) {
           document.getElementById('feedRate').value = def.feed;
           document.getElementById('safeZ').value = def.safeZ;
           document.getElementById('maxDepth').value = def.maxDepth;
           document.getElementById('stepOver').value = def.stepOver;
+          document.getElementById('laserSpeed').value = def.feed;
           showToast(`تم تحميل إعدادات ${e.target.value}`);
         }
       });
     });
 
-    // resize three renderer on window resize
+    // resize three renderer & topView on window resize
     window.addEventListener('resize', () => {
       const container = document.getElementById('threeContainer');
       if (camera && renderer && container) {
@@ -1260,7 +2665,6 @@
         camera.updateProjectionMatrix();
         renderer.setSize(container.clientWidth, container.clientHeight);
       }
-      // also resize topView to previewCanvas dims if exists
       try {
         const top = document.getElementById('topView');
         if (previewCanvas && top) {
@@ -1269,6 +2673,587 @@
       } catch(e){}
     });
 
+    // تنظيف الذاكرة عند إغلاق الصفحة
+    window.addEventListener('beforeunload', () => {
+      memoryManager.cleanupAll();
+      cleanupSimulation();
+    });
+
   </script>
+
+<!-- === Added in v1.0.1 — Non-intrusive UI & helper enhancements === -->
+<script>
+(function(){
+  'use strict';
+  // Safety: do not modify existing functions; add helpers only
+
+  // ----- px -> mm unified conversion -----
+  function getWorkDimsMm() {
+    const workWidthCm = parseFloat(document.getElementById('workWidth')?.value || document.getElementById('laserWorkWidth')?.value || 0);
+    const workHeightCm = parseFloat(document.getElementById('workHeight')?.value || document.getElementById('laserWorkHeight')?.value || 0);
+    return { workWidthMm: workWidthCm * 10, workHeightMm: workHeightCm * 10 };
+  }
+
+  window.pxToMm = function(x, y) {
+    try {
+      if (!window.grayMat) return { mmX: x, mmY: y };
+      const dims = getWorkDimsMm();
+      const gw = window.grayMat.cols || 1;
+      const gh = window.grayMat.rows || 1;
+      const pxToMmX = (dims.workWidthMm || 1) / gw;
+      const pxToMmY = (dims.workHeightMm || 1) / gh;
+      return { mmX: x * pxToMmX, mmY: y * pxToMmY };
+    } catch (e) {
+      console.warn('pxToMm failed', e);
+      return { mmX: x, mmY: y };
+    }
+  };
+
+  // ----- Save / restore settings (safe, non-intrusive) -----
+  function collectInputs() {
+    const inputs = document.querySelectorAll('input, select, textarea');
+    const data = {};
+    inputs.forEach(i => {
+      if (!i.id) return;
+      if (i.type === 'checkbox') data[i.id] = i.checked;
+      else data[i.id] = i.value;
+    });
+    return data;
+  }
+  function applySettings(data) {
+    if (!data) return;
+    for (const key in data) {
+      try {
+        const el = document.getElementById(key);
+        if (!el) continue;
+        if (el.type === 'checkbox') el.checked = !!data[key];
+        else el.value = data[key];
+      } catch(e){}
+    }
+    // update dimension displays if present
+    try { if (window.updateDimensionDisplay) window.updateDimensionDisplay(); } catch(e){}
+  }
+
+  window.saveCncAiSettings = function() {
+    try {
+      const data = collectInputs();
+      localStorage.setItem('CncAi_Settings_v1.0.1', JSON.stringify(data));
+      console.log('CncAi settings saved');
+    } catch(e){ console.warn('save settings error', e); }
+  };
+  window.restoreCncAiSettings = function() {
+    try {
+      const raw = localStorage.getItem('CncAi_Settings_v1.0.1');
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      applySettings(data);
+      console.log('CncAi settings restored');
+    } catch(e){ console.warn('restore settings error', e); }
+  };
+
+  window.addEventListener('load', function(){ try{ restoreCncAiSettings(); } catch(e){} });
+  window.addEventListener('beforeunload', function(){ try{ saveCncAiSettings(); } catch(e){} });
+
+  // ----- Safe timing wrapper for tasks -----
+  (function enhanceTaskTiming(){
+    try {
+      if (!window.TaskManager) return;
+      const TP = TaskManager.prototype;
+      if (!TP) return;
+      // Create storage for timings
+      window._cncTaskTimings = window._cncTaskTimings || [];
+      const originalAdd = TP.addTask;
+      TP.addTask = function(taskFn, description='مهمة') {
+        // Wrap the taskFn so timing is measured per-task without altering original semantics
+        const wrapped = async () => {
+          const label = `task:${description}:${Date.now()}`;
+          console.time(label);
+          const start = performance.now ? performance.now() : Date.now();
+          try {
+            const res = await taskFn();
+            return res;
+          } finally {
+            const end = performance.now ? performance.now() : Date.now();
+            console.timeEnd(label);
+            window._cncTaskTimings.push({ description, durationMs: Math.round(end - start), ts: new Date().toISOString() });
+            // keep only recent 200 entries
+            if (window._cncTaskTimings.length > 200) window._cncTaskTimings.shift();
+          }
+        };
+        return originalAdd.call(this, wrapped, description);
+      };
+    } catch(e) { console.warn('enhanceTaskTiming failed', e); }
+  })();
+
+  // ----- Debug Overlay: performance panel -----
+  function ensurePerfPanel() {
+    try {
+      const overlay = document.getElementById('debugOverlay');
+      if (!overlay) return;
+      let perf = document.getElementById('cncPerfPanel');
+      if (!perf) {
+        perf = document.createElement('div');
+        perf.id = 'cncPerfPanel';
+        perf.style.padding = '8px';
+        perf.style.borderTop = '1px solid rgba(255,255,255,0.02)';
+        perf.style.fontSize = '12px';
+        perf.style.color = '#cfeaf2';
+        overlay.appendChild(perf);
+      }
+      // update loop
+      setInterval(()=>{
+        try {
+          const timings = window._cncTaskTimings || [];
+          const last = timings.slice(-5);
+          const avg = timings.length ? Math.round(timings.reduce((s,t)=>s+t.durationMs,0)/timings.length) : 0;
+          perf.innerHTML = `<div style="opacity:0.9"><b>📊 أداء</b> — إجمالي سجلات: ${timings.length} — متوسط: ${avg} ms</div>` +
+                           `<div style="margin-top:6px;line-height:1.2;"><b>آخر المهام:</b> ${last.map(l=>`${l.description} (${l.durationMs}ms)`).join(' • ')}</div>`;
+        } catch(e){}
+      }, 1500);
+    } catch(e){ console.warn('ensurePerfPanel error', e); }
+  }
+  window.addEventListener('load', ensurePerfPanel);
+
+  // ----- Legend for TopView (non-intrusive) -----
+  function addDepthLegend() {
+    try {
+      if (document.getElementById('depthLegend')) return;
+      const container = document.getElementById('topViewContainer') || document.body;
+      const legend = document.createElement('canvas');
+      legend.id = 'depthLegend';
+      legend.width = 220;
+      legend.height = 24;
+      legend.style.border = '1px solid rgba(255,255,255,0.03)';
+      legend.style.borderRadius = '6px';
+      legend.style.marginTop = '8px';
+      legend.title = 'مقياس العمق (Z) — الألوان تتبع اختيار Colormap';
+      const ctx = legend.getContext('2d');
+      // draw gradient based on known colormaps - approximate jet
+      const grad = ctx.createLinearGradient(0,0,legend.width,0);
+      grad.addColorStop(0, '#0000ff');
+      grad.addColorStop(0.33, '#00ffff');
+      grad.addColorStop(0.66, '#ffff00');
+      grad.addColorStop(1, '#ff0000');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0,0,legend.width,legend.height);
+      ctx.fillStyle = '#cfeaf2';
+      ctx.font = '12px sans-serif';
+      ctx.fillText('عمق Z (مم):', 4, legend.height + 12);
+      // append after topViewContainer
+      container.appendChild(legend);
+    } catch(e){ console.warn('addDepthLegend', e); }
+  }
+  window.addEventListener('load', addDepthLegend);
+
+  // ----- Improved toasts (stacking, types) -----
+  (function initToasts(){
+    try {
+      let root = document.getElementById('cncToastsRoot');
+      if (!root) {
+        root = document.createElement('div');
+        root.id = 'cncToastsRoot';
+        root.style.position = 'fixed';
+        root.style.right = '16px';
+        root.style.bottom = '16px';
+        root.style.zIndex = 40000;
+        root.style.display = 'flex';
+        root.style.flexDirection = 'column';
+        root.style.gap = '8px';
+        document.body.appendChild(root);
+      }
+      window._showCncToast = function(msg, type='info', timeout=3500) {
+        try {
+          const el = document.createElement('div');
+          el.className = 'cnc-toast cnc-toast-' + type;
+          el.style.padding = '8px 12px';
+          el.style.borderRadius = '8px';
+          el.style.minWidth = '180px';
+          el.style.background = type === 'error' ? 'linear-gradient(90deg,#ff6b6b,#ff4444)' : (type==='warn' ? 'linear-gradient(90deg,#f5b041,#f39c12)' : 'linear-gradient(90deg,#06b6d4,#0284c7)');
+          el.style.color = type === 'error' ? '#210' : '#021';
+          el.style.boxShadow = '0 8px 24px rgba(2,6,23,0.6)';
+          el.style.fontWeight = '600';
+          el.textContent = msg;
+          root.appendChild(el);
+          setTimeout(()=>{ el.style.transition = 'opacity 0.35s'; el.style.opacity = '0'; setTimeout(()=>el.remove(), 400); }, timeout);
+        } catch(e){ console.warn('toast show failed', e); }
+      };
+      // expose simple alias to existing showToast for backward compatibility
+      window.showToast = window._showCncToast;
+    } catch(e){}
+  })();
+
+  // ----- Smart tooltips: non-intrusive titles for inputs without title -----
+  (function applySmartTooltips(){
+    try {
+      const labels = document.querySelectorAll('label');
+      labels.forEach(l => {
+        try {
+          const forId = l.getAttribute('for');
+          if (!forId) return;
+          const target = document.getElementById(forId);
+          if (!target) return;
+          if (!target.title) {
+            target.title = l.textContent.trim() + ' — اضغط للمزيد';
+          }
+        } catch(e){}
+      });
+    } catch(e){}
+  })();
+
+  // Expose utilities for debugging
+  window.CncAiHelpers = {
+    saveSettings: window.saveCncAiSettings || function(){},
+    restoreSettings: window.restoreCncAiSettings || function(){},
+    pxToMm: window.pxToMm
+  };
+
+})(); // end IIFE
+</script>
+<!-- === End of v1.0.1 additions === -->
+
+
+<!-- === Added in v1.0.2 — Laser G-code improvements (gamma, safe transitions, pass comments) === -->
+<script>
+(function(){
+  'use strict';
+  // Non-intrusive enhanced laser G-code generator.
+  async function generateLaserGcodeEnhanced() {
+    try {
+      if (!window.grayMat) {
+        window.showToast && window.showToast('لا توجد صورة محمّلة (grayMat)', 'error');
+        return;
+      }
+      // Basic settings (with safe fallbacks)
+      const feedrate = parseFloat(document.getElementById('laserSpeed')?.value) || 2000;
+      const powerMax = parseFloat(document.getElementById('laserPower')?.value) || 80;
+      const passes = parseInt(document.getElementById('laserPasses')?.value) || 1;
+      const detail = parseInt(document.getElementById('laserDetail')?.value) || 5;
+      const invert = document.getElementById('invertZ')?.checked || false; // not used directly but read
+      const safeZ = parseFloat(document.getElementById('safeZ')?.value) || 5;
+
+      // gamma correction parameter (optional UI element may exist)
+      const gammaInput = document.getElementById('laserGamma');
+      const gamma = gammaInput ? (parseFloat(gammaInput.value) || 1.2) : 1.2;
+
+      const cols = window.grayMat.cols;
+      const rows = window.grayMat.rows;
+      if (!cols || !rows) {
+        window.showToast && window.showToast('خطأ في أبعاد الصورة الرمادية', 'error');
+        return;
+      }
+
+      // Determine Y step from detail slider: higher detail => smaller step
+      const stepY = Math.max(1, Math.ceil(10 / Math.max(1, detail)));
+
+      let gcode = '';
+      gcode += '; Generated by CncAi v1.0.2 (Laser enhanced)\n';
+      gcode += '; Units: mm (G21) | Absolute coords (G90)\n';
+      gcode += 'G21\nG90\n';
+      gcode += 'M5 ; ensure laser off\n';
+
+      // helper to map pixel to mm using existing pxToMm if available
+      function pxToMmSafe(px, py) {
+        try {
+          if (window.pxToMm) return window.pxToMm(px, py);
+          // fallback simple proportional mapping
+          const workW = (parseFloat(document.getElementById('laserWorkWidth')?.value)||30)*10;
+          const workH = (parseFloat(document.getElementById('laserWorkHeight')?.value)||20)*10;
+          return { mmX: (px / Math.max(1, cols-1)) * workW, mmY: (py / Math.max(1, rows-1)) * workH };
+        } catch(e){ return { mmX: px, mmY: py }; }
+      }
+
+      // iterate passes
+      for (let pass = 1; pass <= passes; pass++) {
+        gcode += `; --- pass ${pass} ---\n`;
+        // For each raster row
+        for (let py = 0; py < rows; py += stepY) {
+          const rowIndex = py;
+          const isForward = ((Math.floor(py / stepY) % 2) === 0);
+          const startX = isForward ? 0 : cols - 1;
+          const endX = isForward ? cols - 1 : 0;
+          const dir = isForward ? 1 : -1;
+
+          // move to start of row with laser off
+          const startMm = pxToMmSafe(startX, rowIndex);
+          gcode += `G0 X${startMm.mmX.toFixed(3)} Y${startMm.mmY.toFixed(3)}\n`;
+          gcode += 'M5\n'; // ensure laser off during rapid move
+
+          // Raster along the row, emitting G1 with S (power) and feed
+          for (let ix = startX; (dir>0 ? ix<=endX : ix>=endX); ix += dir) {
+            const idx = rowIndex * cols + ix;
+            const val = window.grayMat.data ? (window.grayMat.data[idx] || 0) : 0;
+            // normalized 0..1 (0=black,255=white). For engraving, darker => more power.
+            const v = Math.max(0, Math.min(255, val)) / 255.0;
+            const adjusted = Math.pow(1.0 - v, gamma); // darker -> larger
+            const pwr = Math.round(adjusted * powerMax); // 0 .. powerMax
+
+            const pt = pxToMmSafe(ix, rowIndex);
+            // use G1 with S and feedrate. ensure numbers are reasonable
+            gcode += `G1 X${pt.mmX.toFixed(3)} Y${pt.mmY.toFixed(3)} S${pwr.toFixed(0)} F${Math.round(feedrate)}\n`;
+          }
+
+          // end of row: ensure laser off before rapid move to next row
+          gcode += 'M5\n';
+        } // end rows
+      } // end passes
+
+      // finish
+      gcode += 'M5 ; laser off\n';
+      gcode += `; Safe Z: ${safeZ}\n`;
+      gcode += 'G0 X0 Y0 ; return origin\n';
+
+      // place into UI
+      const outEl = document.getElementById('gcodeOut');
+      if (outEl) outEl.value = gcode;
+      window.lastGeneratedGcode = gcode;
+      window.showToast && window.showToast('✅ تم توليد G-code للّيزر (نسخة محسّنة)', 'info');
+      return gcode;
+    } catch (err) {
+      console.error('generateLaserGcodeEnhanced error', err);
+      window.showToast && window.showToast('خطأ أثناء توليد كود الليزر: ' + (err.message||err), 'error');
+      throw err;
+    }
+  }
+
+  // Attach to existing UI buttons if present (non-destructive)
+  function attachToButtons() {
+    try {
+      const btnEngrave = document.getElementById('btnLaserEngrave') || document.getElementById('btnLaserEngraveButton');
+      if (btnEngrave) {
+        btnEngrave.addEventListener('click', async function(ev){
+          ev.preventDefault();
+          await generateLaserGcodeEnhanced();
+        });
+      }
+      const btnDownload = document.getElementById('btnLaserDownload');
+      if (btnDownload) {
+        btnDownload.addEventListener('click', function(){
+          try {
+            const content = window.lastGeneratedGcode || document.getElementById('gcodeOut')?.value || '';
+            if (!content) { window.showToast && window.showToast('لا توجد بيانات G-code للتحميل', 'warn'); return; }
+            const blob = new Blob([content], {type:'text/plain'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'CncAi_laser_output.nc';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.showToast && window.showToast('⬇️ تم تنزيل ملف G-code', 'info');
+          } catch(e){ console.error(e); window.showToast && window.showToast('فشل التحميل', 'error'); }
+        });
+      }
+      // Quick button same behaviour but non-blocking
+      const btnQuick = document.getElementById('btnLaserQuick');
+      if (btnQuick) {
+        btnQuick.addEventListener('click', function(ev){
+          ev.preventDefault();
+          // fire and forget, do not await to keep UI responsive for quick test
+          generateLaserGcodeEnhanced().catch(e=>{});
+        });
+      }
+    } catch(e){ console.warn('attachToButtons failed', e); }
+  }
+
+  // wait until DOM ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', attachToButtons);
+  } else {
+    attachToButtons();
+  }
+
+  // expose function for developers
+  window.generateLaserGcodeEnhanced = generateLaserGcodeEnhanced;
+
+})(); // end IIFE
+</script>
+<!-- === End of v1.0.2 laser improvements === -->
+
+<!-- === CncAi v1.0.3: Smart Debug (Hybrid) + UI Animations === -->
+<style>
+/* 🧠 Debug overlay (hybrid mode: collapsed + expandable) */
+#cnc_debug_hybrid {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 70000;
+  font-family: system-ui;
+  transition: all .25s ease;
+  box-shadow: 0 10px 30px rgba(0,0,0,.6);
+}
+#cnc_debug_hybrid .collapsed {
+  background: linear-gradient(90deg,#021426,#063044);
+  color: #bfefff;
+  padding: 8px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 48px;
+  justify-content: center;
+}
+#cnc_debug_hybrid .collapsed .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #06b6d4;
+  box-shadow: 0 0 6px rgba(6,182,212,0.8);
+}
+#cnc_debug_hybrid .expanded {
+  display: none;
+  max-width: 420px;
+  background: linear-gradient(180deg,#041a2a,#072235);
+  color: #dff6ff;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.03);
+}
+#cnc_debug_hybrid.expanded {
+  width: 420px;
+}
+#cnc_debug_hybrid.expanded .collapsed { display: none; }
+#cnc_debug_hybrid.expanded .expanded { display: block; }
+
+/* 🧩 Debug text area */
+#cnc_debug_hybrid .expanded .title { font-weight: 700; margin-bottom: 6px }
+#cnc_debug_hybrid .expanded pre {
+  background: #021522;
+  color: #dff6ff;
+  padding: 8px;
+  border-radius: 8px;
+  max-height: 220px;
+  overflow: auto;
+  font-size: 12px;
+}
+
+/* ✨ Button animation */
+.cnc-btn { transition: transform .12s ease, box-shadow .12s ease; }
+.cnc-btn:active { transform: scale(.96); box-shadow: 0 6px 18px rgba(0,0,0,0.45) inset; }
+.cnc-btn:hover { transform: translateY(-3px); }
+
+/* 🔔 Toast messages */
+.cnc-toast {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 80000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cnc-toast .t {
+  background: linear-gradient(90deg,#06b6d4,#0b84b8);
+  color: #001;
+  padding: 8px 12px;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  font-weight: 700;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: all .28s ease;
+}
+.cnc-toast .t.show { opacity: 1; transform: translateY(0); }
+
+/* 🚀 Loading bar */
+#cnc_loading_bar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 4px;
+  background: linear-gradient(90deg,#00c3ff,#0078ff);
+  width: 0;
+  transition: width .3s ease;
+  z-index: 90000;
+}
+</style>
+
+<!-- 🧠 Debug Hybrid Widget -->
+<div id="cnc_debug_hybrid" aria-hidden="false">
+  <div class="collapsed" title="Open Debug">
+    <div class="dot"></div>
+  </div>
+  <div class="expanded" role="dialog">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="title">Debug • التصحيح</div>
+      <button id="cnc_debug_close" class="cnc-btn" style="background:transparent;border:0;color:#9fe9ff">✖</button>
+    </div>
+    <div style="margin-top:8px"><small id="cnc_cv_state">CV: Loading...</small></div>
+    <pre id="cnc_debug_pre">Logs...</pre>
+    <div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end">
+      <button id="cnc_debug_refresh" class="cnc-btn">Retry CV</button>
+      <button id="cnc_debug_clear" class="cnc-btn">Clear</button>
+    </div>
+  </div>
+</div>
+<div id="cnc_loading_bar"></div>
+<div class="cnc-toast" id="cnc_toast_root"></div>
+
+<script>
+(function(){
+  const dbg = document.getElementById('cnc_debug_hybrid');
+  const pre = document.getElementById('cnc_debug_pre');
+  const cvStateEl = document.getElementById('cnc_cv_state');
+  const loadingBar = document.getElementById('cnc_loading_bar');
+
+  // ✅ Toast messages
+  function showToast(msg, time=2200){
+    const root=document.getElementById('cnc_toast_root');
+    const el=document.createElement('div'); el.className='t'; el.textContent=msg;
+    root.appendChild(el);
+    requestAnimationFrame(()=>el.classList.add('show'));
+    setTimeout(()=>{el.classList.remove('show');setTimeout(()=>el.remove(),300);},time);
+  }
+  window.showToast=showToast;
+
+  // ✅ Log printer
+  function log(msg){
+    const t=new Date().toLocaleTimeString();
+    pre.textContent='['+t+'] '+msg+'\\n'+pre.textContent;
+  }
+  window.appendDebug=log;
+
+  // ✅ Debug UI toggles
+  dbg.querySelector('.collapsed').onclick=()=>dbg.classList.add('expanded');
+  document.getElementById('cnc_debug_close').onclick=()=>dbg.classList.remove('expanded');
+  document.getElementById('cnc_debug_clear').onclick=()=>{pre.textContent='';showToast('Logs cleared');};
+  document.getElementById('cnc_debug_refresh').onclick=()=>{safeRetryCv();showToast('Retrying OpenCV...');};
+
+  // ✅ Loading bar
+  function setLoad(p){loadingBar.style.width=p+'%';}
+  window.setLoadingPct=setLoad;
+
+  // ✅ Safe retry OpenCV
+  function safeRetryCv(){
+    setLoad(10);
+    let tries=0;
+    const timer=setInterval(()=>{
+      tries++; setLoad(tries*10);
+      if(window.cv&&cv.Mat){clearInterval(timer);setLoad(100);showToast('OpenCV ready');log('OpenCV recovered');return;}
+      if(tries>10){clearInterval(timer);setLoad(0);showToast('CV retry failed');log('OpenCV retry failed');}
+    },600);
+  }
+  window.safeRetryCv=safeRetryCv;
+
+  // ✅ CV state updater
+  function updateCV(){
+    if(window.cv&&cv.Mat){cvStateEl.textContent='CV: Ready';cvStateEl.style.color='#8fffd1';}
+    else{cvStateEl.textContent='CV: Not ready';cvStateEl.style.color='#ffbfbf';}
+  }
+  window.updateCvState=updateCV;
+
+  // monitor CV status
+  setInterval(updateCV,2000);
+})();
+</script>
+<!-- === End of CncAi v1.0.3 injection === -->
+
+
+
+
+
+
+
+
+  
 </body>
 </html>
