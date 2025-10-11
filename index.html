@@ -1,10 +1,33 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
+  <!-- ✅ CncAi v1.0.3 Smart Debug — Cache & CV Fix -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<script>
+  // 🔄 Force reload bypass cache
+  if(!location.search.includes('ver=')) {
+    const v = '?ver=' + Date.now().toString(36);
+    location.replace(location.pathname + v);
+  }
+
+  // 🧠 Auto CV listener - ensures debug overlay updates when OpenCV ready
+  window.onOpenCvReady = function() {
+    console.log('[CncAi] OpenCV ready signal received');
+    try {
+      if(window.updateCvState) updateCvState();
+      if(window.appendDebug) appendDebug('OpenCV fully initialized');
+      if(window.showToast) showToast('✅ OpenCV ready',2000);
+    } catch(e) { console.warn('CV listener error', e); }
+  };
+</script>
+<!-- ✅ End Fix -->
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>CNC AI — CNC Router & Laser Engraving</title>
 
+  
   <!-- مكتبات -->
   <script src="https://docs.opencv.org/4.8.0/opencv.js" async></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
