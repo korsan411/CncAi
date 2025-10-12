@@ -932,6 +932,7 @@
 
     // colormap current
     let currentColormap = 'jet';
+    let edgeSensitivityTimer = null;
 
     // Simulation / Three
     let scene, camera, renderer, controls;
@@ -1372,7 +1373,7 @@
     // ================= OpenCV readiness - الإصدار المحسن =================
     function waitForCv() {
       try {
-        if (typeof cv !== 'undefined' && cv.getBuildInformation) {
+        if (typeof cv !== 'undefined' && (cv.getBuildInformation || cv.imread || cv.Mat)) {
           // اختبار شامل للتأكد من جاهزية OpenCV
           const testMat = new cv.Mat();
           if (testMat && testMat.delete) {
@@ -1436,7 +1437,7 @@
 
       isMatDeleted(mat) {
         try {
-          return !mat || mat.isDeleted || !mat.data;
+          return !mat || typeof mat.delete !== 'function';
         } catch {
           return true;
         }
@@ -1706,7 +1707,10 @@
             if (!previewCanvas || isProcessing) return;
             const isLaser = document.getElementById('machineCategory').value === 'laser';
             if (!isLaser && cvReady && previewCanvas && previewCanvas.width > 0) {
-              taskManager.addTask(detectContours, 'تحديث حساسية الحواف');
+              clearTimeout(edgeSensitivityTimer);
+              edgeSensitivityTimer = setTimeout(() => {
+                taskManager.addTask(detectContours, 'تحديث حساسية الحواف');
+              }, 300);
             }
           });
         }
