@@ -649,7 +649,62 @@
         border-color: #06b6d4; 
         box-shadow: 0 6px 16px rgba(6, 182, 212, 0.4);
     }
-  </style>
+  
+/* Debug panel controls */
+.debug-panel { position: relative; }
+.debug-header { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
+.debug-controls { display:flex; gap:6px; }
+.debug-controls button { background:transparent; border:1px solid rgba(255,255,255,0.06); color:#cfeaf2; padding:4px 6px; border-radius:6px; cursor:pointer; font-size:12px; }
+.debug-minimized #debugList { display:none; height:24px; overflow:hidden; }
+.debug-minimized .debug-header { border-radius:8px; padding:6px; background:rgba(255,255,255,0.01); }
+.header-debug-toggle { margin-left:8px; padding:6px 8px; background:rgba(255,255,255,0.03); border-radius:8px; cursor:pointer; font-size:0.9rem; color:#cfeaf2; border:1px solid rgba(255,255,255,0.03); }
+
+/* === Debug floating panel styles === */
+#cncaiDebugPanel { position: fixed; right: 18px; bottom: 18px; width: 360px; max-height: 56vh; background: rgba(6,18,28,0.95); border:1px solid rgba(255,255,255,0.04); border-radius:10px; box-shadow: 0 8px 30px rgba(0,0,0,0.6); color:#cfeaf2; z-index:99999; display:flex; flex-direction:column;overflow:hidden; font-family:Inter, system-ui, sans-serif; }
+#cncaiDebugPanel.hidden{ display:none; }
+#cncaiDebugHeader{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.02); background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent); }
+#cncaiDebugHeader .title{ font-size:0.95rem; color:#9bb0c8; }
+#cncaiDebugControls{ display:flex; gap:6px; align-items:center; }
+.cncai-debug-btn{ background:transparent; border:1px solid rgba(255,255,255,0.04); color:#cfeaf2; padding:6px 8px; border-radius:8px; cursor:pointer; font-size:13px; }
+#cncaiDebugListWrap{ padding:8px; overflow:auto; max-height:calc(56vh - 56px); }
+#cncaiDebugPanel.minimized #cncaiDebugListWrap{ display:none; max-height:24px; padding-bottom:6px; }
+#cncaiDebugFloatingBtn{ position:fixed; right:18px; bottom:18px; width:48px; height:48px; border-radius:12px; background:linear-gradient(180deg,#06202b,#083443); color:#cfeaf2; display:flex; align-items:center; justify-content:center; box-shadow:0 6px 20px rgba(3,12,18,0.6); border:1px solid rgba(255,255,255,0.04); z-index:100000; cursor:pointer; font-size:20px; }
+#cncaiDebugFloatingBtn.hidden{ display:none; }
+#cncaiDebugPanel .small{ color:#9bb0c8; font-size:0.85rem; }
+
+/* === Responsive & UI polish added in 2.2a === */
+:root{--bg-start:#08171f;--bg-end:#0c2431;--accent:#06b6d4;--muted:#9bb0c8}
+body{background:linear-gradient(180deg,var(--bg-start),var(--bg-end)); color:#d8e6f0; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;}
+button.file-btn, .cncai-debug-btn, .tab-buttons button { transition: all 180ms ease; }
+button.file-btn:hover, .cncai-debug-btn:hover, .tab-buttons button:hover { transform: translateY(-2px); box-shadow:0 6px 18px rgba(6,182,212,0.06); }
+.panel { border-radius:14px; padding:14px; transition: box-shadow .18s ease; }
+.panel:hover { box-shadow: 0 10px 30px rgba(2,12,20,0.45); }
+/* Responsive layout adjustments */
+@media (max-width: 1100px){
+  .grid { grid-template-columns: 1fr !important; }
+  #threeDViewport { height: 360px !important; }
+  #cncaiDebugPanel { right: 12px; left: 12px; bottom: 12px; width: auto; max-height: 40vh; }
+  #cncaiDebugFloatingBtn { right: 12px; bottom: 12px; }
+  .tab-buttons { overflow:auto; -webkit-overflow-scrolling:touch; }
+  canvas { max-width:100%; height:auto; }
+}
+@media (max-width: 600px){
+  #threeDViewport { height: 260px !important; }
+  #cncaiDebugPanel { width: 92% !important; left:4% !important; right:4% !important; bottom: 12px; max-height: 48vh; }
+  .controls-row { flex-direction:column; align-items:flex-start; gap:6px; }
+  .file-btn { padding:8px 10px; font-size:14px; }
+}
+/* Small polish for inputs */
+input[type="number"], select { background: rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.03); color:var(--muted); padding:6px 8px; border-radius:8px; }
+
+/* Debug header styling enforced for 2.2b */
+#cncaiDebugHeader { background: rgba(6,18,28,0.85); border-bottom:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:space-between; padding:6px 10px; min-height:40px; box-sizing:border-box; }
+#cncaiDebugHeader .debug-title { color: #cfeaf2; font-weight:600; font-size:0.95rem; }
+#cncaiDebugControls { display:flex; gap:8px; align-items:center; }
+#cncaiDebugControls .cncai-debug-btn { width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.04); border-radius:8px; cursor:pointer; font-size:16px; }
+#cncaiDebugControls .cncai-debug-btn:hover { background: rgba(6,182,212,0.12); transform:translateY(-2px); }
+#cncaiDebugPanel { overflow: visible !important; }
+</style>
 </head>
 <body>
   <div class="app">
@@ -657,6 +712,7 @@
       <h1>CNC AI — CNC Router & Laser Engraving & 3D Printing</h1>
       <div id="cvState">
         <span class="loading" style="display:inline-block;width:16px;height:16px;border:3px solid #f3f3f3;border-top:3px solid #06b6d4;border-radius:50%;animation:spin 1s linear infinite;margin-right:8px;"></span>
+        <button id="headerDebugToggle" class="header-debug-toggle" title="إظهار/إخفاء الـ Debug">Debug</button>
         جاري تحميل OpenCV...
       </div>
     </header>
@@ -1101,6 +1157,42 @@
   <div id="toast"></div>
 
   <script>
+// Safe delete wrapper for OpenCV Mats
+function safeDelete(mat){
+  try{
+    if (!mat) return;
+    // prefer isDeleted if available (some builds)
+    if (typeof mat.isDeleted === 'function') {
+      if (!mat.isDeleted()) {
+        safeDelete(mat);
+      }
+    } else {
+      // best-effort: attempt delete inside try/catch
+      safeDelete(mat);
+    }
+  } catch(e){
+    // silent safe warning
+    try{ console.warn("فشل في حذف المصفوفة بأمان:", e); }catch(e){}
+  }
+}
+
+// ============== توحيد مساحات أسماء 3D (يحافظ على النسخة الأصلية) ==============
+function unifyThreeNamespaces() {
+  try {
+    if (typeof window === 'undefined') return;
+    window.threeDCamera = window.threeDCamera || window._camera || window.threeCamera || null;
+    window._camera = window._camera || window.threeDCamera || window.threeCamera || null;
+    window.threeDControls = window.threeDControls || window._controls || window.threeControls || null;
+    window._controls = window._controls || window.threeDControls || window.threeControls || null;
+    window.threeDScene = window.threeDScene || window._scene || window.threeScene || null;
+    window._scene = window._scene || window.threeDScene || window.threeScene || null;
+    window.threeDRenderer = window.threeDRenderer || window._renderer || window.threeRenderer || null;
+    window._renderer = window._renderer || window.threeDRenderer || window.threeRenderer || null;
+    window._threeDUnified = true;
+  } catch(e) { console.warn('unifyThreeNamespaces failed', e); }
+}
+try { window.addEventListener && window.addEventListener('load', unifyThreeNamespaces); } catch(e){}
+
     // ================= متغيرات عامة =================
     let cvReady = false;
     let grayMat = null;
@@ -1426,44 +1518,48 @@
         });
 
         // override console methods
-        const _log = console.log, _warn = console.warn, _error = console.error;
-        console.log = function(...args) {
-          try { 
-            addEntry('info', args.map(a=> {
-              if (typeof a === 'object') {
-                try { return JSON.stringify(a); } catch { return String(a); }
-              }
-              return String(a);
-            }).join(' ')); 
-          } catch(e){}
-          _log.apply(console, args);
-        };
-        
-        console.warn = function(...args) {
-          try { 
-            addEntry('warn', args.map(a=> {
-              if (typeof a === 'object') {
-                try { return JSON.stringify(a); } catch { return String(a); }
-              }
-              return String(a);
-            }).join(' '), new Error().stack); 
-          } catch(e){}
-          _warn.apply(console, args);
-        };
-        
-        console.error = function(...args) {
-          try { 
-            addEntry('error', args.map(a=> {
-              if (typeof a === 'object') {
-                try { return JSON.stringify(a); } catch { return String(a); }
-              }
-              return String(a);
-            }).join(' '), new Error().stack); 
-          } catch(e){}
-          _error.apply(console, args);
-        };
+        const _log = console.log.bind(console);
+const _warn = console.warn.bind(console);
+const _error = console.error.bind(console);
 
-        window.addEventListener('error', function(ev){
+console.log = function(...args) {
+  try {
+    addEntry('info', args.map(a => {
+      if (typeof a === 'object') {
+        try { return JSON.stringify(a); } catch { return String(a); }
+      }
+      return String(a);
+    }).join(' '));
+  } catch(e) {}
+  _log(...args);
+};
+
+console.warn = function(...args) {
+  try {
+    addEntry('warn', args.map(a => {
+      if (typeof a === 'object') {
+        try { return JSON.stringify(a); } catch { return String(a); }
+      }
+      return String(a);
+    }).join(' '), new Error().stack);
+  } catch(e){}
+  _warn(...args);
+};
+
+console.error = function(...args) {
+  try {
+    addEntry('error', args.map(a => {
+      if (typeof a === 'object') {
+        try { return JSON.stringify(a); } catch { return String(a); }
+      }
+      return String(a);
+    }).join(' '), new Error().stack);
+  } catch(e){}
+  _error(...args);
+};
+
+window.addEventListener('error', function(ev){
+
           try { 
             addEntry('error', 
               (ev.message || 'Unknown error') + ' (' + (ev.filename || 'unknown') + ':' + (ev.lineno || 'unknown') + ')', 
@@ -1590,7 +1686,7 @@
           const testMat = new cv.Mat();
           if (testMat && testMat.delete) {
             cvReady = true;
-            testMat.delete();
+            safeDelete(testMat);
             
             // تحديث واجهة المستخدم
             const cvState = document.getElementById('cvState');
@@ -1670,7 +1766,7 @@
       safeDelete(mat) {
         try {
           if (!this.isMatDeleted(mat) && typeof mat.delete === 'function') {
-            mat.delete();
+            safeDelete(mat);
           }
         } catch (error) {
           console.warn('فشل في حذف المصفوفة بأمان:', error);
@@ -5114,8 +5210,160 @@
     console.error('Vector module injection error', err);
   }
 })();
-</script>
+
+// Debug panel controls: minimize/close and header toggle
+(function(){
+  function get(id){ return document.getElementById(id); }
+  function hideDebugPanel(){ try { var p = get('debugPanel'); if (p){ p.style.display='none'; } }catch(e){} }
+  function showDebugPanel(){ try { var p = get('debugPanel'); if (p){ p.style.display='block'; p.classList.remove('debug-minimized'); } }catch(e){} }
+  function minimizeDebugPanel(){ try { var p = get('debugPanel'); if (p){ p.classList.toggle('debug-minimized'); } }catch(e){} }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    var btnMin = get('dbgMinimize');
+    var btnClose = get('dbgClose');
+    var hdrToggle = get('headerDebugToggle');
+    if (btnMin){ btnMin.addEventListener('click', function(){ minimizeDebugPanel(); }); }
+    if (btnClose){ btnClose.addEventListener('click', function(){ hideDebugPanel(); }); }
+    if (hdrToggle){ hdrToggle.addEventListener('click', function(){ var p = get('debugPanel'); if (p && p.style.display==='none'){ showDebugPanel(); } else if (p){ hideDebugPanel(); } else { showDebugPanel(); } }); }
+
+    // Ensure debugPanel exists; if not, create wrapper around debugList
+    if (!get('debugPanel')){
+      var dl = get('debugList');
+      if (dl){
+        var wrapper = document.createElement('div');
+        wrapper.id = 'debugPanel';
+        wrapper.className = 'debug-panel';
+        var header = document.createElement('div');
+        header.className = 'debug-header';
+        var title = document.createElement('div'); title.className='small'; title.innerText='سجل الـ Debug';
+        var controls = document.createElement('div'); controls.className='debug-controls';
+        var minb = document.createElement('button'); minb.id='dbgMinimize'; minb.title='تصغير'; minb.innerText='🔽';
+        var clb = document.createElement('button'); clb.id='dbgClose'; clb.title='إغلاق'; clb.innerText='❌';
+        controls.appendChild(minb); controls.appendChild(clb);
+        header.appendChild(title); header.appendChild(controls);
+        wrapper.appendChild(header);
+        dl.parentNode.insertBefore(wrapper, dl);
+        wrapper.appendChild(dl);
+        minb.addEventListener('click', function(){ wrapper.classList.toggle('debug-minimized'); });
+        clb.addEventListener('click', function(){ wrapper.style.display='none'; });
+      }
+    }
+
+  });
+})();
+// CNC AI Debug Panel controls (added by assistant)
+(function(){
+  function $(id){ return document.getElementById(id); }
+  document.addEventListener('DOMContentLoaded', function(){
+    var panel = $('cncaiDebugPanel');
+    var floatBtn = $('cncaiDebugFloatingBtn');
+    var btnMin = $('cncaiDbgMin');
+    var btnClear = $('cncaiDbgClear');
+    var btnClose = $('cncaiDbgClose');
+    var wrap = $('cncaiDebugListWrap');
+    var placeholder = $('cncaiDebugPlaceholder');
+    // move existing debugList into panel if exists
+    var existing = $('debugList');
+    if (existing){
+      // remove placeholder
+      try{ placeholder.parentNode && placeholder.parentNode.removeChild(placeholder); }catch(e){}
+      // move existing debugList into wrap
+      wrap.appendChild(existing);
+      existing.style.maxHeight = 'calc(56vh - 56px)';
+      existing.style.overflow = 'auto';
+    }
+    // floating button toggles panel visibility
+    floatBtn.addEventListener('click', function(e){
+      if (!panel) return;
+      if (panel.classList.contains('hidden')){
+        panel.classList.remove('hidden');
+        floatBtn.classList.add('hidden');
+      } else {
+        // if open, close panel
+        panel.classList.add('hidden');
+        floatBtn.classList.remove('hidden');
+      }
+    });
+    // close button hides panel and shows floating button
+    btnClose.addEventListener('click', function(){
+      if (!panel) return;
+      panel.classList.add('hidden');
+      floatBtn.classList.remove('hidden');
+    });
+    // minimize toggles minimized class
+    btnMin.addEventListener('click', function(){
+      if (!panel) return;
+      panel.classList.toggle('minimized');
+    });
+    // clear button empties debugList content
+    btnClear.addEventListener('click', function(){
+      try {
+        var dl = $('debugList');
+        if (dl) { dl.innerHTML = ''; var ph = document.createElement('div'); ph.className='small'; ph.innerText='لا سجلات حتى الآن.'; wrap.insertBefore(ph, dl); }
+      } catch(e){ console.warn('clear debug failed', e); }
+    });
+    // initial state: panel visible, floating button hidden
+    if (panel){ panel.classList.remove('hidden'); floatBtn.classList.add('hidden'); }
+  });
+})();
+// Auto-resize handler for Three.js 3D viewer (responsive)
+(function(){
+  function autoResizeThree(){
+    try{
+      var canvas = document.getElementById('canvas3D');
+      if (!canvas) return;
+      // prefer global renderer/camera variables if present
+      var renderer = typeof threeRenderer !== 'undefined' ? threeRenderer : (window.threeRenderer || window._renderer || window.renderer);
+      var camera = typeof threeCamera !== 'undefined' ? threeCamera : (window.threeCamera || window._camera || window.camera);
+      if (!renderer || !camera) return;
+      var w = canvas.clientWidth || canvas.width || Math.floor(window.innerWidth * 0.5);
+      var h = canvas.clientHeight || canvas.height || Math.floor(window.innerHeight * 0.45);
+      renderer.setSize(w, h, false);
+      camera.aspect = (w / h) || 1;
+      camera.updateProjectionMatrix();
+    }catch(e){ try{ console.warn('autoResizeThree failed', e); }catch(e){} }
+  }
+  window.addEventListener('resize', function(){ autoResizeThree(); });
+  // also run once after DOM content loaded
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(autoResizeThree, 80); });
+  // and after window load
+  window.addEventListener('load', function(){ setTimeout(autoResizeThree, 120); });
+})();
+
+// Ensure debug header buttons are wired (idempotent)
+(function(){
+  function $i(id){ return document.getElementById(id); }
+  document.addEventListener('DOMContentLoaded', function(){
+    var min = $i('cncaiDbgMin'), clearBtn = $i('cncaiDbgClear'), closeBtn = $i('cncaiDbgClose');
+    var panel = $i('cncaiDebugPanel'), floatBtn = $i('cncaiDebugFloatingBtn');
+    try{
+      if(min && !min._wired){ min.addEventListener('click', function(){ panel && panel.classList.toggle('minimized'); }); min._wired = true; }
+      if(clearBtn && !clearBtn._wired){ clearBtn.addEventListener('click', function(){ try{ var dl = document.getElementById('debugList'); if(dl) dl.innerHTML = ''; }catch(e){} }); clearBtn._wired = true; }
+      if(closeBtn && !closeBtn._wired){ closeBtn.addEventListener('click', function(){ if(panel) panel.classList.add('hidden'); if(floatBtn) floatBtn.classList.remove('hidden'); }); closeBtn._wired = true; }
+    }catch(e){ try{ console.warn('debug header wiring failed', e); }catch(e){} }
+  });
+})();</script>
 
 
+
+<!-- CNC AI Debug Floating Panel (added by assistant) -->
+<div id="cncaiDebugPanel" aria-hidden="false">
+  <div id="cncaiDebugHeader">
+    <div class="title">⚙️ سجل الـ Debug</div>
+    <div id="cncaiDebugControls">
+      <button id="cncaiDbgMin" class="cncai-debug-btn" title="تصغير">🔽</button>
+      <button id="cncaiDbgClear" class="cncai-debug-btn" title="تفريغ السجل">🧹</button>
+      <button id="cncaiDbgClose" class="cncai-debug-btn" title="إغلاق">❌</button>
+    </div>
+  </div>
+  <div id="cncaiDebugListWrap">
+    <!-- existing debugList will be moved here on DOMContentLoaded if present -->
+    <div id="cncaiDebugPlaceholder" class="small">لا سجلات حتى الآن.</div>
+  </div>
+</div>
+
+<!-- Floating gear button to toggle debug panel -->
+<button id="cncaiDebugFloatingBtn" title="عرض/إخفاء سجل الـ Debug">⚙️</button>
+<!-- End Debug Floating Panel -->
 </body>
 </html>
