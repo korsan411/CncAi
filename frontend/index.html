@@ -817,6 +817,7 @@ input[type="number"], select { background: rgba(255,255,255,0.02); border:1px so
           <button data-tab="topview">🔝 Top View</button>
           <button data-tab="threed">🧊 3D Models</button>
           <button data-tab="simulation">🎬 المحاكاة</button>
+          <button id="tabSTL" class="tab-btn">STL to G-code</button>
         </div>
 
         <div id="original" class="tab-content active">
@@ -5363,6 +5364,28 @@ window.addEventListener('error', function(ev){
 <!-- Floating gear button to toggle debug panel -->
 <button id="cncaiDebugFloatingBtn" title="عرض/إخفاء سجل الـ Debug">⚙️</button>
 <!-- End Debug Floating Panel -->
+  <!-- STL Tab Content -->
+<div id="stlTab" class="tab-section" style="display:none; padding:10px;">
+  <h3 style="color:#cfeaf2;">STL to G-code Converter</h3>
+  <input type="file" id="stlFileInput" accept=".stl" class="file-btn" />
+  <div style="margin-top:10px;">
+    <label>Resolution: 
+      <input type="number" id="stlResolution" value="128" min="16" max="1024" style="width:80px;" />
+    </label>
+    <label style="margin-left:12px;">Work X(mm): 
+      <input type="number" id="stlWorkX" value="100" style="width:80px;" />
+    </label>
+    <label style="margin-left:12px;">Work Y(mm): 
+      <input type="number" id="stlWorkY" value="100" style="width:80px;" />
+    </label>
+  </div>
+  <div style="margin-top:12px;">
+    <button id="stlPreviewBtn" class="file-btn">Preview STL</button>
+    <button id="stlGenerateBtn" class="file-btn">Generate G-code</button>
+    <button id="stlDownloadBtn" class="file-btn">Download G-code</button>
+  </div>
+  <textarea id="stlGcodeOutput" style="width:100%;height:260px;margin-top:12px;font-family:monospace;"></textarea>
+</div>
 <script src="stl_tab_module.js"></script>
 
 
