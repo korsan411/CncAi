@@ -5292,7 +5292,99 @@ try {
 } catch(e){
   console.error('debug topbar init failed', e);
 }
+// ================= نظام الحفاظ على النسبة المتكامل =================
+function initAdvancedAspectRatio() {
+    let aspectRatio = 2/3; // نسبة افتراضية
+    let isLocked = true;
+    
+    // عناصر التحكم
+    const lockBtn = document.createElement('button');
+    lockBtn.innerHTML = '🔒 النسبة مقفلة';
+    lockBtn.className = 'secondary';
+    lockBtn.style.cssText = 'margin:8px 0; width:100%; background: linear-gradient(135deg, #06b6d4, #3b82f6); color: white;';
+    
+    const ratioInfo = document.createElement('div');
+    ratioInfo.style.cssText = 'text-align:center; color:#cfeaf2; font-size:0.9rem; margin-bottom:8px; padding:8px; background:rgba(14,23,33,0.6); border-radius:6px;';
+    
+    // إضافة للواجهة - نضعها في المكان الصحيح
+    const workWidthInput = document.getElementById('workWidth');
+    if (workWidthInput && workWidthInput.parentNode && workWidthInput.parentNode.parentNode) {
+        const workSettings = workWidthInput.parentNode.parentNode;
+        workSettings.appendChild(ratioInfo);
+        workSettings.appendChild(lockBtn);
+    }
+    
+    // تحديث المعلومات
+    function updateRatioInfo() {
+        if (previewCanvas) {
+            aspectRatio = previewCanvas.height / previewCanvas.width;
+            const ratioText = aspectRatio.toFixed(2);
+            ratioInfo.innerHTML = `📐 نسبة الصورة: ${previewCanvas.width} × ${previewCanvas.height} (${ratioText})`;
+        } else {
+            ratioInfo.innerHTML = '📐 قم بتحميل صورة أولاً';
+        }
+    }
+    
+    // تحديث الأبعاد
+    function updateDimensions() {
+        if (!isLocked || !previewCanvas) return;
+        
+        const widthInput = document.getElementById('workWidth');
+        const heightInput = document.getElementById('workHeight');
+        
+        if (widthInput && heightInput) {
+            const width = parseFloat(widthInput.value) || 30;
+            const newHeight = width * aspectRatio;
+            heightInput.value = newHeight.toFixed(1);
+            updateDimensionDisplay();
+        }
+    }
+    
+    // أحداث
+    const widthInput = document.getElementById('workWidth');
+    if (widthInput) {
+        widthInput.addEventListener('input', updateDimensions);
+    }
+    
+    lockBtn.addEventListener('click', () => {
+        isLocked = !isLocked;
+        lockBtn.innerHTML = isLocked ? '🔒 النسبة مقفلة' : '🔓 النسبة مفتوحة';
+        lockBtn.style.background = isLocked 
+            ? 'linear-gradient(135deg, #06b6d4, #3b82f6)' 
+            : 'linear-gradient(135deg, #ef4444, #dc2626)';
+        showToast(isLocked ? 'تم قفل النسبة - سيتم الحفاظ على الأبعاد' : 'تم فتح النسبة - يمكنك تعديل الأبعاد بحرية');
+        
+        // إذا تم القفل، تطبيق النسبة فوراً
+        if (isLocked && previewCanvas) {
+            updateDimensions();
+        }
+    });
+    
+    // عند تحميل صورة جديدة
+    const originalFileHandler = document.getElementById('fileInput').onchange;
+    document.getElementById('fileInput').onchange = function(e) {
+        // تشغيل المعالج الأصلي أولاً
+        if (originalFileHandler) {
+            originalFileHandler.call(this, e);
+        }
+        
+        // ثم تحديث النسبة بعد تحميل الصورة
+        setTimeout(() => {
+            updateRatioInfo();
+            if (isLocked) {
+                updateDimensions();
+            }
+        }, 300); // زيادة الوقت لضمان تحميل الصورة
+    };
+    
+    // التهيئة الأولية
+    updateRatioInfo();
+}
 
+// بدء النظام بعد تحميل الصفحة
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(initAdvancedAspectRatio, 1000);
+});
 </script>
 
 
