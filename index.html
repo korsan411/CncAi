@@ -73,15 +73,22 @@
     }
     
     /* تحسين التبويبات */
-    .tab-buttons { 
-        display: flex; 
-        gap: 8px; 
-        margin-top: 16px; 
-        background: rgba(14, 23, 33, 0.8); 
-        padding: 8px; 
-        border-radius: 10px;
-        border: 1px solid rgba(30, 41, 59, 0.3);
-    }
+    
+.tab-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  background: rgba(14,23,33,0.8);
+  padding: 10px;
+  border-radius: 12px;
+}
+@media (min-width: 900px) {
+  .tab-buttons { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 899px) {
+  .tab-buttons { grid-template-columns: repeat(2, 1fr); }
+}
+
     
     .tab-buttons button { 
         flex: 1; 
@@ -233,7 +240,7 @@
     
     .canvas-placeholder { 
         width: 100%; 
-        min-height: 260px; 
+        min-height:220px; 
         background: rgba(0, 0, 0, 0.3); 
         border-radius: 8px; 
         display: flex; 
@@ -653,6 +660,83 @@
 /* dbgCloseLegacy styling */
 #dbgCloseLegacy { background: rgba(3,37,58,0.95); color:#cfeaf2; border:1px solid rgba(255,255,255,0.04); padding:6px 8px; border-radius:8px; cursor:pointer; font-size:13px; }
 #dbgCloseLegacy:hover { background: rgba(255,50,50,0.95); }
+
+#debugOverlay {
+  width: 90vw;
+  max-width: 420px;
+  left: 5vw;
+  bottom: 12px;
+  font-size: 14px;
+  z-index: 99999;
+}
+#debugControls {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.dbg-btn {
+  min-width: 40px;
+  padding: 8px 10px;
+  font-size: 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+@media (max-width: 600px) {
+  #debugOverlay {
+    width: 96vw;
+    left: 2vw;
+    bottom: 8px;
+    font-size: 13px;
+  }
+  .dbg-btn {
+    font-size: 13px;
+    padding: 6px 8px;
+  }
+}
+
+
+.dbg-btn {
+  background: rgba(6,182,212,0.1);
+  border: 1px solid rgba(6,182,212,0.3);
+  color: #a8e9ff;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.25s ease;
+  box-shadow: 0 0 6px rgba(6,182,212,0.15);
+}
+
+.dbg-btn:hover {
+  background: rgba(6,182,212,0.25);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(6,182,212,0.4);
+  transform: translateY(-1px);
+}
+
+.dbg-btn:active {
+  transform: scale(0.96);
+  box-shadow: 0 0 6px rgba(6,182,212,0.6);
+}
+
+@keyframes glowPulse {
+  0% { box-shadow: 0 0 5px rgba(6,182,212,0.5); }
+  50% { box-shadow: 0 0 15px rgba(6,182,212,0.9); }
+  100% { box-shadow: 0 0 5px rgba(6,182,212,0.5); }
+}
+
+.dbg-btn.active-glow {
+  animation: glowPulse 0.4s ease;
+}
+
+#debugControls {
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+
+#debugTopbar { }
+#debugList { max-height: 40vh; overflow:auto; padding:8px; display:flex; flex-direction:column; gap:6px; }
+
 </style>
 </head>
 <body>
@@ -1093,10 +1177,12 @@
         <button id="dbgToggleSize" class="dbg-btn" title="تصغير/تكبير">🔽</button>
         <button id="dbgCopy" class="dbg-btn" title="نسخ السجل">📋 نسخ</button>
         <button id="dbgClear" class="dbg-btn" title="مسح السجل">🧹 مسح</button>
+      
+        <button id="dbgCloseLegacy" class="dbg-btn" title="إغلاق">❌</button>
       </div>
     </div>
     
-          <button id="dbgCloseLegacy" title="إغلاق" class="file-btn" style="float:right;margin-bottom:6px;">❌ إغلاق</button>
+          
 <div id="debugList"></div>
     <div id="debugFooter">
       <div id="debugSummary">0 سجلات</div>
@@ -1635,6 +1721,26 @@
 
     // ================= نظام إدارة الذاكرة المحسن =================
     class MemoryManager {
+  static safeDelete(mat, name = 'mat') {
+    try {
+      if (mat && typeof mat.delete === 'function') {
+        if (!mat.isDeleted) {
+          mat.delete();
+          mat.isDeleted = true;
+          console.log(`🧹 تم حذف ${name} بأمان`);
+        }
+      }
+    } catch (error) {
+      console.warn(`⚠️ فشل في حذف المصفوفة (${name}):`, error);
+      const dbgList = document.getElementById('debugList');
+      if (dbgList) {
+        const div = document.createElement('div');
+        div.className = 'dbg-item dbg-warn';
+        div.textContent = `فشل في حذف ${name}: ${error.message}`;
+        dbgList.prepend(div);
+      }
+    }
+  }
       constructor() {
         this.mats = new Set();
         this.maxMats = 15; // تقليل الحد الأقصى لتحسين الأداء
@@ -5147,7 +5253,47 @@
       }
     }catch(e){ try{ console.warn('debug close wiring failed', e); }catch(e){} }
   });
-})();</script>
+})();
+// Debug topbar handlers (toggle size / hide / reset position)
+try {
+  const dbgToggleSizeTop = document.getElementById('dbgToggleSizeTop');
+  const dbgHideTop = document.getElementById('dbgHideTop');
+  const dbgResetTop = document.getElementById('dbgResetTop');
+  const debugList = document.getElementById('debugList');
+  const debugOverlay = document.getElementById('debugOverlay');
+
+  if (dbgToggleSizeTop && debugList) {
+    dbgToggleSizeTop.addEventListener('click', () => {
+      if (debugList.style.maxHeight === '120px') {
+        debugList.style.maxHeight = '40vh';
+        dbgToggleSizeTop.textContent = '🔽';
+      } else {
+        debugList.style.maxHeight = '120px';
+        dbgToggleSizeTop.textContent = '🔼';
+      }
+    });
+  }
+
+  if (dbgHideTop && debugOverlay) {
+    dbgHideTop.addEventListener('click', () => {
+      debugOverlay.style.display = (debugOverlay.style.display === 'none') ? 'flex' : 'none';
+    });
+  }
+
+  if (dbgResetTop && debugOverlay) {
+    dbgResetTop.addEventListener('click', () => {
+      debugOverlay.style.bottom = '12px';
+      debugOverlay.style.left = '5vw';
+      debugOverlay.style.width = (window.innerWidth < 600) ? '96vw' : '90vw';
+      debugOverlay.style.maxWidth = '420px';
+      debugOverlay.style.display = 'flex';
+    });
+  }
+} catch(e){
+  console.error('debug topbar init failed', e);
+}
+
+</script>
 
 
 
