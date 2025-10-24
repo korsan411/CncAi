@@ -5387,6 +5387,215 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
+<!-- ===== START: AI Analysis Integration (paste BEFORE </body>) ===== -->
+<!-- AI Section -->
+<section id="ai-analysis" class="tab-content" style="display:none;direction:rtl;text-align:right;padding:14px">
+  <h3>🧠 تحليل الصورة (AI)</h3>
+  <p style="color:#9fb6c3;margin:4px 0 8px">اضغط "ابدأ التحليل" لتحليل الصورة المعروضة في المعاينة.</p>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <button id="runAi" class="btn" style="background:#00aaff;color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer">ابدأ التحليل 🔍</button>
+    <button id="drawHeatmap" class="btn ghost" style="padding:8px 12px;border-radius:6px;cursor:pointer">رسم Heatmap</button>
+    <button id="saveAnalysis" class="btn" style="padding:8px 12px;border-radius:6px;cursor:pointer">💾 حفظ التحليل</button>
+    <button id="clearAi" class="btn ghost" style="padding:8px 12px;border-radius:6px;cursor:pointer">مسح</button>
+    <button id="toggleDetails" class="btn ghost" style="padding:8px 12px;border-radius:6px;cursor:pointer">📊 التفاصيل</button>
+  </div>
+
+  <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;align-items:flex-start">
+    <div style="flex:1;min-width:260px">
+      <div style="color:#9fb6c3;margin-bottom:6px">المعاينة</div>
+      <canvas id="aiPreviewCanvas" width="300" height="200" style="border:1px solid rgba(255,255,255,0.06);border-radius:6px;background:#000"></canvas>
+    </div>
+    <div style="flex:1;min-width:260px">
+      <div style="color:#9fb6c3;margin-bottom:6px">Heatmap (300×200)</div>
+      <canvas id="aiHeatmapCanvas" width="300" height="200" style="border:1px solid rgba(255,255,255,0.06);border-radius:6px;background:#000"></canvas>
+    </div>
+    <div style="flex:1;min-width:220px">
+      <div style="color:#9fb6c3;margin-bottom:6px">تقييم سريع</div>
+      <div id="aiSummary" style="padding:8px;border-radius:6px;background:rgba(255,255,255,0.02);min-height:64px">لا نتائج بعد.</div>
+    </div>
+  </div>
+
+  <div id="aiDetails" style="display:none;margin-top:12px">
+    <table id="aiResultTable" style="width:100%;border-collapse:collapse;margin-top:8px">
+      <thead><tr><th style="padding:6px;border:1px solid rgba(255,255,255,0.04)">العنصر</th><th style="padding:6px;border:1px solid rgba(255,255,255,0.04)">القيمة</th><th style="padding:6px;border:1px solid rgba(255,255,255,0.04)">التفسير</th></tr></thead>
+      <tbody id="aiResultBody"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Integration script: add tab button (last), AI logic, toast -->
+<script>
+(function(){
+  /* --- add AI tab button reliably as last tab in main tab row --- */
+  function addAiTabButton(){
+    var container = document.querySelector('.tabs') || document.querySelector('#tabs') || document.querySelector('.tab-buttons') || document.querySelector('[role="tablist"]') || document.querySelector('nav') || null;
+    if(!container){
+      // find a div that contains many buttons (fallback)
+      var possible = Array.from(document.querySelectorAll('div')).find(d=>d.querySelector && d.querySelector('button'));
+      container = possible || document.body;
+    }
+    if(container && !container.querySelector('[data-tab="ai-analysis"]')){
+      var btn = document.createElement('button');
+      btn.className = 'tab-button';
+      btn.dataset.tab = 'ai-analysis';
+      btn.type = 'button';
+      btn.innerText = '🧠 تحليل الصورة';
+      btn.style.cursor = 'pointer';
+      btn.addEventListener('click', function(){
+        // prefer native CncAi.openTab if exists
+        try{ if(window.CncAi && typeof CncAi.openTab === 'function'){ CncAi.openTab('ai-analysis'); return; } }catch(e){}
+        // fallback: show our section, hide others
+        document.querySelectorAll('.tab-content, section').forEach(function(s){ s.style.display='none'; });
+        var el = document.getElementById('ai-analysis'); if(el) el.style.display='block';
+        // active class handling
+        container.querySelectorAll('[data-tab]').forEach(function(b){ b.classList.remove('active'); });
+        btn.classList.add('active');
+      });
+      container.appendChild(btn);
+    }
+  }
+
+  /* --- toast --- */
+  function showToast(msg, timeout){
+    var t = document.getElementById('toast');
+    if(!t){ t = document.createElement('div'); t.id='toast'; t.style.position='fixed'; t.style.left='50%'; t.style.transform='translateX(-50%)'; t.style.bottom='20px'; t.style.background='rgba(0,0,0,0.8)'; t.style.color='#fff'; t.style.padding='8px 12px'; t.style.borderRadius='8px'; t.style.zIndex=9999; document.body.appendChild(t); }
+    t.textContent = msg; t.style.display = 'block';
+    clearTimeout(t._timer);
+    t._timer = setTimeout(function(){ t.style.display='none'; }, timeout||3000);
+  }
+
+  /* --- find source canvas robustly --- */
+  function findSourceCanvas(){
+    var ids = ['originalCanvas','inputCanvas','imageCanvas','previewCanvas'];
+    for(var i=0;i<ids.length;i++){
+      var el = document.getElementById(ids[i]);
+      if(el && el.tagName && el.tagName.toLowerCase() === 'canvas'){
+        try{ var d = el.getContext('2d').getImageData(0,0,1,1).data; if(d && d[3] !== 0) return el; }catch(e){ return el; }
+      }
+    }
+    var canvases = Array.from(document.querySelectorAll('canvas')).filter(function(c){ return !['aiPreviewCanvas','aiHeatmapCanvas'].includes(c.id); });
+    for(var j=0;j<canvases.length;j++){
+      var r = canvases[j].getBoundingClientRect(); if(r.width>0 && r.height>0) return canvases[j];
+    }
+    return null;
+  }
+
+  /* --- small utilities: dominant colors, colormap, heatmap renderer --- */
+  function dominantColorsFromCanvas(canvas, sample){
+    sample = sample || 0.12;
+    try{
+      var w=canvas.width,h=canvas.height, ctx=canvas.getContext('2d');
+      var img = ctx.getImageData(0,0,w,h).data, counts = {}, step = Math.max(1, Math.floor(1/(sample||0.12)));
+      for(var i=0;i<img.length;i+=4*step){
+        var r=(img[i]>>4), g=(img[i+1]>>4), b=(img[i+2]>>4);
+        var key = (r<<8)|(g<<4)|b; counts[key] = (counts[key]||0)+1;
+      }
+      var arr = Object.keys(counts).map(function(k){ return {k:parseInt(k),c:counts[k]}; }).sort(function(a,b){ return b.c-a.c; }).slice(0,3);
+      return arr.map(function(it){ var k=it.k; var r=((k>>8)&0xF)<<4; var g=((k>>4)&0xF)<<4; var b=(k&0xF)<<4; return {hex:'#'+[r,g,b].map(function(v){return v.toString(16).padStart(2,'0');}).join(''), pct: Math.round(it.c/((w*h)/step)*100)}); 
+    }catch(e){ return []; }
+  }
+  function colorMapJet(v){
+    var fourValue = 4*v;
+    var r = Math.min(255, Math.max(0, Math.round(255 * Math.min(fourValue - 1.5, -fourValue + 4.5))));
+    var g = Math.min(255, Math.max(0, Math.round(255 * Math.min(fourValue - 0.5, -fourValue + 3.5))));
+    var b = Math.min(255, Math.max(0, Math.round(255 * Math.min(fourValue + 0.5, -fourValue + 2.5))));
+    return [r,g,b];
+  }
+  function createHeatmapFromGrayArray(grayArr,w,h,outCanvas){
+    var ctx = outCanvas.getContext('2d'); var img = ctx.createImageData(w,h); var max=-Infinity,min=Infinity;
+    for(var i=0;i<grayArr.length;i++){ if(grayArr[i]>max) max=grayArr[i]; if(grayArr[i]<min) min=grayArr[i]; }
+    var range = Math.max(1e-9, max-min);
+    for(var y=0;y<h;y++){ for(var x=0;x<w;x++){ var idx=y*w+x; var v=(grayArr[idx]-min)/range; var c=colorMapJet(v); var p=idx*4; img.data[p]=c[0]; img.data[p+1]=c[1]; img.data[p+2]=c[2]; img.data[p+3]=200; } }
+    ctx.putImageData(img,0,0);
+  }
+
+  /* --- compute heatmap + stats (OpenCV if exists, fallback JS) --- */
+  async function computeHeatmapAndStats(srcCanvas, previewCanvas, heatCanvas){
+    if(!srcCanvas) return null;
+    try{ var pctx = previewCanvas.getContext('2d'); pctx.clearRect(0,0,previewCanvas.width,previewCanvas.height); pctx.drawImage(srcCanvas,0,0,srcCanvas.width,srcCanvas.height,0,0,previewCanvas.width,previewCanvas.height); }catch(e){}
+    var w = heatCanvas.width, h = heatCanvas.height;
+    var tmp = document.createElement('canvas'); tmp.width=w; tmp.height=h; var tctx = tmp.getContext('2d');
+    tctx.drawImage(srcCanvas,0,0,srcCanvas.width,srcCanvas.height,0,0,w,h);
+    if(typeof cv !== 'undefined' && cv && cv.imread){
+      try{
+        var mat = cv.imread(tmp); var gray = new cv.Mat(); cv.cvtColor(mat, gray, cv.COLOR_RGBA2GRAY);
+        var mean = cv.mean(gray)[0];
+        var meanMat = new cv.Mat(), stdMat = new cv.Mat(); cv.meanStdDev(gray, meanMat, stdMat);
+        var contrast = stdMat.data64F ? stdMat.data64F[0] : (stdMat.data?stdMat.data[0]:0);
+        var lap = new cv.Mat(); cv.Laplacian(gray, lap, cv.CV_64F); var mm = new cv.Mat(), ss = new cv.Mat(); cv.meanStdDev(lap, mm, ss);
+        var sharpness = ss.data64F?ss.data64F[0]:(ss.data?ss.data[0]:0);
+        var edges = new cv.Mat(); cv.Canny(gray, edges, 50, 150); var edgeCount = cv.countNonZero(edges);
+        var grayArr = new Float32Array(w*h);
+        for(var y=0;y<h;y++){ for(var x=0;x<w;x++){ grayArr[y*w+x] = gray.ucharPtr(y,x)[0]; } }
+        createHeatmapFromGrayArray(grayArr,w,h,heatCanvas);
+        var dominants = dominantColorsFromCanvas(tmp,0.12);
+        try{ mat.delete(); gray.delete(); meanMat.delete(); stdMat.delete(); lap.delete(); mm.delete(); ss.delete(); edges.delete(); }catch(e){}
+        return {mean:mean,contrast:contrast,sharpness:sharpness,edgeCount:edgeCount,dominants:dominants};
+      }catch(e){ console.warn('OpenCV compute failed', e); }
+    }
+    // fallback JS:
+    try{
+      var imgd = tctx.getImageData(0,0,w,h);
+      var grayArr = new Float32Array(w*h); var sum=0;
+      for(var p=0,idx=0;p<imgd.data.length;p+=4,idx++){ var r=imgd.data[p], g=imgd.data[p+1], b=imgd.data[p+2]; var gi = 0.299*r+0.587*g+0.114*b; grayArr[idx]=gi; sum+=gi; }
+      createHeatmapFromGrayArray(grayArr,w,h,heatCanvas);
+      var mean = sum/(w*h); var s=0; for(var i=0;i<grayArr.length;i++){ s+=(grayArr[i]-mean)*(grayArr[i]-mean); }
+      var contrast = Math.sqrt(s/grayArr.length);
+      var edgeCount=0; for(var y=1;y<h-1;y+=1){ for(var x=1;x<w-1;x+=1){ var a=grayArr[y*w+x]; var b=grayArr[y*w+x+1]; if(Math.abs(a-b)>20) edgeCount++; } }
+      var dominants = dominantColorsFromCanvas(tmp,0.12);
+      return {mean:mean,contrast:contrast,sharpness:0,edgeCount:edgeCount,dominants:dominants};
+    }catch(e){ console.warn('fallback compute failed', e); return null; }
+  }
+
+  /* --- render results to table + toast rating --- */
+  function renderAiResults(res){
+    var tbody = document.getElementById('aiResultBody'); if(!tbody) return; tbody.innerHTML='';
+    var rows = [
+      ['درجة الحدة (Sharpness)', (res.sharpness||0).toFixed(2), (res.sharpness>100?'حاد جدًا':(res.sharpness>20?'حاد':'معتدل'))],
+      ['نسبة التباين (Contrast)', (res.contrast||0).toFixed(2), (res.contrast>50?'متباين عالي':'متباين منخفض')],
+      ['درجة السطوع (Brightness)', Math.round(res.mean||0), (res.mean>127?'ساطع':'داكن')],
+      ['عدد الحواف المكتشفة (Edges Count)', res.edgeCount||0, (res.edgeCount>2000?'تفاصيل كثيرة':'تفاصيل قليلة')],
+      ['الألوان السائدة (Dominant Colors)', (res.dominants?res.dominants.map(function(d){return d.hex+"("+d.pct+"%)";}).join(", "):"-"), 'الأكثر شيوعًا'],
+      ['متوسط الإضاءة (Mean Intensity)', (res.mean||0).toFixed(2), '0–255']
+    ];
+    for(var i=0;i<rows.length;i++){ var tr=document.createElement('tr'); tr.innerHTML='<td style="padding:6px;border:1px solid rgba(255,255,255,0.04)">'+rows[i][0]+'</td><td style="padding:6px;border:1px solid rgba(255,255,255,0.04)">'+rows[i][1]+'</td><td style="padding:6px;border:1px solid rgba(255,255,255,0.04)">'+rows[i][2]+'</td>'; tbody.appendChild(tr); }
+    var score=0; if(res.mean && res.mean>100) score+=1; if(res.contrast && res.contrast>30) score+=1; if(res.sharpness && res.sharpness>20) score+=1; if(res.edgeCount && res.edgeCount>500) score+=1;
+    var rating = score>=3? '🟢 جودة عالية' : (score==2? '🟡 جودة متوسطة' : '🔴 جودة منخفضة');
+    var sum = document.getElementById('aiSummary'); if(sum) sum.textContent = rating;
+    showToast('🧠 التحليل اكتمل — ' + rating, 4000);
+  }
+
+  /* --- bind UI actions --- */
+  document.addEventListener('DOMContentLoaded', function(){
+    addAiTabButton();
+    var runBtn = document.getElementById('runAi');
+    if(runBtn) runBtn.addEventListener('click', async function(){
+      var src = findSourceCanvas();
+      if(!src){ showToast('⚠️ لم يتم تحميل أي صورة — الرجاء رفع صورة أولاً',4000); debugLog('خطأ: لا توجد صورة للتحليل'); return; }
+      showToast('⏳ جاري التحليل...');
+      try{
+        var res = await computeHeatmapAndStats(src, document.getElementById('aiPreviewCanvas'), document.getElementById('aiHeatmapCanvas'));
+        if(!res){ showToast('⚠️ فشل التحليل'); debugLog('compute returned null'); return; }
+        renderAiResults(res);
+        debugLog('تم إظهار نتائج AI');
+      }catch(e){ console.error(e); showToast('⚠️ حدث خطأ أثناء التحليل'); debugLog('AI error: '+(e.message||e)); }
+    });
+    var drawBtn = document.getElementById('drawHeatmap');
+    if(drawBtn) drawBtn.addEventListener('click', async function(){ var src = findSourceCanvas(); if(!src){ showToast('⚠️ لا توجد صورة للرسم'); return; } await computeHeatmapAndStats(src, document.getElementById('aiPreviewCanvas'), document.getElementById('aiHeatmapCanvas')); showToast('✅ تم رسم الخريطة الحرارية'); });
+    var saveBtn = document.getElementById('saveAnalysis'); if(saveBtn) saveBtn.addEventListener('click', function(){ var a=document.getElementById('aiPreviewCanvas'), b=document.getElementById('aiHeatmapCanvas'); if(!a||!b){ showToast('⚠️ لا توجد بيانات للحفظ'); return; } var out=document.createElement('canvas'); out.width=a.width+b.width+10; out.height=Math.max(a.height,b.height); var octx=out.getContext('2d'); octx.fillStyle='#000'; octx.fillRect(0,0,out.width,out.height); octx.drawImage(a,0,0); octx.drawImage(b,a.width+10,0); var link=document.createElement('a'); link.href=out.toDataURL('image/png'); link.download='cncai_analysis.png'; link.click(); showToast('💾 تم حفظ التحليل كصورة'); });
+    var clearBtn = document.getElementById('clearAi'); if(clearBtn) clearBtn.addEventListener('click', function(){ var tbody=document.getElementById('aiResultBody'); if(tbody) tbody.innerHTML=''; var p=document.getElementById('aiPreviewCanvas').getContext('2d'); p.clearRect(0,0,300,200); var h=document.getElementById('aiHeatmapCanvas').getContext('2d'); h.clearRect(0,0,300,200); var sum=document.getElementById('aiSummary'); if(sum) sum.textContent='لا نتائج بعد.'; showToast('🧹 تم مسح نتائج AI'); });
+    var toggleBtn = document.getElementById('toggleDetails'); if(toggleBtn) toggleBtn.addEventListener('click', function(){ var el=document.getElementById('aiDetails'); el.style.display = (el.style.display==='none' || !el.style.display) ? 'block' : 'none'; });
+  });
+})();
+</script>
+<!-- ===== END: AI Analysis Integration ===== -->
+
+  
+
+
+
+  
 
 
 <button id="cncaiDebugFloatingBtnLegacy" title="Toggle Debug" style="position:fixed;right:18px;bottom:18px;width:44px;height:44px;border-radius:10px;background:linear-gradient(180deg,#06202b,#083443);color:#cfeaf2;border:1px solid rgba(255,255,255,0.04);z-index:99999;display:flex;align-items:center;justify-content:center;font-size:20px;">⚙️</button>
