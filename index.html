@@ -1,4 +1,6 @@
 <!doctype html>
+<!-- CncAi — Version 2.5.0 | All Improvements Batch | October 2025 -->
+<!-- CncAi — Version 2.4.7 | Clean Debug System | October 2025 -->
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8"/>
@@ -738,6 +740,53 @@
 #debugList { max-height: 40vh; overflow:auto; padding:8px; display:flex; flex-direction:column; gap:6px; }
 
 </style>
+
+<style id="cnc-tabs-style">
+/* CNC_AI_TABS_RESPONSIVE_2_5_0 */
+.tab-buttons{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;align-items:center;padding:8px;border-radius:10px}
+.tab-buttons .more-dropdown{position:relative}
+.more-list{position:absolute;right:0;top:40px;background:rgba(6,10,14,0.96);border:1px solid rgba(255,255,255,0.03);padding:6px;border-radius:8px;display:none;z-index:20000;min-width:140px}
+.more-list button{display:block;width:100%;text-align:right;padding:6px;background:transparent;border:0;color:#e6f7ff}
+</style>
+<script id="cnc-tabs-js">
+(function(){
+  try{
+    const container = document.querySelector('.tab-buttons');
+    if(!container) return;
+    function buildMore(){ // move extra tabs into More
+      const buttons = Array.from(container.querySelectorAll('button.tab-btn, a.tab-btn'));
+      const maxVisible = 6;
+      // remove existing more if any
+      const existing = container.querySelector('.more-dropdown');
+      if(existing) existing.remove();
+      if(buttons.length <= maxVisible) return;
+      const moreDiv = document.createElement('div');
+      moreDiv.className = 'more-dropdown';
+      const moreBtn = document.createElement('button');
+      moreBtn.textContent = 'المزيد ▾';
+      moreBtn.className = 'tab-btn';
+      moreBtn.type = 'button';
+      const list = document.createElement('div');
+      list.className = 'more-list';
+      // move extras
+      buttons.slice(maxVisible).forEach(function(b){
+        const copy = b.cloneNode(true);
+        copy.addEventListener('click', function(ev){ b.click(); list.style.display='none'; });
+        list.appendChild(copy);
+        b.style.display = 'none';
+      });
+      moreDiv.appendChild(moreBtn);
+      moreDiv.appendChild(list);
+      container.appendChild(moreDiv);
+      moreBtn.addEventListener('click', function(){ list.style.display = list.style.display==='block' ? 'none' : 'block'; });
+      document.addEventListener('click', function(e){ if(!moreDiv.contains(e.target)) list.style.display='none'; });
+    }
+    window.addEventListener('load', buildMore);
+    window.addEventListener('resize', function(){ setTimeout(buildMore,120); });
+  }catch(e){}
+})();
+</script>
+
 </head>
 <body>
   <div class="app">
@@ -893,6 +942,56 @@
       <!-- RIGHT panel -->
       <div class="panel">
         <h3>⚙️ إعدادات الماكينة</h3>
+
+<!-- Advanced Machine Settings (2.4.8) - collapsible card -->
+<style id="cnc-adv-machine-style">
+#adv-machine-card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:12px;border-radius:10px;margin-top:10px;border:1px solid rgba(255,255,255,0.03);max-width:720px}
+#adv-machine-toggle{display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+#adv-machine-body{margin-top:10px;display:none;gap:8px;flex-direction:column}
+.adv-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.adv-row label{min-width:88px;color:#cfeaf2}
+.adv-input{width:120px;padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:#e6f7ff}
+.adv-slider{width:180px}
+.adv-actions{margin-top:8px;display:flex;gap:8px}
+</style>
+
+<div id="adv-machine-card">
+  <div id="adv-machine-toggle" aria-expanded="false">
+    <div style="font-weight:700;color:#dff8ff">⚙️ الإعدادات المتقدمة للماكينة</div>
+    <div id="adv-arrow" style="color:#9bb0c8">▼</div>
+  </div>
+  <div id="adv-machine-body" role="region" aria-hidden="true">
+    <div class="adv-row">
+      <label>Origin X</label><input id="adv_origin_x" class="adv-input" type="number" step="0.01" value="0">
+      <label>Origin Y</label><input id="adv_origin_y" class="adv-input" type="number" step="0.01" value="0">
+      <label>Origin Z</label><input id="adv_origin_z" class="adv-input" type="number" step="0.01" value="0">
+    </div>
+    <div class="adv-row">
+      <label>Calib X</label><input id="adv_cal_x" class="adv-slider" type="range" min="-1" max="1" step="0.01" value="0">
+      <span id="adv_cal_x_val" style="min-width:36px;text-align:center;color:#a8e9ff">0</span>
+      <label>Calib Y</label><input id="adv_cal_y" class="adv-slider" type="range" min="-1" max="1" step="0.01" value="0">
+      <span id="adv_cal_y_val" style="min-width:36px;text-align:center;color:#a8e9ff">0</span>
+    </div>
+    <div class="adv-row">
+      <label>Reverse X</label><input id="adv_rev_x" type="checkbox">
+      <label>Reverse Y</label><input id="adv_rev_y" type="checkbox">
+    </div>
+    <div class="adv-row">
+      <label>Execution</label>
+      <select id="adv_exec" class="adv-input">
+        <option value="raster">Raster</option>
+        <option value="contour">Contour</option>
+      </select>
+      <label>Delay (ms)</label><input id="adv_delay" class="adv-input" type="number" min="0" value="0" step="10">
+    </div>
+    <div class="adv-actions">
+      <button id="adv_reset" class="dbg-btn">إرجاع الإعدادات الافتراضية</button>
+      <div style="flex:1"></div>
+      <button id="adv_save" class="dbg-btn">حفظ</button>
+    </div>
+  </div>
+</div>
+
 
         <!-- Machine Category Selection -->
         <label for="machineCategory">نوع الماكينة الرئيسي</label>
@@ -1170,23 +1269,10 @@
   </div>
 
   <!-- Debug Overlay -->
-  <div id="debugOverlay" aria-live="polite" role="status">
-    <div id="debugHeader">
-      <div><b>Debug</b> — Console</div>
-      <div id="debugControls">
-        <button id="dbgToggleSize" class="dbg-btn" title="تصغير/تكبير">🔽</button>
-        <button id="dbgCopy" class="dbg-btn" title="نسخ السجل">📋 نسخ</button>
-        <button id="dbgClear" class="dbg-btn" title="مسح السجل">🧹 مسح</button>
-      
-        <button id="dbgCloseLegacy" class="dbg-btn" title="إغلاق">❌</button>
-      </div>
-    </div>
+  </div>
     
           
-<div id="debugList"></div>
-    <div id="debugFooter">
-      <div id="debugSummary">0 سجلات</div>
-      <div style="flex:1"></div>
+<div style="flex:1"></div>
       <div style="font-size:12px;color:#9bb0c8">انقر التصغير لحفظ الشاشة</div>
     </div>
   </div>
@@ -5387,217 +5473,399 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-<!-- ===== START: AI Analysis Integration (paste BEFORE </body>) ===== -->
-<!-- AI Section -->
-<section id="ai-analysis" class="tab-content" style="display:none;direction:rtl;text-align:right;padding:14px">
-  <h3>🧠 تحليل الصورة (AI)</h3>
-  <p style="color:#9fb6c3;margin:4px 0 8px">اضغط "ابدأ التحليل" لتحليل الصورة المعروضة في المعاينة.</p>
 
-  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-    <button id="runAi" class="btn" style="background:#00aaff;color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer">ابدأ التحليل 🔍</button>
-    <button id="drawHeatmap" class="btn ghost" style="padding:8px 12px;border-radius:6px;cursor:pointer">رسم Heatmap</button>
-    <button id="saveAnalysis" class="btn" style="padding:8px 12px;border-radius:6px;cursor:pointer">💾 حفظ التحليل</button>
-    <button id="clearAi" class="btn ghost" style="padding:8px 12px;border-radius:6px;cursor:pointer">مسح</button>
-    <button id="toggleDetails" class="btn ghost" style="padding:8px 12px;border-radius:6px;cursor:pointer">📊 التفاصيل</button>
-  </div>
 
-  <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;align-items:flex-start">
-    <div style="flex:1;min-width:260px">
-      <div style="color:#9fb6c3;margin-bottom:6px">المعاينة</div>
-      <canvas id="aiPreviewCanvas" width="300" height="200" style="border:1px solid rgba(255,255,255,0.06);border-radius:6px;background:#000"></canvas>
+
+<!-- Clean Debug System (CncAi 2.4.7) -->
+<style id="cnc-clean-debug-style">
+/* Minimal clean debug styles */
+#cnc-debug-overlay{position:fixed;left:12px;top:12px;width:min(420px,94vw);max-height:60vh;display:flex;flex-direction:column;background:#0b1318;color:#e6f7ff;border-radius:10px;box-shadow:0 8px 20px rgba(0,0,0,0.6);z-index:24000;font-size:13px;overflow:hidden;transition:transform .18s ease,opacity .18s ease}
+#cnc-debug-overlay.collapsed{height:44px;overflow:visible}
+#cnc-debug-header{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.03)}
+#cnc-debug-title{font-weight:700;color:#dff8ff;margin-right:8px}
+#cnc-debug-body{padding:8px;overflow:auto;max-height:calc(60vh - 48px);font-family:monospace;font-size:12px}
+#cnc-debug-controls button{background:transparent;border:0;color:#bfefff;cursor:pointer;padding:6px 8px;border-radius:6px}
+#cnc-debug-btn{position:fixed;left:12px;bottom:12px;z-index:25000;width:44px;height:44px;border-radius:50%;background:#06b6d4;color:#fff;border:none;box-shadow:0 6px 16px rgba(0,0,0,0.45);font-size:18px;cursor:pointer}
+</style>
+
+<div id="cnc-debug-overlay" class="collapsed" aria-hidden="true" aria-live="polite">
+  <div id="cnc-debug-header">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div id="cnc-debug-title">CncAi Debug</div>
+      <small id="cnc-debug-count" style="color:#9bb0c8">0</small>
     </div>
-    <div style="flex:1;min-width:260px">
-      <div style="color:#9fb6c3;margin-bottom:6px">Heatmap (300×200)</div>
-      <canvas id="aiHeatmapCanvas" width="300" height="200" style="border:1px solid rgba(255,255,255,0.06);border-radius:6px;background:#000"></canvas>
-    </div>
-    <div style="flex:1;min-width:220px">
-      <div style="color:#9fb6c3;margin-bottom:6px">تقييم سريع</div>
-      <div id="aiSummary" style="padding:8px;border-radius:6px;background:rgba(255,255,255,0.02);min-height:64px">لا نتائج بعد.</div>
+    <div id="cnc-debug-controls">
+      <button id="cnc-debug-copy" title="Copy logs">📋</button>
+      <button id="cnc-debug-clear" title="Clear logs">🧹</button>
+      <button id="cnc-debug-close" title="Close">❌</button>
     </div>
   </div>
+  <div id="cnc-debug-body" role="log"></div>
+</div>
 
-  <div id="aiDetails" style="display:none;margin-top:12px">
-    <table id="aiResultTable" style="width:100%;border-collapse:collapse;margin-top:8px">
-      <thead><tr><th style="padding:6px;border:1px solid rgba(255,255,255,0.04)">العنصر</th><th style="padding:6px;border:1px solid rgba(255,255,255,0.04)">القيمة</th><th style="padding:6px;border:1px solid rgba(255,255,255,0.04)">التفسير</th></tr></thead>
-      <tbody id="aiResultBody"></tbody>
-    </table>
-  </div>
-</section>
+<button id="cnc-debug-btn" aria-label="Open debug">🐞</button>
 
-<!-- Integration script: add tab button (last), AI logic, toast -->
-<script>
+
+<script id="cnc-clean-debug-js">
 (function(){
-  /* --- add AI tab button reliably as last tab in main tab row --- */
-  function addAiTabButton(){
-    var container = document.querySelector('.tabs') || document.querySelector('#tabs') || document.querySelector('.tab-buttons') || document.querySelector('[role="tablist"]') || document.querySelector('nav') || null;
-    if(!container){
-      // find a div that contains many buttons (fallback)
-      var possible = Array.from(document.querySelectorAll('div')).find(d=>d.querySelector && d.querySelector('button'));
-      container = possible || document.body;
-    }
-    if(container && !container.querySelector('[data-tab="ai-analysis"]')){
-      var btn = document.createElement('button');
-      btn.className = 'tab-button';
-      btn.dataset.tab = 'ai-analysis';
-      btn.type = 'button';
-      btn.innerText = '🧠 تحليل الصورة';
-      btn.style.cursor = 'pointer';
-      btn.addEventListener('click', function(){
-        // prefer native CncAi.openTab if exists
-        try{ if(window.CncAi && typeof CncAi.openTab === 'function'){ CncAi.openTab('ai-analysis'); return; } }catch(e){}
-        // fallback: show our section, hide others
-        document.querySelectorAll('.tab-content, section').forEach(function(s){ s.style.display='none'; });
-        var el = document.getElementById('ai-analysis'); if(el) el.style.display='block';
-        // active class handling
-        container.querySelectorAll('[data-tab]').forEach(function(b){ b.classList.remove('active'); });
-        btn.classList.add('active');
-      });
-      container.appendChild(btn);
-    }
+  const overlay = document.getElementById('cnc-debug-overlay');
+  const body = document.getElementById('cnc-debug-body');
+  const btn = document.getElementById('cnc-debug-btn');
+  const copyBtn = document.getElementById('cnc-debug-copy');
+  const clearBtn = document.getElementById('cnc-debug-clear');
+  const closeBtn = document.getElementById('cnc-debug-close');
+  const countEl = document.getElementById('cnc-debug-count');
+  const MAX = 300;
+  let logs = [];
+
+  function updateCount(){ if(countEl) countEl.textContent = logs.length + ' logs'; }
+  function makeLine(type,msg){
+    const el = document.createElement('div');
+    el.textContent = '[' + new Date().toLocaleTimeString() + '] ' + (type?type.toUpperCase():'INFO') + ' ' + msg;
+    el.style.padding='3px 0';
+    el.style.borderBottom='1px solid rgba(255,255,255,0.02)';
+    return el;
+  }
+  function pushLog(type,msg){
+    logs.unshift({t:Date.now(),type:type,msg:String(msg)});
+    const el = makeLine(type,String(msg));
+    if(body.firstChild) body.insertBefore(el, body.firstChild); else body.appendChild(el);
+    if(logs.length>MAX){ logs.pop(); if(body.lastChild) body.removeChild(body.lastChild); }
+    updateCount();
   }
 
-  /* --- toast --- */
-  function showToast(msg, timeout){
-    var t = document.getElementById('toast');
-    if(!t){ t = document.createElement('div'); t.id='toast'; t.style.position='fixed'; t.style.left='50%'; t.style.transform='translateX(-50%)'; t.style.bottom='20px'; t.style.background='rgba(0,0,0,0.8)'; t.style.color='#fff'; t.style.padding='8px 12px'; t.style.borderRadius='8px'; t.style.zIndex=9999; document.body.appendChild(t); }
-    t.textContent = msg; t.style.display = 'block';
-    clearTimeout(t._timer);
-    t._timer = setTimeout(function(){ t.style.display='none'; }, timeout||3000);
-  }
+  const orig = { log: console.log.bind(console), warn: console.warn.bind(console), error: console.error.bind(console) };
+  console.log = function(...a){ try{ pushLog('info', a.map(x=>String(x)).join(' ')); }catch(e){}; return orig.log(...a); };
+  console.warn = function(...a){ try{ pushLog('warn', a.map(x=>String(x)).join(' ')); }catch(e){}; return orig.warn(...a); };
+  console.error = function(...a){ try{ pushLog('error', a.map(x=>String(x)).join(' ')); }catch(e){}; return orig.error(...a); };
 
-  /* --- find source canvas robustly --- */
-  function findSourceCanvas(){
-    var ids = ['originalCanvas','inputCanvas','imageCanvas','previewCanvas'];
-    for(var i=0;i<ids.length;i++){
-      var el = document.getElementById(ids[i]);
-      if(el && el.tagName && el.tagName.toLowerCase() === 'canvas'){
-        try{ var d = el.getContext('2d').getImageData(0,0,1,1).data; if(d && d[3] !== 0) return el; }catch(e){ return el; }
-      }
-    }
-    var canvases = Array.from(document.querySelectorAll('canvas')).filter(function(c){ return !['aiPreviewCanvas','aiHeatmapCanvas'].includes(c.id); });
-    for(var j=0;j<canvases.length;j++){
-      var r = canvases[j].getBoundingClientRect(); if(r.width>0 && r.height>0) return canvases[j];
-    }
-    return null;
-  }
+  window.debugAdd = function(type,msg){ pushLog(type||'info', msg||''); };
+  window.debugClearLogs = function(){ logs=[]; if(body) body.innerHTML=''; updateCount(); };
+  window.debugGetLogs = function(){ return logs.slice(); };
 
-  /* --- small utilities: dominant colors, colormap, heatmap renderer --- */
-  function dominantColorsFromCanvas(canvas, sample){
-    sample = sample || 0.12;
-    try{
-      var w=canvas.width,h=canvas.height, ctx=canvas.getContext('2d');
-      var img = ctx.getImageData(0,0,w,h).data, counts = {}, step = Math.max(1, Math.floor(1/(sample||0.12)));
-      for(var i=0;i<img.length;i+=4*step){
-        var r=(img[i]>>4), g=(img[i+1]>>4), b=(img[i+2]>>4);
-        var key = (r<<8)|(g<<4)|b; counts[key] = (counts[key]||0)+1;
-      }
-      var arr = Object.keys(counts).map(function(k){ return {k:parseInt(k),c:counts[k]}; }).sort(function(a,b){ return b.c-a.c; }).slice(0,3);
-      return arr.map(function(it){ var k=it.k; var r=((k>>8)&0xF)<<4; var g=((k>>4)&0xF)<<4; var b=(k&0xF)<<4; return {hex:'#'+[r,g,b].map(function(v){return v.toString(16).padStart(2,'0');}).join(''), pct: Math.round(it.c/((w*h)/step)*100)}); 
-    }catch(e){ return []; }
-  }
-  function colorMapJet(v){
-    var fourValue = 4*v;
-    var r = Math.min(255, Math.max(0, Math.round(255 * Math.min(fourValue - 1.5, -fourValue + 4.5))));
-    var g = Math.min(255, Math.max(0, Math.round(255 * Math.min(fourValue - 0.5, -fourValue + 3.5))));
-    var b = Math.min(255, Math.max(0, Math.round(255 * Math.min(fourValue + 0.5, -fourValue + 2.5))));
-    return [r,g,b];
-  }
-  function createHeatmapFromGrayArray(grayArr,w,h,outCanvas){
-    var ctx = outCanvas.getContext('2d'); var img = ctx.createImageData(w,h); var max=-Infinity,min=Infinity;
-    for(var i=0;i<grayArr.length;i++){ if(grayArr[i]>max) max=grayArr[i]; if(grayArr[i]<min) min=grayArr[i]; }
-    var range = Math.max(1e-9, max-min);
-    for(var y=0;y<h;y++){ for(var x=0;x<w;x++){ var idx=y*w+x; var v=(grayArr[idx]-min)/range; var c=colorMapJet(v); var p=idx*4; img.data[p]=c[0]; img.data[p+1]=c[1]; img.data[p+2]=c[2]; img.data[p+3]=200; } }
-    ctx.putImageData(img,0,0);
-  }
+  if(btn) btn.addEventListener('click', function(){ overlay.classList.toggle('collapsed'); overlay.setAttribute('aria-hidden', overlay.classList.contains('collapsed')? 'true':'false'); });
+  if(copyBtn) copyBtn.addEventListener('click', function(){ try{ navigator.clipboard.writeText(logs.map(l=> new Date(l.t).toISOString()+' '+l.type+' '+l.msg).join('\n')); }catch(e){} });
+  if(clearBtn) clearBtn.addEventListener('click', function(){ window.debugClearLogs(); });
+  if(closeBtn) closeBtn.addEventListener('click', function(){ overlay.classList.add('collapsed'); });
 
-  /* --- compute heatmap + stats (OpenCV if exists, fallback JS) --- */
-  async function computeHeatmapAndStats(srcCanvas, previewCanvas, heatCanvas){
-    if(!srcCanvas) return null;
-    try{ var pctx = previewCanvas.getContext('2d'); pctx.clearRect(0,0,previewCanvas.width,previewCanvas.height); pctx.drawImage(srcCanvas,0,0,srcCanvas.width,srcCanvas.height,0,0,previewCanvas.width,previewCanvas.height); }catch(e){}
-    var w = heatCanvas.width, h = heatCanvas.height;
-    var tmp = document.createElement('canvas'); tmp.width=w; tmp.height=h; var tctx = tmp.getContext('2d');
-    tctx.drawImage(srcCanvas,0,0,srcCanvas.width,srcCanvas.height,0,0,w,h);
-    if(typeof cv !== 'undefined' && cv && cv.imread){
-      try{
-        var mat = cv.imread(tmp); var gray = new cv.Mat(); cv.cvtColor(mat, gray, cv.COLOR_RGBA2GRAY);
-        var mean = cv.mean(gray)[0];
-        var meanMat = new cv.Mat(), stdMat = new cv.Mat(); cv.meanStdDev(gray, meanMat, stdMat);
-        var contrast = stdMat.data64F ? stdMat.data64F[0] : (stdMat.data?stdMat.data[0]:0);
-        var lap = new cv.Mat(); cv.Laplacian(gray, lap, cv.CV_64F); var mm = new cv.Mat(), ss = new cv.Mat(); cv.meanStdDev(lap, mm, ss);
-        var sharpness = ss.data64F?ss.data64F[0]:(ss.data?ss.data[0]:0);
-        var edges = new cv.Mat(); cv.Canny(gray, edges, 50, 150); var edgeCount = cv.countNonZero(edges);
-        var grayArr = new Float32Array(w*h);
-        for(var y=0;y<h;y++){ for(var x=0;x<w;x++){ grayArr[y*w+x] = gray.ucharPtr(y,x)[0]; } }
-        createHeatmapFromGrayArray(grayArr,w,h,heatCanvas);
-        var dominants = dominantColorsFromCanvas(tmp,0.12);
-        try{ mat.delete(); gray.delete(); meanMat.delete(); stdMat.delete(); lap.delete(); mm.delete(); ss.delete(); edges.delete(); }catch(e){}
-        return {mean:mean,contrast:contrast,sharpness:sharpness,edgeCount:edgeCount,dominants:dominants};
-      }catch(e){ console.warn('OpenCV compute failed', e); }
-    }
-    // fallback JS:
-    try{
-      var imgd = tctx.getImageData(0,0,w,h);
-      var grayArr = new Float32Array(w*h); var sum=0;
-      for(var p=0,idx=0;p<imgd.data.length;p+=4,idx++){ var r=imgd.data[p], g=imgd.data[p+1], b=imgd.data[p+2]; var gi = 0.299*r+0.587*g+0.114*b; grayArr[idx]=gi; sum+=gi; }
-      createHeatmapFromGrayArray(grayArr,w,h,heatCanvas);
-      var mean = sum/(w*h); var s=0; for(var i=0;i<grayArr.length;i++){ s+=(grayArr[i]-mean)*(grayArr[i]-mean); }
-      var contrast = Math.sqrt(s/grayArr.length);
-      var edgeCount=0; for(var y=1;y<h-1;y+=1){ for(var x=1;x<w-1;x+=1){ var a=grayArr[y*w+x]; var b=grayArr[y*w+x+1]; if(Math.abs(a-b)>20) edgeCount++; } }
-      var dominants = dominantColorsFromCanvas(tmp,0.12);
-      return {mean:mean,contrast:contrast,sharpness:0,edgeCount:edgeCount,dominants:dominants};
-    }catch(e){ console.warn('fallback compute failed', e); return null; }
-  }
+  window.cncDebug = { add: window.debugAdd, clear: window.debugClearLogs, get: window.debugGetLogs };
 
-  /* --- render results to table + toast rating --- */
-  function renderAiResults(res){
-    var tbody = document.getElementById('aiResultBody'); if(!tbody) return; tbody.innerHTML='';
-    var rows = [
-      ['درجة الحدة (Sharpness)', (res.sharpness||0).toFixed(2), (res.sharpness>100?'حاد جدًا':(res.sharpness>20?'حاد':'معتدل'))],
-      ['نسبة التباين (Contrast)', (res.contrast||0).toFixed(2), (res.contrast>50?'متباين عالي':'متباين منخفض')],
-      ['درجة السطوع (Brightness)', Math.round(res.mean||0), (res.mean>127?'ساطع':'داكن')],
-      ['عدد الحواف المكتشفة (Edges Count)', res.edgeCount||0, (res.edgeCount>2000?'تفاصيل كثيرة':'تفاصيل قليلة')],
-      ['الألوان السائدة (Dominant Colors)', (res.dominants?res.dominants.map(function(d){return d.hex+"("+d.pct+"%)";}).join(", "):"-"), 'الأكثر شيوعًا'],
-      ['متوسط الإضاءة (Mean Intensity)', (res.mean||0).toFixed(2), '0–255']
-    ];
-    for(var i=0;i<rows.length;i++){ var tr=document.createElement('tr'); tr.innerHTML='<td style="padding:6px;border:1px solid rgba(255,255,255,0.04)">'+rows[i][0]+'</td><td style="padding:6px;border:1px solid rgba(255,255,255,0.04)">'+rows[i][1]+'</td><td style="padding:6px;border:1px solid rgba(255,255,255,0.04)">'+rows[i][2]+'</td>'; tbody.appendChild(tr); }
-    var score=0; if(res.mean && res.mean>100) score+=1; if(res.contrast && res.contrast>30) score+=1; if(res.sharpness && res.sharpness>20) score+=1; if(res.edgeCount && res.edgeCount>500) score+=1;
-    var rating = score>=3? '🟢 جودة عالية' : (score==2? '🟡 جودة متوسطة' : '🔴 جودة منخفضة');
-    var sum = document.getElementById('aiSummary'); if(sum) sum.textContent = rating;
-    showToast('🧠 التحليل اكتمل — ' + rating, 4000);
-  }
-
-  /* --- bind UI actions --- */
-  document.addEventListener('DOMContentLoaded', function(){
-    addAiTabButton();
-    var runBtn = document.getElementById('runAi');
-    if(runBtn) runBtn.addEventListener('click', async function(){
-      var src = findSourceCanvas();
-      if(!src){ showToast('⚠️ لم يتم تحميل أي صورة — الرجاء رفع صورة أولاً',4000); debugLog('خطأ: لا توجد صورة للتحليل'); return; }
-      showToast('⏳ جاري التحليل...');
-      try{
-        var res = await computeHeatmapAndStats(src, document.getElementById('aiPreviewCanvas'), document.getElementById('aiHeatmapCanvas'));
-        if(!res){ showToast('⚠️ فشل التحليل'); debugLog('compute returned null'); return; }
-        renderAiResults(res);
-        debugLog('تم إظهار نتائج AI');
-      }catch(e){ console.error(e); showToast('⚠️ حدث خطأ أثناء التحليل'); debugLog('AI error: '+(e.message||e)); }
-    });
-    var drawBtn = document.getElementById('drawHeatmap');
-    if(drawBtn) drawBtn.addEventListener('click', async function(){ var src = findSourceCanvas(); if(!src){ showToast('⚠️ لا توجد صورة للرسم'); return; } await computeHeatmapAndStats(src, document.getElementById('aiPreviewCanvas'), document.getElementById('aiHeatmapCanvas')); showToast('✅ تم رسم الخريطة الحرارية'); });
-    var saveBtn = document.getElementById('saveAnalysis'); if(saveBtn) saveBtn.addEventListener('click', function(){ var a=document.getElementById('aiPreviewCanvas'), b=document.getElementById('aiHeatmapCanvas'); if(!a||!b){ showToast('⚠️ لا توجد بيانات للحفظ'); return; } var out=document.createElement('canvas'); out.width=a.width+b.width+10; out.height=Math.max(a.height,b.height); var octx=out.getContext('2d'); octx.fillStyle='#000'; octx.fillRect(0,0,out.width,out.height); octx.drawImage(a,0,0); octx.drawImage(b,a.width+10,0); var link=document.createElement('a'); link.href=out.toDataURL('image/png'); link.download='cncai_analysis.png'; link.click(); showToast('💾 تم حفظ التحليل كصورة'); });
-    var clearBtn = document.getElementById('clearAi'); if(clearBtn) clearBtn.addEventListener('click', function(){ var tbody=document.getElementById('aiResultBody'); if(tbody) tbody.innerHTML=''; var p=document.getElementById('aiPreviewCanvas').getContext('2d'); p.clearRect(0,0,300,200); var h=document.getElementById('aiHeatmapCanvas').getContext('2d'); h.clearRect(0,0,300,200); var sum=document.getElementById('aiSummary'); if(sum) sum.textContent='لا نتائج بعد.'; showToast('🧹 تم مسح نتائج AI'); });
-    var toggleBtn = document.getElementById('toggleDetails'); if(toggleBtn) toggleBtn.addEventListener('click', function(){ var el=document.getElementById('aiDetails'); el.style.display = (el.style.display==='none' || !el.style.display) ? 'block' : 'none'; });
-  });
+  if(overlay) overlay.classList.add('collapsed');
 })();
 </script>
-<!-- ===== END: AI Analysis Integration ===== -->
-
-  
 
 
+<script id="cnc-adv-machine-js">
+(function(){
+  // elements
+  const toggle = document.getElementById('adv-machine-toggle');
+  const body = document.getElementById('adv-machine-body');
+  const arrow = document.getElementById('adv-arrow');
+  const inputs = {
+    origin_x: document.getElementById('adv_origin_x'),
+    origin_y: document.getElementById('adv_origin_y'),
+    origin_z: document.getElementById('adv_origin_z'),
+    cal_x: document.getElementById('adv_cal_x'),
+    cal_y: document.getElementById('adv_cal_y'),
+    cal_x_val: document.getElementById('adv_cal_x_val'),
+    cal_y_val: document.getElementById('adv_cal_y_val'),
+    rev_x: document.getElementById('adv_rev_x'),
+    rev_y: document.getElementById('adv_rev_y'),
+    exec: document.getElementById('adv_exec'),
+    delay: document.getElementById('adv_delay'),
+    reset: document.getElementById('adv_reset'),
+    save: document.getElementById('adv_save')
+  };
 
-  
+  const STORAGE_KEY = 'cnc_machine_advanced_v2';
+
+  function loadSettings(){
+    try{
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if(stored){
+        const s = JSON.parse(stored);
+        inputs.origin_x.value = s.origin_x ?? 0;
+        inputs.origin_y.value = s.origin_y ?? 0;
+        inputs.origin_z.value = s.origin_z ?? 0;
+        inputs.cal_x.value = s.cal_x ?? 0;
+        inputs.cal_y.value = s.cal_y ?? 0;
+        inputs.cal_x_val.textContent = (inputs.cal_x.value||0);
+        inputs.cal_y_val.textContent = (inputs.cal_y.value||0);
+        inputs.rev_x.checked = !!s.rev_x;
+        inputs.rev_y.checked = !!s.rev_y;
+        inputs.exec.value = s.exec || 'raster';
+        inputs.delay.value = s.delay || 0;
+      } else {
+        // defaults
+        inputs.cal_x_val.textContent = inputs.cal_x.value;
+        inputs.cal_y_val.textContent = inputs.cal_y.value;
+      }
+    }catch(e){}
+  }
+  function saveSettings(){
+    const obj = {
+      origin_x: parseFloat(inputs.origin_x.value)||0,
+      origin_y: parseFloat(inputs.origin_y.value)||0,
+      origin_z: parseFloat(inputs.origin_z.value)||0,
+      cal_x: parseFloat(inputs.cal_x.value)||0,
+      cal_y: parseFloat(inputs.cal_y.value)||0,
+      rev_x: !!inputs.rev_x.checked,
+      rev_y: !!inputs.rev_y.checked,
+      exec: inputs.exec.value,
+      delay: parseInt(inputs.delay.value)||0
+    };
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(obj)); }catch(e){}
+    return obj;
+  }
+  function resetSettings(){
+    inputs.origin_x.value = 0;
+    inputs.origin_y.value = 0;
+    inputs.origin_z.value = 0;
+    inputs.cal_x.value = 0;
+    inputs.cal_y.value = 0;
+    inputs.cal_x_val.textContent = 0;
+    inputs.cal_y_val.textContent = 0;
+    inputs.rev_x.checked = false;
+    inputs.rev_y.checked = false;
+    inputs.exec.value = 'raster';
+    inputs.delay.value = 0;
+    try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
+  }
+
+  // toggle behavior
+  if(toggle){
+    toggle.addEventListener('click', function(){
+      const open = body.style.display !== 'flex' && body.style.display !== 'block';
+      body.style.display = open ? 'flex' : 'none';
+      body.setAttribute('aria-hidden', !open);
+      arrow.textContent = open ? '▲' : '▼';
+    });
+  }
+
+  // live update values
+  if(inputs.cal_x){
+    inputs.cal_x.addEventListener('input', ()=>{ inputs.cal_x_val.textContent = inputs.cal_x.value; saveSettings(); });
+  }
+  if(inputs.cal_y){
+    inputs.cal_y.addEventListener('input', ()=>{ inputs.cal_y_val.textContent = inputs.cal_y.value; saveSettings(); });
+  }
+  // save on changes
+  ['origin_x','origin_y','origin_z','rev_x','rev_y','exec','delay'].forEach(function(k){
+    const el = inputs[k];
+    if(!el) return;
+    el.addEventListener('change', saveSettings);
+  });
+  if(inputs.save) inputs.save.addEventListener('click', saveSettings);
+  if(inputs.reset) inputs.reset.addEventListener('click', function(){ resetSettings(); });
+
+  // expose getAdvancedSettings
+  window.getAdvancedMachineSettings = function(){
+    try{
+      const s = JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');
+      return {
+        origin_x: parseFloat(s.origin_x)||0,
+        origin_y: parseFloat(s.origin_y)||0,
+        origin_z: parseFloat(s.origin_z)||0,
+        cal_x: parseFloat(s.cal_x)||0,
+        cal_y: parseFloat(s.cal_y)||0,
+        rev_x: !!s.rev_x,
+        rev_y: !!s.rev_y,
+        exec: s.exec || 'raster',
+        delay: parseInt(s.delay)||0
+      };
+    }catch(e){
+      return { origin_x:0,origin_y:0,origin_z:0,cal_x:0,cal_y:0,rev_x:false,rev_y:false,exec:'raster',delay:0 };
+    }
+  };
+
+  // applyAdvancedMachineSettings: transforms G-code string (safely)
+  window.applyAdvancedMachineSettings = function(gcode, settings){
+    if(!gcode || typeof gcode !== 'string') return gcode;
+    settings = settings || window.getAdvancedMachineSettings();
+    // regex helpers
+    function replCoord(line, axis, offset, reverse){
+      const rx = new RegExp(axis + '(-?\\d+(?:\\.\\d+)?)', 'i');
+      if(!rx.test(line)) return line;
+      return line.replace(rx, function(full, val){
+        let num = parseFloat(val);
+        if(reverse) num = -num;
+        if(offset) num = num + offset;
+        return axis + num.toFixed(4);
+      });
+    }
+    const out = gcode.split('\\n').map(function(line){
+      const t = line.trim();
+      if(t.startsWith('G0') || t.startsWith('G1') || t.startsWith('g0') || t.startsWith('g1')){
+        let l = line;
+        l = replCoord(l, 'X', settings.origin_x || 0, settings.rev_x);
+        l = replCoord(l, 'Y', settings.origin_y || 0, settings.rev_y);
+        l = replCoord(l, 'Z', settings.origin_z || 0, false);
+        // calibration scaling (simple multiply)
+        if(settings.cal_x && settings.cal_x !== 0){
+          l = l.replace(/X(-?\\d+(?:\\.\\d+)?)/i, function(full,val){ return 'X' + (parseFloat(val) * (1 + settings.cal_x)).toFixed(4); });
+        }
+        if(settings.cal_y && settings.cal_y !== 0){
+          l = l.replace(/Y(-?\\d+(?:\\.\\d+)?)/i, function(full,val){ return 'Y' + (parseFloat(val) * (1 + settings.cal_y)).toFixed(4); });
+        }
+        return l;
+      }
+      return line;
+    }).join('\\n');
+    return out;
+  };
+
+  // patch generateGCode if exists: wrap sync or promise-returning functions
+  try{
+    if(typeof window.generateGCode === 'function'){
+      const orig = window.generateGCode;
+      window.generateGCode = function(){
+        const res = orig.apply(this, arguments);
+        if(res && typeof res.then === 'function'){
+          return res.then(function(g){ try{ return window.applyAdvancedMachineSettings(g); }catch(e){ return g; } });
+        } else {
+          try{ return window.applyAdvancedMachineSettings(res); }catch(e){ return res; }
+        }
+      };
+    }
+  }catch(e){}
+  // initial load
+  loadSettings();
+})();
+</script>
 
 
-<button id="cncaiDebugFloatingBtnLegacy" title="Toggle Debug" style="position:fixed;right:18px;bottom:18px;width:44px;height:44px;border-radius:10px;background:linear-gradient(180deg,#06202b,#083443);color:#cfeaf2;border:1px solid rgba(255,255,255,0.04);z-index:99999;display:flex;align-items:center;justify-content:center;font-size:20px;">⚙️</button>
+<script id="cnc-safe-delete">
+// Safe delete helper for OpenCV Mats
+function safeDelete(mat){
+  try{
+    if(!mat) return;
+    if(typeof mat.delete === 'function') mat.delete();
+  }catch(e){ try{ console.warn('safeDelete error', e && e.message? e.message : e); }catch(e){} }
+}
+// patch cv.Mat.prototype.delete if possible
+(function(){
+  try{
+    if(typeof cv !== 'undefined' && cv && cv.Mat && cv.Mat.prototype && !cv.Mat.prototype.__safePatched){
+      const p = cv.Mat.prototype;
+      const orig = p.delete;
+      p.delete = function(){ try{ return orig.call(this); }catch(e){ try{ console.warn('Mat.delete wrapped error', e && e.message? e.message: e); }catch(e){} } };
+      p.__safePatched = true;
+    }
+  }catch(e){}
+  window.addEventListener('load', function(){ setTimeout(function(){ try{ if(typeof cv !== 'undefined' && cv && cv.Mat && cv.Mat.prototype && !cv.Mat.prototype.__safePatched){ const p = cv.Mat.prototype; const orig = p.delete; p.delete = function(){ try{ return orig.call(this); }catch(e){} }; p.__safePatched = true; } }catch(e){} },1500); });
+})();
+</script>
+
+
+<script id="cnc-gcode-lib">
+/* CNC_AI_GCODE_LIB_2_5_0 */
+// Lightweight G-code parser for G0/G1 lines (supports X/Y/Z/F and comments)
+window.parseGCode = function(gcodeText){
+  const lines = gcodeText.split(/\r?\n/);
+  const out = [];
+  for(const raw of lines){
+    const line = raw.trim();
+    if(line === ''){ out.push({raw:raw}); continue; }
+    const parts = line.split(';')[0].trim(); // remove inline comment after ;
+    const obj = { raw: raw };
+    const m = parts.match(/^(G\d+)\s*(.*)/i);
+    if(m){
+      obj.cmd = m[1].toUpperCase();
+      const args = m[2];
+      const re = /([XYZFI])(-?\d+(?:\.\d+)?)/ig;
+      let arg;
+      while((arg = re.exec(args)) !== null){
+        obj[arg[1].toUpperCase()] = parseFloat(arg[2]);
+      }
+    }
+    out.push(obj);
+  }
+  return out;
+};
+
+window.stringifyGCode = function(parsed){
+  return parsed.map(function(obj){
+    if(obj.raw && !obj.cmd) return obj.raw;
+    if(obj.cmd){
+      var s = obj.cmd;
+      var keys = ['X','Y','Z','F','I'];
+      keys.forEach(function(k){ if(obj[k]!==undefined) s += ' ' + k + Number(obj[k]).toFixed(4); });
+      return s;
+    }
+    return obj.raw || '';
+  }).join('\n');
+};
+
+// applyAdvancedMachineSettings uses model-based transform
+window.applyAdvancedMachineSettings = window.applyAdvancedMachineSettings || function(gcodeText, settings){
+  if(!gcodeText || typeof gcodeText !== 'string') return gcodeText;
+  settings = settings || (window.getAdvancedMachineSettings? window.getAdvancedMachineSettings() : {});
+  try{
+    const parsed = window.parseGCode(gcodeText);
+    const out = parsed.map(function(obj){
+      if(!obj.cmd) return obj;
+      const cmd = obj.cmd.toUpperCase();
+      if(cmd === 'G0' || cmd === 'G1'){ // transform coordinates
+        const nx = (obj.X!==undefined)?obj.X:undefined;
+        const ny = (obj.Y!==undefined)?obj.Y:undefined;
+        const nz = (obj.Z!==undefined)?obj.Z:undefined;
+        let X = nx, Y = ny, Z = nz;
+        if(X!==undefined){ if(settings.rev_x) X = -X; if(settings.origin_x) X = X + (parseFloat(settings.origin_x)||0); if(settings.cal_x) X = X * (1 + parseFloat(settings.cal_x)||0); obj.X = Number(X); }
+        if(Y!==undefined){ if(settings.rev_y) Y = -Y; if(settings.origin_y) Y = Y + (parseFloat(settings.origin_y)||0); if(settings.cal_y) Y = Y * (1 + parseFloat(settings.cal_y)||0); obj.Y = Number(Y); }
+        if(Z!==undefined){ obj.Z = Number(Z + (parseFloat(settings.origin_z)||0)); }
+      }
+      return obj;
+    });
+    return window.stringifyGCode(out);
+  }catch(e){ return gcodeText; }
+};
+
+// wrapper for generateGCode if exists
+(function(){
+  try{
+    if(typeof window.generateGCode === 'function'){
+      const orig = window.generateGCode;
+      window.generateGCode = function(){
+        const res = orig.apply(this, arguments);
+        if(res && typeof res.then === 'function'){
+          return res.then(function(g){ try{ return window.applyAdvancedMachineSettings(g); }catch(e){ return g; } });
+        } else {
+          try{ return window.applyAdvancedMachineSettings(res); }catch(e){ return res; }
+        }
+      };
+    }
+  }catch(e){ console.warn('gcode wrapper error', e); }
+})();
+</script>
+
+
+<script id="cnc-task-manager">
+/* CNC_AI_TASK_MANAGER_2_5_0 */
+window.CncTaskManager = (function(){
+  const q = [];
+  let running = false;
+  function runNext(){
+    if(running) return;
+    const task = q.shift();
+    if(!task) return;
+    running = true;
+    try{
+      const res = task.fn();
+      if(res && typeof res.then === 'function'){
+        res.then(()=>{ running=false; runNext(); }).catch(()=>{ running=false; runNext(); });
+      } else {
+        running=false; setTimeout(runNext, 0);
+      }
+    }catch(e){ running=false; setTimeout(runNext,0); }
+  }
+  return {
+    queue(name, fn){
+      q.push({name:name, fn:fn});
+      setTimeout(runNext,0);
+    }
+  };
+})();
+</script>
+
 </body>
 </html>
